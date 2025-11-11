@@ -1,5 +1,5 @@
 [project]
-name = "poke_env"
+name = "pokemon-gba-env"
 version = "0.1.0"
 description = "A wrapper with emulation, state parsing and low-level control modules for Pokemon Red"
 readme = "README.md"

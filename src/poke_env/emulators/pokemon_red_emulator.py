@@ -122,9 +122,8 @@ class PokemonRedEmulator(Emulator):
     MAP_ROW_OFFSET = PAD
     MAP_COL_OFFSET = PAD
 
-    def __init__(self, parameters: dict, init_state=None, headless: bool = False, max_steps: int = None, save_video: bool = None, fast_video: bool = None, session_name: str = None, instance_id: str = None):
-        assert parameters is not None, "You must provide a parameters dictionary to the Emulator"
-        assert len(parameters) > 0, "The parameters dictionary cannot be empty"
+    def __init__(self, parameters: dict = None, init_state=None, headless: bool = False, max_steps: int = None, save_video: bool = None, fast_video: bool = None, session_name: str = None, instance_id: str = None):
+        parameters = load_parameters(parameters)
         if init_state is None:
             init_state = parameters["pokemon_red_default_state"]        
         gb_path = parameters["pokemon_red_gb_path"]
