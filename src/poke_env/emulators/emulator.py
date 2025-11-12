@@ -323,16 +323,14 @@ class Emulator():
             video_id = self.get_free_video_id()
         base_dir = os.path.join(self.session_path, "videos")
         os.makedirs(base_dir, exist_ok=True)
-        full_name = os.path.join(base_dir, f"full_{video_id}")
-        model_name = os.path.join(base_dir, f"model_{video_id}")
+        model_name = os.path.join(base_dir, f"{video_id}")
         self.close_video()
         self.frame_writer = cv2.VideoWriter(model_name, cv2.VideoWriter_fourcc(*"mp4v"), 60, (self.output_shape[0], self.output_shape[1]), isColor=False)
         self.video_running = True
 
     def add_video_frame(self):
         current_frame = self.get_current_frame(reduce_res=self.reduce_video_resolution)[:, :, 0]
-        frame_size = (current_frame.shape[1], current_frame.shape[0]) # Width, Height, should be equal to self.frame_size and self.output_shape[:2]
-        print(self.output_shape[:2], frame_size)
+        # frame_size = (current_frame.shape[1], current_frame.shape[0]) # Width, Height, should be equal to self.output_shape[:2]
         # Create VideoWriter object
         frame = current_frame
         self.frame_writer.write(frame)
