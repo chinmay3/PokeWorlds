@@ -104,10 +104,11 @@ class Emulator():
         self.reset_count = 0
         self.step_count = 0
         self.reduce_video_resolution = parameters["gameboy_reduce_video_resolution"]
+        pokemon_frame_size = (160, 144) # TODO: confirm this is universal if you want other GB games. 
         if self.reduce_video_resolution:
-            self.output_shape = (80, 72, self.frame_stacks)
+            self.output_shape = (pokemon_frame_size[0]//2, pokemon_frame_size[1]//2, self.frame_stacks)
         else:
-            self.output_shape = (160, 144, self.frame_stacks)
+            self.output_shape = (pokemon_frame_size[0], pokemon_frame_size[1], self.frame_stacks)
 
         head = "null" if self.headless else "SDL2"
 
@@ -121,8 +122,7 @@ class Emulator():
         if not self.headless:
             if not is_none_str(self.parameters["gameboy_headed_emulation_speed"]):
                 self.pyboy.set_emulation_speed(int(self.parameters["gameboy_headed_emulation_speed"]))        
-        
-    
+            
     def clear_unamed_sessions(self):
         """
         Clears all unnamed sessions from the session directory.
@@ -145,9 +145,7 @@ class Emulator():
                     continue
             saved_sessions.append(session)
         log_info(f"Kept sessions: {saved_sessions}", self.parameters)
-        
-        
-    
+                
     def get_session_path(self) -> str:
         """
         Returns the path to the session directory for this environment variant.
@@ -157,7 +155,6 @@ class Emulator():
         session_path = os.path.join(storage_dir, "sessions", self.get_env_variant())
         os.makedirs(session_path, exist_ok=True)
         return session_path
-
 
     def set_init_state(self, init_state: str):
         """Sets a new initial state file for the environment. and resets the environment.
@@ -353,7 +350,6 @@ class Emulator():
             self.model_frame_writer = None
         self.video_running = False
     
-
     def close(self):
         self.pyboy.stop(save=False) # TODO: check if this is the correct way to close the pyboy emulator. It gives errors. 
         self.close_video()
@@ -361,7 +357,6 @@ class Emulator():
         if os.path.exists(self.session_path) and len(os.listdir(self.session_path)) == 0:
             os.rmdir(self.session_path)
     
-
     def human_play(self, max_steps: int = None):
         """_summary_
         
@@ -382,10 +377,8 @@ class Emulator():
                 break
         self.close()
         # wait for pyboy
-        #sleep(1)
+        #sleep(1) TODO: See how to close properly in this setting. 
         
-        
-    
     def _human_step_play(self, max_steps: int = None, init_state: str = None):
         """_summary_
         Primarily for debugging.         
@@ -435,7 +428,6 @@ class Emulator():
             if truncated:
                 log_info("Max steps reached. Exiting human play mode.", self.parameters)
                 break
-        
         
     def save_render(self):
         render_path = os.path.join(self.session_path, "renders", f"step_{self.step_count}_id{self.instance_id}.jpeg")
