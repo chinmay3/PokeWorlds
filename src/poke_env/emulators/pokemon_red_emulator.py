@@ -3,7 +3,7 @@
 
 
 from poke_env.utils import log_warn, log_info, log_error, load_parameters
-from poke_env.emulators.emulator import Emulator
+from poke_env.emulators.emulator import Emulator, GameStateParser
 
 import json
 import numpy as np
@@ -25,15 +25,46 @@ class GameInfo:
         self.data = {}
         
 
-class GameStateParser:
+class PokemonRedGameStateParser(GameStateParser):
+    PAD = 20
+    GLOBAL_MAP_SHAPE = (444 + PAD * 2, 436 + PAD * 2)
+    MAP_ROW_OFFSET = PAD
+    MAP_COL_OFFSET = PAD
+
     def __init__(self, pyboy, parameters):
-        self.pyboy = pyboy
-        self.parameters = parameters
+        super().__init__(pyboy, parameters)
         # load event names (parsed from https://github.com/pret/pokered/blob/91dc3c9f9c8fd529bb6e8307b58b96efa0bec67e/constants/event_constants.asm)
-        with open("events.json") as f:
+        events_location = self.parameters["pokemon_red_events_path"]
+        with open(events_location) as f:
             event_names = json.load(f)
         self.event_names = event_names
-    
+        self.essential_map_locations = {
+            v:i for i,v in enumerate([
+                40, 0, 12, 1, 13, 51, 2, 54, 14, 59, 60, 61, 15, 3, 65
+            ])
+        }
+        MAP_PATH = parameters["pokemon_red_map_data_path"]
+        with open(MAP_PATH) as map_data:
+            MAP_DATA = json.load(map_data)["regions"]
+        self.MAP_DATA = {int(e["id"]): e for e in MAP_DATA}
+        
+    # Handle KeyErrors. TODO: Figure out what this is doing. 
+    def local_to_global(self, r: int, c: int, map_n: int):
+        try:
+            (
+                map_x,
+                map_y,
+            ) = self.MAP_DATA[map_n]["coordinates"]
+            gy = r + map_y + self.MAP_ROW_OFFSET
+            gx = c + map_x + self.MAP_COL_OFFSET
+            if 0 <= gy < self.GLOBAL_MAP_SHAPE[0] and 0 <= gx < self.GLOBAL_MAP_SHAPE[1]:
+                return gy, gx
+            print(f"coord out of bounds! global: ({gx}, {gy}) game: ({r}, {c}, {map_n})")
+            return self.GLOBAL_MAP_SHAPE[0] // 2, self.GLOBAL_MAP_SHAPE[1] // 2
+        except KeyError:
+            print(f"Map id {map_n} not found in map_data.json.")
+            return self.GLOBAL_MAP_SHAPE[0] // 2, self.GLOBAL_MAP_SHAPE[1] // 2
+
     def bit_count(self, bits):
         return bin(bits).count("1")    
     
@@ -112,49 +143,30 @@ class GameStateParser:
     
     def get_global_coords(self):
             x_pos, y_pos, map_n = self.get_game_coords()
-            return local_to_global(y_pos, x_pos, map_n)
+            return self.local_to_global(y_pos, x_pos, map_n)
+    
+    def __repr__(self):
+        return "PokemonRed"
+    
+    def parse_all(self):
+        pass
+
+    def parse_step(self):
+        pass
+
+
 
     
     
 class BasicPokemonRedEmulator(Emulator):
-    PAD = 20
-    GLOBAL_MAP_SHAPE = (444 + PAD * 2, 436 + PAD * 2)
-    MAP_ROW_OFFSET = PAD
-    MAP_COL_OFFSET = PAD
-
     def __init__(self, parameters: dict = None, init_state=None, headless: bool = False, max_steps: int = None, save_video: bool = None, session_name: str = None, instance_id: str = None):
         parameters = load_parameters(parameters)
         if init_state is None:
             init_state = parameters["pokemon_red_default_state"]        
         gb_path = parameters["pokemon_red_gb_path"]
-        super().__init__(gb_path, init_state, parameters, headless, max_steps, save_video, session_name, instance_id)
-        self.essential_map_locations = {
-            v:i for i,v in enumerate([
-                40, 0, 12, 1, 13, 51, 2, 54, 14, 59, 60, 61, 15, 3, 65
-            ])
-        }
-        MAP_PATH = parameters["pokemon_red_map_data_path"]
-        with open(MAP_PATH) as map_data:
-            MAP_DATA = json.load(map_data)["regions"]
-        MAP_DATA = {int(e["id"]): e for e in MAP_DATA}
-        
-    # Handle KeyErrors. TODO: Figure out what this is doing. 
-    def local_to_global(self, r: int, c: int, map_n: int):
-        try:
-            (
-                map_x,
-                map_y,
-            ) = self.MAP_DATA[map_n]["coordinates"]
-            gy = r + map_y + self.MAP_ROW_OFFSET
-            gx = c + map_x + self.MAP_COL_OFFSET
-            if 0 <= gy < self.GLOBAL_MAP_SHAPE[0] and 0 <= gx < self.GLOBAL_MAP_SHAPE[1]:
-                return gy, gx
-            print(f"coord out of bounds! global: ({gx}, {gy}) game: ({r}, {c}, {map_n})")
-            return self.GLOBAL_MAP_SHAPE[0] // 2, self.GLOBAL_MAP_SHAPE[1] // 2
-        except KeyError:
-            print(f"Map id {map_n} not found in map_data.json.")
-            return self.GLOBAL_MAP_SHAPE[0] // 2, self.GLOBAL_MAP_SHAPE[1] // 2
-            
+        game_state_parser_class = PokemonRedGameStateParser
+        super().__init__(gb_path, game_state_parser_class, init_state, parameters, headless, max_steps, save_video, session_name, instance_id)
+
     def _get_obs(self):        
         observation = {}
         return observation

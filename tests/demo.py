@@ -1,5 +1,5 @@
-from poke_env import PokemonRedEmulator
+from poke_env import BasicPokemonRedEmulator
 
 if __name__ == "__main__":
-    env = PokemonRedEmulator(parameters=None, headless=False)
+    env = BasicPokemonRedEmulator(parameters=None, headless=False)
     env.human_play()

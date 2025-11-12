@@ -1,7 +1,11 @@
 from enum import Enum
+from abc import ABC, abstractmethod
+from typing import Type
+
+
 import os
 import uuid
-from poke_env.utils import load_parameters, log_error, log_warn, file_makedir, log_info, is_none_str
+from poke_env.utils import load_parameters, log_error, log_warn, file_makedir, log_info, is_none_str, nested_dict_to_str
 
 
 import cv2
@@ -46,13 +50,58 @@ class LowLevelActions(Enum):
         PRESS_BUTTON_B: WindowEvent.RELEASE_BUTTON_B,
         PRESS_BUTTON_START: WindowEvent.RELEASE_BUTTON_START}
 
-class Emulator():
-    def __init__(self, gb_path: str, init_state: str, parameters: dict, headless: bool = True, max_steps: int = None, save_video: bool = None, session_name: str = None, instance_id: str = None):
+
+class GameStateParser(ABC):
+    def __init__(self, pyboy, parameters):
+        self.pyboy = pyboy
+        self.parameters = parameters
+        self.parsed_variables = {}
+
+    def clear(self):
+        self.parsed_variables = {"done": False}
+
+    @abstractmethod
+    def parse_step(self):
+        """
+        Parses the game state at the current step. Saves any relevant variables to self.parsed_variables.
+        :return: None
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def parse_all(self):
+        """
+        Parses the game state. Use this function for additional variables that you may not need at every step because they are expensive to compute.
+        :return: None
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def __repr__(self) -> str:
+        """
+        Name of the parser for logging purposes.
+        :return: string name of the parser
+        """
+        raise NotImplementedError
+    
+    def __str__(self) -> str:
+        start = f"***\tGameStateParser({self.__repr__()})\t***"
+        body = nested_dict_to_str(self.parsed_variables, indent=1)
+        return f"{start}\n{body}"
+
+        
+
+    
+
+
+class Emulator(ABC):
+    def __init__(self, gb_path: str, game_state_parser_class: Type[GameStateParser], init_state: str, parameters: dict, headless: bool = True, max_steps: int = None, save_video: bool = None, session_name: str = None, instance_id: str = None):
         """_summary_
         Initializes the Pokemon Environment. 
 
         Args:
             gb_path (str): Path to the GameBoy ROM file.
+            game_state_parser_class (Type[GameStateParser]): A class that inherits from GameStateParser to parse game state variables.
             init_state (str): Path to the initial state file to load.
             parameters (dict): Dictionary of parameters for the environment.
             headless (bool, optional): Whether to run the environment in headless mode. Defaults to True.
@@ -61,6 +110,7 @@ class Emulator():
             session_name (str, optional): Name of the session. If None, a new session name will be allocated. Defaults to None.        
         """
         assert gb_path is not None, "You must provide a path to the GameBoy ROM file."
+        assert isinstance(game_state_parser_class, type) and issubclass(game_state_parser_class, GameStateParser), "You must provide a valid GameStateParser subclass."
         assert init_state is not None, "You must provide an initial state file to load."
         assert parameters is not None, "You must provide a parameters dictionary."
         assert parameters != {}, "The parameters dictionary cannot be empty."
@@ -112,6 +162,7 @@ class Emulator():
             self.gb_path,
             window=head,
         )
+        self.game_state_parser = game_state_parser_class(self.pyboy, self.parameters)
 
         #self.screen = self.pyboy.botsupport_manager().screen()
 
@@ -243,12 +294,13 @@ class Emulator():
             self.add_video_frame()
 
         self.run_action_on_emulator(action)
+        self.game_state_parser.parse_step()
 
-        step_limit_reached = self.check_if_done()
+        self.game_state_parser.parsed_variables["done"] = self.check_if_done()
 
         self.step_count += 1
 
-        return step_limit_reached
+        return self.game_state_parser
     
     def run_action_on_emulator(self, action: LowLevelActions, profile: bool = False, render: bool = None):
         """_summary_
@@ -364,8 +416,8 @@ class Emulator():
         self.reset()
         while True:
             self.pyboy.tick(1, True)
-            truncated = self.step_count >= self.max_steps - 1
-            if truncated:
+            state = self.step_count >= self.max_steps - 1
+            if state.parsed_variables["done"]:
                 break
         self.close()
         # wait for pyboy
@@ -416,8 +468,8 @@ class Emulator():
                 log_warn(f"Invalid input {user_input}. Valid inputs are: {list(character_to_action.keys())} or e to exit.", self.parameters)
                 continue
             action = character_to_action[user_input]
-            truncated = self.step(action)
-            if truncated:
+            state = self.step(action)
+            if state.parsed_variables["done"]:
                 log_info("Max steps reached. Exiting human play mode.", self.parameters)
                 break
         
@@ -426,6 +478,7 @@ class Emulator():
         file_makedir(render_path)
         plt.imsave(render_path, self.render(reduce_res=False)[:,:, 0])
             
+    @abstractmethod
     def get_env_variant(self) -> str:
         """        
         Returns a string identifier for the particular environment variant being used.

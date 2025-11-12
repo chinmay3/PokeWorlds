@@ -13,3 +13,14 @@ def is_none_str(s):
             if s.lower() == option:
                 return True
     return isna(s)
+
+
+def nested_dict_to_str(nested_dict, indent=0, indent_char="  "):
+    result = ""
+    for key, value in nested_dict.items():
+        result += indent_char * indent + str(key) + ": "
+        if isinstance(value, dict):
+            result += "Dict: \n" + nested_dict_to_str(value, indent + 1, indent_char=indent_char)
+        else:
+            result += str(value) + "\n"
+    return result
