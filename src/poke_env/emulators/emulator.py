@@ -19,19 +19,6 @@ from skimage.transform import downscale_local_mean
 import numpy as np
 
 
-def allocate_new_session_name(parameters, session_path):
-    storage_dir = parameters["storage_dir"]
-    session_path = os.path.join(storage_dir, session_path)
-    os.makedirs(session_path, exist_ok=True)
-    existing_sessions = os.listdir(session_path)
-    # session names are always in the form session_X where X is an integer starting from 0
-    session_indices = [int(name.split("_")[-1]) for name in existing_sessions if name.startswith("session_") and name.split("_")[-1].isdigit()]
-    if len(session_indices) == 0:
-        new_index = 0
-    else:
-        new_index = max(session_indices) + 1
-    new_session_name = f"session_{new_index}"
-    return new_session_name
 
 class LowLevelActions(Enum):
     PRESS_ARROW_DOWN = WindowEvent.PRESS_ARROW_DOWN
@@ -99,12 +86,19 @@ class Emulator(ABC):
 
         Args:
             gb_path (str): Path to the GameBoy ROM file.
+
             game_state_parser_class (Type[GameStateParser]): A class that inherits from GameStateParser to parse game state variables.
+
             init_state (str): Path to the initial state file to load.
+
             parameters (dict): Dictionary of parameters for the environment.
+
             headless (bool, optional): Whether to run the environment in headless mode. Defaults to True.
+
             max_steps (int, optional): Maximum number of steps per episode. Defaults to None.
+
             save_video (bool, optional): Whether to save video of the episodes. Defaults to None.
+            
             session_name (str, optional): Name of the session. If None, a new session name will be allocated. Defaults to None.        
         """
         assert gb_path is not None, "You must provide a path to the GameBoy ROM file."
@@ -132,7 +126,7 @@ class Emulator(ABC):
             save_video = self.parameters["gameboy_default_save_video"]
         self.save_video = save_video
         if session_name is None:
-            session_name = allocate_new_session_name(self.parameters, session_path=self.get_session_path())
+            session_name = self.allocate_new_session_name()
         self.session_name = session_name
         self.session_path = os.path.join(self.get_session_path(), self.session_name)
         os.makedirs(self.session_path, exist_ok=True)
@@ -168,6 +162,20 @@ class Emulator(ABC):
             if not is_none_str(self.parameters["gameboy_headed_emulation_speed"]):
                 self.pyboy.set_emulation_speed(int(self.parameters["gameboy_headed_emulation_speed"]))        
             
+    def allocate_new_session_name(self):
+        storage_dir = self.parameters["storage_dir"]
+        session_path = os.path.join(storage_dir, "sessions", self.get_env_variant())
+        os.makedirs(session_path, exist_ok=True)
+        existing_sessions = os.listdir(session_path)
+        # session names are always in the form session_X where X is an integer starting from 0
+        session_indices = [int(name.split("_")[-1]) for name in existing_sessions if name.startswith("session_") and name.split("_")[-1].isdigit()]
+        if len(session_indices) == 0:
+            new_index = 0
+        else:
+            new_index = max(session_indices) + 1
+        new_session_name = f"session_{new_index}"
+        return new_session_name
+
     def clear_unamed_sessions(self):
         """
         Clears all unnamed sessions from the session directory.
@@ -344,7 +352,7 @@ class Emulator(ABC):
     def get_free_video_id(self) -> str:
         """
         Returns a new unique video ID for saving video files.
-        
+
         Returns:
             str: A new unique video ID.
         """
