@@ -178,3 +178,5 @@ storage/
 results/
 rom_data/*/*.gb
 rom_data/*/*.gbc
+rom_data/*/*.gb.ram
+rom_data/*/*.sav
