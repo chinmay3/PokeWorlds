@@ -3,7 +3,6 @@
 
 
 from poke_env.utils import log_warn, log_info, log_error, load_parameters
-from poke_env.emulators.structs import Pokemon
 from poke_env.emulators.emulator import Emulator, GameStateParser
 
 from typing import Set, List
@@ -136,7 +135,24 @@ class PokemonRedGameStateParser(GameStateParser):
         """
         super().__init__(pyboy, parameters)
         # load event names (parsed from https://github.com/pret/pokered/blob/91dc3c9f9c8fd529bb6e8307b58b96efa0bec67e/constants/event_constants.asm)
-        events_location = self._parameters["pokemon_red_events_path"]
+        popup_captures = {}
+        menu_captures = {}
+        pc_captures = {}
+        #battle_bag_captures = {}
+        #battle_fight_captures = {}
+        # TODO: item menu captures
+        captures_dir = parameters["pokemon_red_rom_data_path"] + "/image_data/"
+        popup_captures["bottom_right"] = np.load(os.path.join(captures_dir, "popup_open_bottom_right.npy"))
+        menu_captures["top_right"] = np.load(os.path.join(captures_dir, "menu_open_top_right.npy"))
+        popup_captures["bottom_left"] = np.load(os.path.join(captures_dir, "popup_open_bottom_left.npy"))
+        pc_captures["top_left"] = np.load(os.path.join(captures_dir, "pc_top_left.npy"))
+        self.screen_captures = {
+            "popup": popup_captures,
+            "menu": menu_captures,
+            "pc": pc_captures,
+        }
+        """ Screen captures for detecting popups and menus."""
+        events_location = parameters["pokemon_red_rom_data_path"] + "/events.json"
         with open(events_location) as f:
             event_slots = json.load(f)
         event_slots = event_slots
@@ -224,7 +240,7 @@ class PokemonRedGameStateParser(GameStateParser):
                 40, 0, 12, 1, 13, 51, 2, 54, 14, 59, 60, 61, 15, 3, 65
             ])
         } # TODO: Do I need this?
-        MAP_PATH = parameters["pokemon_red_map_data_path"]
+        MAP_PATH = parameters["pokemon_red_rom_data_path"] + "/map_data.json"
         with open(MAP_PATH) as map_data:
             MAP_DATA = json.load(map_data)["regions"]
         self._MAP_DATA = {int(e["id"]): e for e in MAP_DATA}
@@ -474,81 +490,6 @@ class PokemonRedGameStateParser(GameStateParser):
         return self.read_m(0xCC28)
 
     # TODO Section:
-    def get_player_pokemon(self, party_id: int) -> Pokemon:
-        """
-        Returns a Pokemon object representing the player's Pokemon at the specified party index.
-
-        Args:
-            party_id (int): The index of the Pokemon in the player's party (0-5).
-
-        Returns:
-            Pokemon: The Pokemon object representing the player's Pokemon.
-        """
-        # The pokemon initializer takes:
-        # class Pokemon: __init__(self, species, type1, type2, level, current_hp, status, hp_ev, attack_ev, defense_ev, speed_ev, special_ev, attack_defense_iv, speed_special_iv, max_hp, attack, defense, speed, special, move1, move2, move3, move4, move_1_pp, move_2_pp, move_3_pp, move_4_pp)
-        if party_id == 0:
-            # set the relevant variables here
-            pass
-        elif party_id == 1:
-            # set
-            pass
-        elif party_id == 2:
-            # set
-            pass
-        elif party_id == 3:
-            pass
-        elif party_id == 4:
-            pass
-        elif party_id == 5:
-            pass
-        elif party_id == 6:
-            pass
-        else:
-            log_error(f"Only 6 pokemon max", self._parameters)
-        return Pokemon(self.read_m(species_addr), self.read_m(type1_addr), self.read_m(type2_addr), 
-                       self.read_m(level_addr), self.read_m(current_hp_addr), self.read_m(status_addr), self.read_m(hp_ev_addr), self.read_m(attack_ev_addr), self.read_m(defense_ev_addr), self.read_m(speed_ev_addr), self.read_m(special_ev_addr), self.read_m(attack_defense_iv_addr), self.read_m(speed_special_iv_addr), self.read_m(max_hp_addr), self.read_m(attack_addr), self.read_m(defense_addr), self.read_m(speed_addr), self.read_m(special_addr), self.read_m(move1_addr), self.read_m(move2_addr), self.read_m(move3_addr), self.read_m(move4_addr), self.read_m(move_1_pp_addr), self.read_m(move_2_pp_addr), self.read_m(move_3_pp_addr), self.read_m(move_4_pp_addr))
-
-    def get_opponent_pokemon(self, party_id: int) -> Pokemon:
-        """
-        Returns a Pokemon object representing the enemy's Pokemon at the specified index.
-
-        Args:
-            enemy_id (int): The index of the enemy Pokemon (0 for single battles, 0 and 1 for double battles).
-        Returns:
-            Pokemon: The Pokemon object representing the enemy's Pokemon.
-        """
-                # The pokemon initializer takes:
-        # class Pokemon: __init__(self, species, type1, type2, level, current_hp, status, hp_ev, attack_ev, defense_ev, speed_ev, special_ev, attack_defense_iv, speed_special_iv, max_hp, attack, defense, speed, special, move1, move2, move3, move4, move_1_pp, move_2_pp, move_3_pp, move_4_pp)
-        if party_id == 0:
-            # set the relevant variables here
-            pass
-        elif party_id == 1:
-            # set
-            pass
-        elif party_id == 2:
-            # set
-            pass
-        elif party_id == 3:
-            pass
-        elif party_id == 4:
-            pass
-        elif party_id == 5:
-            pass
-        elif party_id == 6:
-            pass
-        else:
-            log_error(f"Only 6 pokemon max", self._parameters)
-        return Pokemon(self.read_m(species_addr), self.read_m(type1_addr), self.read_m(type2_addr), 
-                       self.read_m(level_addr), self.read_m(current_hp_addr), self.read_m(status_addr), self.read_m(hp_ev_addr), self.read_m(attack_ev_addr), self.read_m(defense_ev_addr), self.read_m(speed_ev_addr), self.read_m(special_ev_addr), self.read_m(attack_defense_iv_addr), self.read_m(speed_special_iv_addr), self.read_m(max_hp_addr), self.read_m(attack_addr), self.read_m(defense_addr), self.read_m(speed_addr), self.read_m(special_addr), self.read_m(move1_addr), self.read_m(move2_addr), self.read_m(move3_addr), self.read_m(move4_addr), self.read_m(move_1_pp_addr), self.read_m(move_2_pp_addr), self.read_m(move_3_pp_addr), self.read_m(move_4_pp_addr))
-
-    def get_all_player_pokemon(self) -> List[Pokemon]:
-        """
-        """
-        pass
-
-    def get_all_opponent_pokemon(self) -> List[Pokemon]:
-        pass
-
     def get_species_caught(self) -> List[str]:
         # Go through PokeDex, find all caught species
         pass
@@ -557,6 +498,110 @@ class PokemonRedGameStateParser(GameStateParser):
         # Go through PokeDex, find all seen species
         pass
 
+    def get_screen_bottom_right(self, current_frame: np.ndarray) -> np.ndarray:
+        """
+        Returns the ndarray capture of the bottom right of the screen. For menus and pop ups, this section will usually contain a Pokeball
+        This can be used to assess state of menu or dialogue
+
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+        Returns:
+            np.ndarray: The captured bottom right section of the screen.
+        """
+        return self.capture_square_centered(current_frame, center_x=156, center_y=140, box_size=10)
+
+    def get_screen_bottom_left(self, current_frame: np.ndarray) -> np.ndarray:
+        """
+        Returns the ndarray capture of the bottom left of the screen. For menus and pop ups, this section will usually contain a Pokeball
+        This can be used to assess state of menu or dialogue
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+
+        Returns:
+            np.ndarray: The captured bottom left section of the screen.
+        """
+        return self.capture_square_centered(current_frame, center_x=4, center_y=140, box_size=10)
+    
+    def get_screen_top_right(self, current_frame: np.ndarray) -> np.ndarray:
+        """
+        Returns the ndarray capture of the top right of the screen. The start menu has a pokeball icon here when its open
+        This can be used to assess state of menu or dialogue
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+
+        Returns:
+            np.ndarray: The captured top right section of the screen.
+        """
+        return self.capture_square_centered(current_frame, center_x=156, center_y=2, box_size=10)
+    
+    def get_screen_top_left(self, current_frame: np.ndarray) -> np.ndarray:
+        """
+        Returns the ndarray capture of the top left of the screen. The PC menu has a pokeball here when its open
+        This can be used to assess state of menu or dialogue
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+
+        Returns:
+            np.ndarray: The captured top right section of the screen.
+        """
+        return self.capture_square_centered(current_frame, center_x=4, center_y=2, box_size=10)    
+    
+    def get_start_menu_open(self, current_frame: np.ndarray, epsilon=0.01) -> bool:
+        """
+        Determines if the start menu is currently open based on screen capture comparison.
+
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+            epsilon (float): The threshold for determining if the menu is open.
+        Returns:
+            bool: True if the start menu is open, False otherwise.
+        """
+        top_right = self.get_screen_top_right(current_frame)
+        menu_top_right = self.screen_captures["menu"]["top_right"]
+        diff = np.abs(top_right - menu_top_right).mean()
+        if diff < epsilon:
+            return True
+        return False
+    
+    def get_pc_open(self, current_frame: np.ndarray, epsilon=0.01) -> bool:
+        """
+        Determines if the PC menu is currently open based on screen capture comparison.
+
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+            epsilon (float): The threshold for determining if the PC is open.
+        Returns:
+            bool: True if the PC is open, False otherwise.
+        """
+        top_left = self.get_screen_top_left(current_frame)
+        pc_top_left = self.screen_captures["pc"]["top_left"]
+        diff = np.abs(top_left - pc_top_left).mean()
+        if diff < epsilon:
+            return True
+        return False
+    
+    def get_popup_open(self, current_frame: np.ndarray, epsilon=0.01) -> bool:
+        """
+        Determines if a popup is currently open based on screen capture comparison.
+
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+            epsilon (float): The threshold for determining if the popup is open.
+        Returns:
+            bool: True if a popup is open, False otherwise.
+        """
+        if self.isinbattle() or self.get_pc_open(current_frame, epsilon):
+            return False        
+        bottom_right = self.get_screen_bottom_right(current_frame)
+        popup_bottom_right = self.screen_captures["popup"]["bottom_right"]
+        diff = np.abs(bottom_right - popup_bottom_right).mean()
+        bottom_left = self.get_screen_bottom_left(current_frame)
+        popup_bottom_left = self.screen_captures["popup"]["bottom_left"]
+        diff_left = np.abs(bottom_left - popup_bottom_left).mean()
+        diff = diff + diff_left
+        if diff < epsilon * 2:
+            return True
+        return False
 
     def __repr__(self):
         return "PokemonRed"
@@ -565,6 +610,16 @@ class PokemonRedGameStateParser(GameStateParser):
         pass
 
     def parse_step(self):
+        #centered = self.get_screen_top_left(self.get_current_frame())
+        #centered = self.draw_square_centered(self.get_current_frame(), center_x=4, center_y=2, box_size=10, thickness=2)
+        #import matplotlib.pyplot as plt
+        #plt.imshow(centered)
+        #plt.show()
+        #np.save("pc_top_left.npy", centered)
+        current_frame = self.get_current_frame()
+        self.parsed_variables["popup_open"] = self.get_popup_open(current_frame)
+        self.parsed_variables["start_menu_open"] = self.get_start_menu_open(current_frame)
+        self.parsed_variables["pc_open"] = self.get_pc_open(current_frame)
         self.parsed_variables["local_coords"] = self.get_local_coords()
         self.parsed_variables["global_coords"] = self.get_global_coords()
         self.parsed_variables["in_battle"] = self.isinbattle()
@@ -602,8 +657,8 @@ class BasicPokemonRedEmulator(Emulator):
     def __init__(self, parameters: dict = None, init_state=None, headless: bool = False, max_steps: int = None, save_video: bool = None, session_name: str = None, instance_id: str = None):
         parameters = load_parameters(parameters)
         if init_state is None:
-            init_state = parameters["pokemon_red_default_state"]        
-        gb_path = parameters["pokemon_red_gb_path"]
+            init_state = parameters["pokemon_red_rom_data_path"] + "/states/default.state"
+        gb_path = parameters["pokemon_red_rom_data_path"] + "/PokemonRed.gb"
         game_state_parser_class = PokemonRedGameStateParser
         super().__init__(gb_path, game_state_parser_class, init_state, parameters, headless, max_steps, save_video, session_name, instance_id)
     
