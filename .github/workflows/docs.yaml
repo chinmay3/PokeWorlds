@@ -39,7 +39,7 @@ jobs:
       - run: |
           mkdir -p docs/assets
           cp assets/blackicon.png docs/assets/
-          pdoc src/poke_env -o docs -d google -n --logo "assets/blackicon.png"
+          pdoc src/poke_env -o docs -d google -n --logo "	https://dhananjayashok.github.io/PokemonEnvironments/assets/blackicon.png"
 
       - uses: actions/upload-pages-artifact@v4
         with:
