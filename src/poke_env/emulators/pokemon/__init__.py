@@ -37,6 +37,10 @@ _VARIANT_TO_PARSER = {
 """ Mapping of variant names to their corresponding GameStateParser classes."""
 
 
+AVAILABLE_POKEMON_VARIANTS = list(VARIANT_TO_GB_NAME.keys())
+""" List of available Pokemon game variants. """
+
+
 def _infer_variant(variant: str, parameters: dict) -> str:
     """ 
     Try to infer the variant given a variant name 
