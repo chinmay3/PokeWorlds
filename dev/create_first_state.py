@@ -1,4 +1,6 @@
-from poke_env import Emulator, AVAILABLE_POKEMON_VARIANTS, VARIANT_TO_GB_NAME
+from poke_env.emulators.emulator import Emulator
+from poke_env import AVAILABLE_POKEMON_VARIANTS
+from poke_env.emulators.pokemon import VARIANT_TO_GB_NAME
 from poke_env.utils import load_parameters, log_error
 import click
 

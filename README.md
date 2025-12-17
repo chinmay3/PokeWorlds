@@ -80,6 +80,11 @@ python demo.py
 ```
 This should open up a GameBoy window where you can play the Pokemon Red game. 
 
+To see how a random agent does, try:
+```bash
+python demo.py --play_mode random
+```
+
 
 ## Quickstart
 
