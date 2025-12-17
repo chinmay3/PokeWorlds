@@ -98,6 +98,18 @@ python tests/gameboy/save_state.py
 
 This will save the state to `tmp.state`
 
+Alternatively, run the pyboy simulator with:
+```bash 
+python tests/gameboy/dev.py
+```
+
+This will run the game with the option to enter dev mode. If you want to save a particular state, go to [the gameboy configs](configs/gameboy_vars.yaml) *while* playing the game (at the state you want to save), change the `gameboy_dev_play_stop` parameter to `true` and then check the terminal. You will get a message with the possible dev actions. 
+
+* `s`: saves the state (useful for creating fixed starting points)
+* `c`: captures the screen in a particular [named region]() LINK TO DOCS at the current game frame (useful for creating reference images of particular states e.g. menu/pc open, dialogues that trigger on particular milestones or events etc.) WRITE A README WITH EXAMPLES ON BOTH OF THESE
+
+
+
 
 
 ## Citation

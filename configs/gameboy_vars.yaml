@@ -7,3 +7,4 @@ gameboy_hard_max_steps: 1000000
 gameboy_default_save_video: false
 gameboy_headless_render: true # Can set to false for non-visual agents.
 gameboy_reduce_video_resolution: true
+gameboy_dev_play_stop: true # If true, will immediately freeze the emulator and allow the user to perform useful state specific actions. Only for development.

@@ -1,6 +1,6 @@
 from enum import Enum
 from abc import ABC, abstractmethod
-from typing import Type, Optional
+from typing import Type, Optional, Tuple
 
 
 import os
@@ -8,7 +8,7 @@ from time import perf_counter
 import sys
 import shutil
 import uuid
-from poke_env.utils import load_parameters, log_error, log_warn, file_makedir, log_info, is_none_str, nested_dict_to_str
+from poke_env.utils import load_parameters, log_error, log_warn, file_makedir, log_info, is_none_str, nested_dict_to_str, verify_parameters
 
 
 import cv2
@@ -19,6 +19,15 @@ from skimage.transform import downscale_local_mean
 import numpy as np
 
 
+# TODO: Think about design for this.
+class GameInfo:
+    def __init__(self, parameters):
+        self.data = {}
+        self.parameters = parameters
+        
+    
+    def reset(self):
+        self.data = {}
 
 class LowLevelActions(Enum):
     """
@@ -42,15 +51,129 @@ class LowLevelActions(Enum):
         PRESS_BUTTON_START: WindowEvent.RELEASE_BUTTON_START}
 
 
+class NamedScreenRegion:
+    """
+    Saves a reference to a named screen region (always a rectangle) for easy access.
+    """
+    def __init__(self, name: str, start_x: int, start_y: int, width: int, height: int, parameters: dict, target_path: Optional[str] = None):
+        """
+        Initializes a named screen region.
+
+        Args:
+            name (str): The name of the screen region.
+            start_x (int): The starting x-coordinate of the region in pixel space of the full resolution game screen. 
+            start_y (int): The starting y-coordinate of the region in pixel space of the full resolution game screen.
+            width (int): The width of the region in pixels.
+            height (int): The height of the region in pixels.
+            target (str): Optional path to a .npy file containing a screen capture of this region. Non-existent paths are only allowed if parameters['debug_mode'] (from configs/project_vars.yaml) is set to True. 
+        """
+        self.name = name
+        """ Name of the screen region. """
+        self.start_x = start_x
+        """ The starting x-coordinate of the region. """
+        self.start_y = start_y
+        """ The starting y-coordinate of the region. """
+        self.width = width
+        """ The width of the region. """
+        self.height = height
+        """ The height of the region. """
+        self._parameters = parameters
+        self.target_path = target_path
+        """ Path to npy file of a screen capture that we will be comparing this region against. Optional. """
+        self.target : Optional[np.ndarray]= None
+        if target_path is not None:
+            if not target_path.endswith(".npy"):
+                target_path = target_path + ".npy"
+            if not os.path.exists(target_path):
+                if not self._parameters['debug_mode']:
+                    log_error(f"Target file {target_path} does not exist. This is only allowed in debug_mode (can be set in configs/project_vars.yaml)", self._parameters)
+                else:
+                    log_warn(f"Target file {target_path} does not exist. Continuing since debug_mode is enabled.", self._parameters)
+            else:
+                self.target = np.load(target_path)
+
+    def get_end_x(self) -> int:
+        """
+        Returns the end x-coordinate of the named screen region.
+        
+        Returns:
+            int: The end x-coordinate of the named screen region.
+        """
+        return self.start_x + self.width
+    
+    def get_end_y(self) -> int:
+        """
+        Returns the end y-coordinate of the named screen region.
+        Returns:
+            int: The end y-coordinate of the named screen region.
+        """
+        return self.start_y + self.height
+    
+    def get_corners(self) -> Tuple[int, int, int, int]:
+        """
+        Returns the corners of the named screen region as (start_x, start_y, end_x, end_y).
+
+        Returns:
+            Tuple[int, int, int, int]: The corners of the named screen region.
+        """
+        return (self.start_x, self.start_y, self.get_end_x(), self.get_end_y())
+    
+    def __str__(self) -> str:
+        return f"NamedScreenRegion(name={self.name}, start_x={self.start_x}, start_y={self.start_y}, width={self.width}, height={self.height})"
+    
+    def __repr__(self) -> str:
+        return self.__str__()
+    
+    
+    def matches_target(self, reference: np.ndarray, strict_shape: bool=True, epsilon=0.01) -> bool:
+        """
+        Compares the given reference image to the target image using Absolute Error (AE).
+        Args:
+            reference (np.ndarray): The reference image to compare.
+            strict_shape (bool, optional): Whether to error out if the array shapes do not match. Defaults to True.
+            epsilon (float, optional): The threshold for considering a match. Defaults to 0.01.
+        Returns:
+            bool: True if the MSE is below the epsilon threshold, False otherwise.
+        """
+        if self.target is None:
+            log_error(f"No target image set for NamedScreenRegion {self.name}. Cannot compare.", self._parameters)
+        if strict_shape and reference.shape != self.target.shape:
+            log_error(f"Reference image shape {reference.shape} does not match target image shape {self.target.shape} for NamedScreenRegion {self.name}.", self._parameters)
+        diff = np.abs(reference.astype(np.float32) - self.target.astype(np.float32))
+        mae = np.mean(diff)
+        if mae <= epsilon:
+            return True
+        return False
+
+
 class GameStateParser(ABC):
     """
     Abstract base class for parsing game state variables from the GameBoy emulator.
     """
-    def __init__(self, pyboy, parameters):
-        self._pyboy = pyboy
+    def __init__(self, pyboy, parameters, named_screen_regions: Optional[list[NamedScreenRegion]] = None):
+        """
+        Initializes the GameStateParser.
+        Args:
+            pyboy: An instance of the PyBoy emulator.
+            parameters: A dictionary of parameters for configuration.
+            named_screen_regions (Optional[list[NamedScreenRegion]]): A list of NamedScreenRegion objects for easy access to specific screen regions.
+        """
+        verify_parameters(parameters)
         self._parameters = parameters
+        if not isinstance(pyboy, PyBoy):
+            log_error("pyboy must be an instance of PyBoy", self._parameters)
+        self._pyboy = pyboy
         self.parsed_variables = {"done": False}
-        """Dictionary to hold all parsed game state variables."""
+        """Dictionary to hold all parsed game state variables.""" # TODO: Revisit Design
+        self.named_screen_regions: dict[str, NamedScreenRegion] = {}
+        """ Dictionary of NamedScreenRegion objects for easy access to specific screen regions. """
+        if named_screen_regions is not None:
+            for region in named_screen_regions:
+                if not isinstance(region, NamedScreenRegion):
+                    log_error(f"named_screen_regions must be a list of NamedScreenRegion objects. Found {type(region)}", self._parameters)
+                if region.name in self.named_screen_regions:
+                    log_error(f"Duplicate named screen region: {region.name}", self._parameters)
+                self.named_screen_regions[region.name] = region
 
     def clear(self):
         """
@@ -58,7 +181,88 @@ class GameStateParser(ABC):
         """
         self.parsed_variables = {"done": False}
 
-    def get_current_frame(self):
+    def bit_count(self, bits: int) -> int:
+        """
+        Counts the number of set bits (1s) in the given integer.
+        Args:
+            bits (int): The integer to count set bits in.
+        Returns:
+            int: The number of set bits.
+        """
+        return bin(bits).count("1")    
+    
+    def read_m(self, addr: bytes) -> int:
+        """
+        Reads a byte from the specified memory address.
+        Args:
+            addr (int): The memory address to read from.
+        Returns:
+            int: The byte value at the specified memory address.
+        """
+        #return self.pyboy.get_memory_value(addr)
+        return self._pyboy.memory[addr]
+
+    def read_bits(self, addr) -> str:
+        """
+        Reads a memory address and returns the result as a binary string. Adds padding so that reading bit 0 works correctly. 
+        Args:
+            addr (int): The memory address to read from.
+        Returns:
+            str: The binary string representation of the byte at the specified memory address.
+        """
+        # add padding so zero will read '0b100000000' instead of '0b0'
+        return bin(256 + self.read_m(addr))
+
+    def read_bit(self, addr, bit: int) -> bool:
+        """
+        Reads a specific bit from a memory address.
+        Args:
+            addr (int): The memory address to read from.
+            bit (int): The bit position to read (0-7).
+        Returns:
+            bool: True if the bit is set (1), False otherwise.
+        """
+        # add padding so zero will read '0b100000000' instead of '0b0'
+        return self.read_bits(addr)[-bit - 1] == "1"
+    
+    def read_m_bit(self, addr_bit: str) -> bool:
+        """
+        Reads a specific addr-bit string from a memory address. 
+        Args:
+            addr_bit (str): The - concatenation of a memory address and the bit position (e.g. '0xD87D-5')
+        Returns:
+            bool: True if the bit at that memory address is set (1), False otherwise
+        """
+        if "-" not in addr_bit:
+            log_error(f"Incorrect format addr_bit: {addr_bit}", self._parameters)
+        addr, bit = addr_bit.split("-")        
+        flag = False
+        try:
+            addr = eval(addr)
+        except:
+            flag = True
+        if flag:
+            log_error(f"Could not eval byte string: {addr}. Check format", self._parameters)
+        if not bit.isdigit():
+            log_error(f"bit {bit} is not digit", self._parameters)
+        bit = int(bit)
+        return self.read_bit(addr, bit)
+
+    def get_raised_flags(self, item_dict: dict) -> set:
+        """
+        Reads a dictionary of the form {flag_name: memory_address-bit} and returns a set of all flag names that are currently raised (i.e. the bit at the memory address is 1).
+        Args:
+            item_dict (dict): A dictionary mapping flag names to memory address-bit strings.
+        Returns:
+            set: A set of flag names that are currently raised.
+        """
+        items = set()
+        for item_name, slot in item_dict.items():
+            if self.read_m_bit(slot):
+                items.add(item_name)
+        return items
+    
+    def get_current_frame(self) -> np.ndarray:
         """
         Reads the pyboy screen and returns a full resolution numpy array
         
@@ -68,6 +272,29 @@ class GameStateParser(ABC):
         screen = self._pyboy.screen.ndarray[:,:,0:1]  # (144, 160, 3)
         return screen
     
+    def capture_box(self, current_frame: np.ndarray, start_x: int, start_y: int, width: int, height: int) -> np.ndarray:
+        """
+        Captures a rectangular region from the current frame.
+
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+            start_x (int): The starting x-coordinate of the region.
+            start_y (int): The starting y-coordinate of the region.
+            width (int): The width of the region.
+            height (int): The height of the region.
+        Returns:
+            np.ndarray: The captured rectangular region.
+        """
+        # first check that the box is within the frame
+        end_x = start_x + width
+        end_y = start_y + height
+        if start_x < 0 or start_y < 0 or end_x > current_frame.shape[1] or end_y > current_frame.shape[0]:
+            start_x = max(0, start_x)
+            start_y = max(0, start_y)
+            end_x = min(current_frame.shape[1], end_x)
+            end_y = min(current_frame.shape[0], end_y)
+        return current_frame[start_y:end_y, start_x:end_x, :]
+     
     def capture_square_centered(self, current_frame: np.ndarray, center_x: int, center_y: int, box_size: int) -> np.ndarray:
         """
         Captures a square region from the current frame centered at (center_x, center_y) with the given box size.
@@ -87,6 +314,33 @@ class GameStateParser(ABC):
         start_y = max(center_y - half_box, 0)
         end_y = min(center_y + half_box, current_frame.shape[0])
         return current_frame[start_y:end_y, start_x:end_x, :]
+    
+    def draw_box(self, current_frame: np.ndarray, start_x: int, start_y: int, width: int, height: int, color: tuple = (0, 0, 0), thickness: int = 1) -> np.ndarray:
+        """
+        Draws a rectangle on the current frame.
+
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+            start_x (int): The starting x-coordinate of the rectangle.
+            start_y (int): The starting y-coordinate of the rectangle.
+            width (int): The width of the rectangle.
+            height (int): The height of the rectangle.
+            color (tuple, optional): The color of the rectangle in BGR format. Defaults to (255, 0, 0) (red).
+            thickness (int, optional): The thickness of the rectangle border. Defaults to 1.
+
+        Returns:
+            np.ndarray: The frame with the drawn rectangle.
+        """
+        end_x = start_x + width
+        end_y = start_y + height
+        if start_x < 0 or start_y < 0 or end_x > current_frame.shape[1] or end_y > current_frame.shape[0]:
+            start_x = max(0, start_x)
+            start_y = max(0, start_y)
+            end_x = min(current_frame.shape[1], end_x)
+            end_y = min(current_frame.shape[0], end_y)
+        frame_with_box = current_frame.copy()
+        cv2.rectangle(frame_with_box, (start_x, start_y), (end_x, end_y), color, thickness)
+        return frame_with_box
     
     def draw_square_centered(self, current_frame: np.ndarray, center_x: int, center_y: int, box_size: int, color: tuple = (0, 0, 0), thickness: int = 1) -> np.ndarray:
         """
@@ -111,21 +365,60 @@ class GameStateParser(ABC):
         frame_with_square = current_frame.copy()
         cv2.rectangle(frame_with_square, (start_x, start_y), (end_x, end_y), color, thickness)
         return frame_with_square
+    
+    def capture_named_region(self, current_frame: np.ndarray, name: str) -> np.ndarray:
+        """
+        Captures a named region from the current frame.
 
-    @abstractmethod
-    def parse_step(self):
-        """
-        Parses the game state at the current step. Saves any relevant variables to `self.parsed_variables`
-        """
-        raise NotImplementedError
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+            name (str): The name of the region to capture.
 
-    @abstractmethod
-    def parse_all(self):
+        Returns:
+            np.ndarray: The captured region.
         """
-        Parses the game state. Use this function for additional variables that you may not need at every step because they are expensive to compute.
+        if name not in self.named_screen_regions:
+            log_error(f"Named screen region {name} not found.", self._parameters)
+        region = self.named_screen_regions[name]
+        x, y, w, h = region.start_x, region.start_y, region.width, region.height
+        return self.capture_box(current_frame, x, y, w, h)
+    
+    def draw_named_region(self, current_frame: np.ndarray, name: str, color: tuple = (0, 0, 0), thickness: int = 1) -> np.ndarray:
         """
-        raise NotImplementedError
+        Draws a named region on the current frame.
 
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+            name (str): The name of the region to draw.
+            color (tuple, optional): The color of the rectangle in BGR format. Defaults to (255, 0, 0) (red).
+            thickness (int, optional): The thickness of the rectangle border. Defaults to 1.
+
+        Returns:
+            np.ndarray: The frame with the drawn rectangle.
+        """
+        if name not in self.named_screen_regions:
+            log_error(f"Named screen region {name} not found.", self._parameters)
+        region = self.named_screen_regions[name]
+        x, y, w, h = region.start_x, region.start_y, region.width, region.height
+        return self.draw_box(current_frame, x, y, w, h, color, thickness)
+
+    
+    def draw_grid_overlay(self, current_frame: np.ndarray, grid_skip: int=20) -> np.ndarray:
+        """
+        Draws a grid overlay on the current frame for easier region identification.
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+            grid_skip (int, optional): The number of pixels between grid lines. Defaults to 20.
+        Returns:
+            np.ndarray: The frame with the grid overlay.            
+        """
+        frame_with_grid = current_frame.copy()
+        for x in range(0, current_frame.shape[1], grid_skip):
+            cv2.line(frame_with_grid, (x, 0), (x, current_frame.shape[0]), (0, 0, 255), 1, lineType=cv2.LINE_AA)
+        for y in range(0, current_frame.shape[0], grid_skip):
+            cv2.line(frame_with_grid, (0, y), (current_frame.shape[1], y), (0, 0, 255), 1, lineType=cv2.LINE_AA)
+        return frame_with_grid
+    
     @abstractmethod
     def __repr__(self) -> str:
         """
@@ -156,8 +449,7 @@ class Emulator(ABC):
             save_video (bool, optional): Whether to save video of the episodes. Defaults to None.            
             session_name (str, optional): Name of the session. If None, a new session name will be allocated. Defaults to None.        
         """
-        assert parameters is not None, "You must provide a parameters dictionary."
-        assert parameters != {}, "The parameters dictionary cannot be empty."
+        verify_parameters(parameters)
         self._parameters = parameters
         assert gb_path is not None, "You must provide a path to the GameBoy ROM file."
         assert isinstance(game_state_parser_class, type) and issubclass(game_state_parser_class, GameStateParser), "You must provide a valid GameStateParser subclass."
@@ -202,6 +494,9 @@ class Emulator(ABC):
         """ TODO: IDK YET """
         self.render_headless = parameters["gameboy_headless_render"]
         """ Whether to render the emulator screen even in headless mode. This must be true for methods that rely on image observations (e.g. VLMs) to access the screen. Defaults to value specified in config files. """
+        if not self.render_headless:
+            log_error("render_headless cannot be set to False. In the Pokemon environments, screen captures are used aggressively to determine state. ", self._parameters)
+
         self._full_frame_writer = None
         self._model_frame_writer = None
         self.reset_count = 0
@@ -372,8 +667,7 @@ class Emulator(ABC):
         if self.save_video or self.video_running: # TODO: Consider alternative ways of handling this
             self.add_video_frame()
 
-        self.run_action_on_emulator(action)
-        self.game_state_parser.parse_step()
+        frames = self.run_action_on_emulator(action)
 
         if self.check_if_done():
             self.game_state_parser.parsed_variables["done"] = True
@@ -381,7 +675,7 @@ class Emulator(ABC):
 
         self.step_count += 1
 
-        return self.game_state_parser
+        return
 
     def get_game_state(self) -> GameStateParser:
         """
@@ -392,17 +686,23 @@ class Emulator(ABC):
         """
         return self.game_state_parser
 
-    def run_action_on_emulator(self, action: LowLevelActions = None, profile: bool = False, render: bool = None):
+    def run_action_on_emulator(self, action: LowLevelActions = None, profile: bool = False, render: bool = None) -> Optional[np.ndarray]:
         """ 
         
         Performs the given action on the emulator by pressing and releasing the corresponding button.
 
         Args:
             action (LowLevelActions): Lowest level action to perform on the emulator.
+            profile (bool, optional): Whether to profile the action execution time. Defaults to False.
+            render (bool, optional): Whether to render the emulator screen during action execution. Defaults to None.
+        Returns:
+            Optional[np.ndarray]: The stack of frames that passed while performing the action, if rendering is enabled. Is of shape [n_frames (variable perhaps idk), height, width, channels]. Otherwise, None.
         """
-        # press button then release after some steps
         #log_info(f"Running action: {action}", self.parameters)        
+        frames = None
         if action is not None:
+            if render == True:
+                frames = []
             if profile:
                 start_time = perf_counter()
             self._pyboy.send_input(action.value)
@@ -414,23 +714,31 @@ class Emulator(ABC):
             if render is not None:
                 render_screen = render
             else:
-                render_screen = self.save_video or not self.headless or self.render_headless
+                render_screen = self.save_video or not self.headless or self.render_headless 
             press_step = self.press_step
             self._pyboy.tick(press_step, render_screen)
+            if render:
+                frames.append(self.get_current_frame(reduce_res=False))
             if profile:
                 start_time = perf_counter()
             self._pyboy.send_input(LowLevelActions.release_actions.value[action.value])
             if profile:
                 mid_time = perf_counter()
             self._pyboy.tick(self.act_freq - press_step - 1, render_screen)
+            if render:
+                frames.append(self.get_current_frame(reduce_res=False))
             if profile:
                 end_time = perf_counter()
             # Releasing action LowLevelActions.PRESS_ARROW_LEFT took 0.00 ms, followed by 16.13 ms for remaining ticks
             self._pyboy.tick(1, True)
+            if render:
+                frames.append(self.get_current_frame(reduce_res=False))
+                frames = np.concatenate(frames, axis=2)  # concatenate along channel axis TODO: check this
         else:
             log_warn("No action provided to run_action_on_emulator. Skipping action. You probably should only ever use this in debugging mode. Idk maybe wait is a command.", self._parameters)
             self._pyboy.tick(self.act_freq, True)
-    
+        return frames
+            
     def get_free_video_id(self) -> str:
         """
         Returns a new unique video ID for saving video files.
@@ -525,11 +833,9 @@ class Emulator(ABC):
         if self.headless:
             log_error("Human play mode requires headless=False. Change the initialization", self._parameters)    
         self.reset()
-        self.game_state_parser.parse_step()
         starting_state = str(self.game_state_parser)
         while True:
             self._pyboy.tick(1, True)
-            self.game_state_parser.parse_step()
             new_state = str(self.game_state_parser)
             if new_state != starting_state:
                 log_info(f"Current game state:\n{new_state}", self._parameters)
@@ -540,7 +846,114 @@ class Emulator(ABC):
         self.close()
         # wait for pyboy
         #sleep(1) TODO: See how to close properly in this setting. 
-        
+
+    def _dev_play(self, max_steps: int = None):
+        """
+        Allows a human to play the emulator using keyboard inputs. Does not route through step function. 
+        This function continuously reads from the parameters in the configs directory and if it detects a change in the `gameboy_dev_play_stop` parameter, will enter a breakpoint
+
+        Args:
+            max_steps (int, optional): Maximum number of steps to play. Defaults to gameboy_hard_max_steps in configs.
+        """
+        if max_steps is None:
+            max_steps = self._parameters["gameboy_hard_max_steps"]
+        log_info("Starting human play mode. Use arrow keys and A/B/Start buttons to play. Close the window to exit. Open configs/gameboy_vars.yaml and set gameboy_dev_play_stop to true to enable development mode.", self._parameters)
+        if self.headless:
+            log_error("Human play mode requires headless=False. Change the initialization", self._parameters)
+        self.reset()
+        while True:
+            self._parameters = load_parameters()
+            if not self._parameters["gameboy_dev_play_stop"]:
+                self._pyboy.tick(1, True)
+            else:
+                valid_regions = list(self.game_state_parser.named_screen_regions.keys())
+                dev_instructions = f"""
+                In development mode.
+                Enter 'e' to close the emulator.
+                Enter '' to re-enter normal play mode (remember to change gameboy_dev_play_stop back to false in configs or it'll stop again). 
+                Enter 's <state_path(.state)>' to save the current state as a .state file.
+                Enter 'c <region_name> <save_path(.npy)/ None if region.target_path is set>' to capture a named region and save it as a .npy file.
+                Enter 'd <region_name> to draw a named region and display the current screen with the region drawn.
+                Enter 'b' to enter a breakpoint.
+                Valid region names are: {valid_regions}
+                """
+                log_info(dev_instructions, self._parameters)
+                user_input = input("Dev mode input: ")
+                user_input = user_input.lower().strip()
+                first_char = user_input[0] if len(user_input) > 0 else ""
+                allowed_inputs = ["e", "", "c", "s", "d", "b"]
+                if first_char not in allowed_inputs:
+                    log_warn(f"Invalid input {user_input}. Valid inputs are: {allowed_inputs}", self._parameters)
+                    continue
+                if first_char == "e":
+                    log_info("Exiting human play mode.", self._parameters)
+                    break
+                elif first_char == "":
+                    log_info("Exiting development mode. Resuming normal play.", self._parameters)
+                    continue
+                elif first_char == "s":
+                    parts = user_input.split(" ")
+                    if len(parts) != 2:
+                        log_warn(f"Invalid input {user_input}. To save state, use 's <state_path(.state)>'", self._parameters)
+                        continue
+                    state_path = parts[1]
+                    if os.path.exists(state_path):
+                        confirm_input = input(f"State file {state_path} already exists. Overwrite? (y/n): ")
+                        if confirm_input.lower().strip() != "y":
+                            log_info("Aborting save state.", self._parameters)
+                            continue
+                    self.save_state(state_path)
+                elif first_char == "b":
+                    breakpoint()
+                else:
+                    # draw it even if c, so we can see what we're capturing
+                    save_path = None
+                    if first_char == "c":
+                        parts = user_input.split(" ")
+                        if len(parts) != 3:
+                            if len(parts) != 2:
+                                log_warn(f"Invalid input {user_input}. To capture region, use 'c <region_name> <save_path(.npy)>'", self._parameters)
+                                continue
+                            else:                                
+                                region_name = parts[1]
+                                region = self.game_state_parser.named_screen_regions[region_name]
+                                save_path = region.target_path
+                                if save_path is None:
+                                    log_warn(f"Region {region_name} does not have a target path specified. Please provide a save path.", self._parameters)
+                                    continue
+                        else:
+                            save_path = parts[2]
+                        if not save_path.endswith(".npy"):
+                            save_path = save_path + ".npy"
+                        file_makedir(save_path)
+                    elif first_char == "d":
+                        parts = user_input.split(" ")
+                        if len(parts) != 2:
+                            log_warn(f"Invalid input {user_input}. To draw region, use 'd <region_name>'", self._parameters)
+                            continue
+                        region_name = parts[1]
+                    current_frame = self.get_current_frame(reduce_res=False)
+                    drawn_frame = self.game_state_parser.draw_named_region(current_frame, region_name)
+                    plt.imshow(drawn_frame[:, :, 0], cmap="gray")
+                    plt.title(f"Region: {region_name}")
+                    plt.show()
+                    if first_char == "c":
+                        captured_region = self.game_state_parser.capture_named_region(current_frame, region_name)
+                        plt.imshow(captured_region[:, :, 0], cmap="gray")
+                        plt.title(f"Captured Region: {region_name}")
+                        plt.show()
+                        existing_file = os.path.exists(save_path)
+                        existing_str = "" if not existing_file else " (will overwrite existing file)"
+                        confirmation_input = input(f"Save captured region {region_name} to {save_path}? (y/n) {existing_str}: ")
+                        if confirmation_input.lower().strip() != "y":
+                            log_info("Aborting capture region.", self._parameters)
+                            continue
+                        np.save(save_path, captured_region)
+                        log_info(f"Saved captured region {region_name} to {save_path}", self._parameters)
+            if self.step_count >= max_steps:
+                break
+        self.close()
+    
     def _human_step_play(self, max_steps: int = None, init_state: str = None):
         """ 
         Allows a human to play the emulator using keyboard inputs. This routes the code through the step function. Only for debugging.         
@@ -610,6 +1023,7 @@ class Emulator(ABC):
         """
         if not state_path.endswith(".state"):
             state_path = state_path + ".state"
+        file_makedir(state_path)
         with open(state_path, "wb") as f:
             self._pyboy.save_state(f)
         log_info(f"Saved state to {state_path}", self._parameters)

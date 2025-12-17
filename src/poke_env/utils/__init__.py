@@ -54,3 +54,14 @@ def nested_dict_to_str(nested_dict, indent=0, indent_char="  "):
         else:
             result += str(value) + "\n"
     return result
+
+def verify_parameters(parameters: dict):
+    """
+    Does a basic sanity check to ensure parameters is a non-empty dictionary.
+    """
+    if parameters is None:
+        raise ValueError("Parameters cannot be None.")
+    if not isinstance(parameters, dict):
+        raise ValueError("Parameters must be a dictionary.")
+    if len(parameters) == 0:
+        raise ValueError("Parameters dictionary cannot be empty.")
