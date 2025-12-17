@@ -9,150 +9,240 @@ See the MemoryBasedPokemonRedGameStateParser class for examples of how to read g
 """
 
 from poke_env.utils import log_warn, log_info, log_error, load_parameters, verify_parameters
-from poke_env.emulators.emulator import Emulator, GameStateParser, NamedScreenRegion
+from poke_env.emulators.emulator import GameStateParser, NamedScreenRegion
 
-from typing import Set, List, Type, Dict, Optional
+from typing import Set, List, Type, Dict, Optional, Tuple
 import os
 from abc import ABC, abstractmethod
+from enum import Enum
+
 from pyboy import PyBoy
 
 import json
 import numpy as np
 from bidict import bidict
 
+
+class AgentState(Enum):
+    """
+    Enum representing different agent states in the Pokemon game.
+    1. FREE_ROAM: The agent is freely roaming the game world.
+    2. IN_DIALOGUE: The agent is currently in a dialogue state. (including reading signs, talking to NPCs, etc.)
+    3. IN_MENU: The agent is currently in a menu state. (including PC, Name Entry, Pokedex, etc.)
+    4. IN_BATTLE: The agent is currently in a battle state.
+    """
+    FREE_ROAM = 0
+    IN_DIALOGUE = 1
+    IN_MENU = 2
+    IN_BATTLE = 3
+
 class PokemonGameStateParser(GameStateParser, ABC):
     """
-    Reads from memory addresses to form the state
+    Base class for Pokemon game state parsers. Uses visual screen regions to parse game state.
+    Defines common named screen regions and methods for determining game states such as being in battle, menu, or dialogue.
+
+    Can be used to determine the exact AgentState
     """
-    def __init__(self, pyboy: PyBoy, parameters: dict, named_screen_regions: Optional[list[NamedScreenRegion]] = None):
+    COMMON_REGIONS = [
+                ("dialogue_bottom_right", 151, 135, 10, 10), 
+                ("menu_top_right", 152, 1, 6, 6),
+                ("pc_top_left", 0, 0, 6, 6),
+                ("battle_enemy_hp_text", 15, 17, 10, 5), 
+                ("battle_player_hp_text", 80, 73, 10, 5), 
+                ("dialogue_choice_bottom_right", 153, 87, 6, 6),
+                ("name_entity_top_left", 0, 32, 6, 6),
+                ("player_card_middle", 56, 70, 6, 6),
+                ("map_bottom_right", 140, 130, 10, 10),
+    ]
+    """ List of common named screen regions for Pokemon games. """
+
+    def __init__(self, variant: str, pyboy: PyBoy, parameters: dict, additional_named_screen_region_details: List[Tuple[str, int, int, int, int]] = []):
         """
         Initializes the PokemonGameStateParser.
         Args:
+            variant (str): The variant of the Pokemon game.
             pyboy (PyBoy): The PyBoy emulator instance.
             parameters (dict): Configuration parameters for the emulator.
-            named_screen_regions (Optional[list[NamedScreenRegion]]): List of named screen regions to monitor.
+            additional_named_screen_region_details (List[Tuple[str, int, int, int, int]]): Parameters associated with additional named screen regions to include.
         """
         verify_parameters(parameters)
-        super().__init__(pyboy, parameters, named_screen_regions)
-
-    @abstractmethod
-    def is_in_dialogue(self) -> bool:
-        """
-        Determines if the player is currently in a dialogue state or reading text from a sign, interacting with an object etc.
-        Essentially anything that causes text to appear at the bottom of the screen that isn't a battle, pc or menu.
-
-        Returns:
-            bool: True if in dialogue, False otherwise.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def is_menu_open(self) -> bool:
-        """
-        Determines if the menu is currently open.
-
-        Returns:
-            bool: True if the menu is open, False otherwise.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def is_in_battle(self) -> bool:
-        """
-        Determines if the player is currently in a battle.
-
-        Returns:
-            bool: True if in battle, False otherwise.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def is_pokedex_open(self) -> bool:
-        """
-        Determines if the Pokedex is currently open.
-        Returns:
-            bool: True if the Pokedex is open, False otherwise.
-        """
-        # for pokemon Red, is at last entry if the screen does not change on a down input. Same for Crystal
-        raise NotImplementedError
-
-    def is_bag_open(self) -> bool:
-        """
-        Determines if the bag is currently open.
-        Returns:
-            bool: True if the bag is open, False otherwise.
-        """
-        raise NotImplementedError
-
-class BasePokemonRedGameStateParser(PokemonGameStateParser, ABC):
-    """
-    Game state parser for all PokemonRed-based games. Uses visual screen regions to parse game state.
-    """
-    # dialogue_bottom_left (4, 140, 10, 10)
-    _REGIONS = [("dialogue_bottom_right", 151, 135, 10, 10), 
-                ("menu_top_right", 152, 1, 6, 6),
-                ]
-    base = "pokemon_red"
-
-    def __init__(self, pyboy, variant, parameters):
-        """
-        Initializes the Pokemon Red game state parser.
-
-        Args: 
-            pyboy: An instance of the PyBoy emulator.
-            parameters: A dictionary of parameters for configuration.
-        """
-        verify_parameters(parameters)
+        additional_named_screen_region_details.extend(self.COMMON_REGIONS)
         self.variant = variant
         if f"{variant}_rom_data_path" not in parameters:
             log_error(f"ROM data path not found for variant: {variant}. Add {variant}_rom_data_path to the config files. See configs/pokemon_red_vars.yaml for an example", parameters)
         self.rom_data_path = parameters[f"{variant}_rom_data_path"]
         """ Path to the ROM data directory for the specific Pokemon variant."""
         captures_dir = self.rom_data_path + "/captures/"
-        regions = []
-        for region_name, x, y, w, h in self._REGIONS:
+        named_screen_regions = []
+        for region_name, x, y, w, h in additional_named_screen_region_details:
             region = NamedScreenRegion(region_name, x, y, w, h, parameters=parameters, target_path=os.path.join(captures_dir, region_name))
-            regions.append(region)
-        super().__init__(pyboy=pyboy, parameters=parameters, named_screen_regions=regions)
-    
-    def get_screen_top_left(self, current_frame: np.ndarray) -> np.ndarray:
+            named_screen_regions.append(region)
+        super().__init__(pyboy, parameters, named_screen_regions)
+
+    @abstractmethod
+    def is_in_pokedex(self, current_screen: np.ndarray) -> bool:
         """
-        Returns the ndarray capture of the top left of the screen. The PC menu has a pokeball here when its open
-        This can be used to assess state of menu or dialogue
+        Determines if the Pokedex is currently open.
         Args:
-            current_frame (np.ndarray): The current frame from the emulator.
+            current_screen (np.ndarray): The current screen frame from the emulator.
 
         Returns:
-            np.ndarray: The captured top right section of the screen.
+            bool: True if the Pokedex is open, False otherwise.
         """
-        return self.capture_square_centered(current_frame, center_x=4, center_y=2, box_size=10)    
-    
-    def parse_all(self):
-        pass
+        raise NotImplementedError
 
-    def parse_step(self):
-        #centered = self.get_screen_top_left(self.get_current_frame())
-        #centered = self.draw_square_centered(self.get_current_frame(), center_x=4, center_y=2, box_size=10, thickness=2)
-        #import matplotlib.pyplot as plt
-        #plt.imshow(centered)
-        #plt.show()
-        #np.save("pc_top_left.npy", centered)
-        current_frame = self.get_current_frame()
+    def is_in_battle(self, current_screen: np.ndarray) -> bool:
+        """
+        Determines if the player is currently in a battle by checking for battle HP text regions.
 
-    def is_in_dialogue(self) -> bool:
+        Args:
+            current_screen (np.ndarray): The current screen frame from the emulator.
+
+        Returns:
+            bool: True if in battle, False otherwise.
+        """
+        enemy_hp_match = self.named_region_matches_target(current_screen, "battle_enemy_hp_text")
+        player_hp_match = self.named_region_matches_target(current_screen, "battle_player_hp_text")
+        return enemy_hp_match or player_hp_match
+
+    def is_in_menu(self, current_screen: np.ndarray, trust_previous: bool = False) -> bool:
+        """
+        Determines if any form of menu (or choice dialogue) is currently open by checking a variety of screen regions.
+
+        Args:
+            current_screen (np.ndarray): The current screen frame from the emulator.
+            trust_previous (bool): If True, trusts that checks for other states like is_in_battle have been done and can be skipped.
+
+        Returns:
+            bool: True if the menu is open, False otherwise.
+        """
+        any_match_regions = ["menu_top_right", "dialogue_choice_bottom_right", "pc_top_left", 
+                             "name_entity_top_left", "player_card_middle", "map_bottom_right", 
+                             "pokemon_list_hp_text" # This one is defined in each subclass as the position varies slightly between games
+                             ]
+        if not trust_previous:
+            if self.is_in_battle(current_screen):
+                return False
+        if self.is_in_pokedex(current_screen):
+            return True
+        for region_name in any_match_regions:
+            if self.named_region_matches_target(current_screen, region_name):
+                return True
         return False
-    
-    def is_menu_open(self) -> bool:
-        return False
-    
-    def is_in_battle(self) -> bool:
-        return False
-    
-    def is_pokedex_open(self) -> bool:
-        return False
+
+    def is_in_dialogue(self, current_screen: np.ndarray, trust_previous: bool = False) -> bool:
+        """
+        Determines if the player is currently in a dialogue state or reading text from a sign, interacting with an object etc.
+        Essentially anything that causes text to appear at the bottom of the screen that isn't a battle, pc or menu.
+
+        Args: 
+            current_screen (np.ndarray): The current screen frame from the emulator.
+            trust_previous (bool): If True, trusts that checks for other states like is_in_battle have been done and can be skipped.
+
+        Returns:
+            bool: True if in dialogue, False otherwise.
+        """
+        if trust_previous:
+            return self.named_region_matches_target(current_screen, "dialogue_bottom_right")
+        if self.is_in_battle(current_screen):
+            return False
+        elif self.is_in_menu(current_screen):
+            return False
+        else:
+            return self.named_region_matches_target(current_screen, "dialogue_bottom_right")
+        
+    def get_agent_state(self, current_screen: np.ndarray) -> AgentState:
+        """
+        Determines the current agent state based on the screen.
+
+        Uses trust_previous to optimize checks.
+
+        Args:
+            current_screen (np.ndarray): The current screen frame from the emulator.
+
+        Returns:
+            AgentState: The current agent state.
+        """
+        if self.is_in_battle(current_screen):
+            return AgentState.IN_BATTLE
+        elif self.is_in_menu(current_screen, trust_previous=True):
+            return AgentState.IN_MENU
+        elif self.is_in_dialogue(current_screen, trust_previous=True):
+            return AgentState.IN_DIALOGUE
+        else:
+            return AgentState.FREE_ROAM
+
+class BasePokemonRedGameStateParser(PokemonGameStateParser, ABC):
+    """
+    Game state parser for all PokemonRed-based games.
+    """
+    _REGIONS = [
+                ("pokedex_top_left", 7, 6, 12, 6),
+                ("pokedex_info_mid_left", 6, 71, 6, 6),
+                ("pokemon_list_hp_text", 32, 9, 10, 5),
+                ("pokemon_stats_hp_text", 88, 24, 10, 5)
+            ]
+
+    def __init__(self, pyboy: PyBoy, variant: str, parameters: dict):
+        super().__init__(variant=variant, pyboy=pyboy, parameters=parameters, additional_named_screen_region_details=self._REGIONS)
+
+    def is_in_pokedex(self, current_screen: np.ndarray) -> bool:
+        return self.named_region_matches_target(current_screen, "pokedex_top_left") or self.named_region_matches_target(current_screen, "pokedex_info_mid_left")
     
     def __repr__(self):
         return f"PokemonRedBase(variant={self.variant})"
+
+
+class BasePokemonCrystalGameStateParser(PokemonGameStateParser, ABC):
+    """
+    Game state parser for all PokemonCrystal-based games.
+
+    TODO: The map screenshot for crystal assumes a Jhoto map. Must do a similar process for Kanto. To add Kanto we should add another named screen region called map_bottom_right_kanto with same boundary as player_card_middle and then recapture it.
+    Without this fix, the is_in_menu check may fail when in Kanto as the map_bottom_right region will not match.
+    """
+    _REGIONS = [
+        ("pokemon_list_hp_text", 87, 16, 10, 5),
+        ("pokedex_seen_text", 3, 88, 5, 5),
+        ("pokedex_info_height_text", 69, 57, 5, 5),
+        ("pokegear_top_left", 0, 0, 6, 6),
+        ("pokemon_stats_lvl_text", 113, 0, 5, 5),
+        ("bag_text", 18, 0, 6, 6),
+    ]
+
+    def __init__(self, pyboy: PyBoy, variant: str, parameters: dict):
+        super().__init__(variant=variant, pyboy=pyboy, parameters=parameters, additional_named_screen_region_details=self._REGIONS)
+
+
+    def is_in_bag(self, current_screen: np.ndarray) -> bool:
+        """
+        Determines if the Bag is currently open.
+        """
+        return self.named_region_matches_target(current_screen, "bag_text")
+    
+    def is_in_pokegear(self, current_screen: np.ndarray) -> bool:
+        """
+        Determines if the Pokegear is currently open.
+        """
+        return self.named_region_matches_target(current_screen, "pokegear_top_left")
+
+    def is_in_pokedex(self, current_screen):
+        return self.named_region_matches_target(current_screen, "pokedex_seen_text") or self.named_region_matches_target(current_screen, "pokedex_info_height_text")
+    
+    def is_in_menu(self, current_screen: np.ndarray, trust_previous: bool = False) -> bool:
+        # This technically mistakenly also flags when someone calls you on the pokegear, but that's probably fine for now. 
+        # Could change by adding special region for pokegear_call_top_left and overriding is_in_menu and is_in_dialogue.
+        result = super().is_in_menu(current_screen, trust_previous=trust_previous)
+        if result:
+            return True
+        if self.is_in_bag(current_screen):
+            return True
+        if self.is_in_pokegear(current_screen):
+            return True
+        return False
+
+    def __repr__(self):
+        return f"PokemonCrystalBase(variant={self.variant})"
+
 
 class PokemonRedGameStateParser(BasePokemonRedGameStateParser):
     def __init__(self, pyboy, parameters):
@@ -161,6 +251,13 @@ class PokemonRedGameStateParser(BasePokemonRedGameStateParser):
 class PokemonBrownGameStateParser(BasePokemonRedGameStateParser):
     def __init__(self, pyboy, parameters):
         super().__init__(pyboy, variant="pokemon_brown", parameters=parameters)
+
+
+class PokemonCrystalGameStateParser(BasePokemonCrystalGameStateParser):
+    def __init__(self, pyboy, parameters):
+        super().__init__(pyboy, variant="pokemon_crystal", parameters=parameters)
+
+
 
 
 """

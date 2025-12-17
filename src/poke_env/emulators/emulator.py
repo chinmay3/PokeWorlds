@@ -129,8 +129,11 @@ class NamedScreenRegion:
         """
         if self.target is None:
             log_error(f"No target image set for NamedScreenRegion {self.name}. Cannot compare.", self._parameters)
-        if strict_shape and reference.shape != self.target.shape:
-            log_error(f"Reference image shape {reference.shape} does not match target image shape {self.target.shape} for NamedScreenRegion {self.name}.", self._parameters)
+        if reference.shape != self.target.shape:
+            if strict_shape:
+                log_error(f"Reference image shape {reference.shape} does not match target image shape {self.target.shape} for NamedScreenRegion {self.name}.", self._parameters)
+            else:
+                return False
         diff = np.abs(reference.astype(np.float32) - self.target.astype(np.float32))
         mae = np.mean(diff)
         if mae <= epsilon:
@@ -653,6 +656,7 @@ class Emulator():
         if not init_state.endswith(".state"):
             log_error(f"New initial state file {init_state} is not a .state file.", self._parameters)
         self.init_state = init_state
+        log_info(f"Set new initial state file to {self.init_state}", self._parameters)
 
     def reset(self, new_init_state: str = None, seed: int = None):
         """
@@ -877,7 +881,7 @@ class Emulator():
         """
         if max_steps is None:
             max_steps = self._parameters["gameboy_hard_max_steps"]
-        log_info("Starting human play mode. Use arrow keys and A/B/Start buttons to play. Close the window to exit.", self._parameters)
+        log_info("Starting human play mode. Use arrow keys and A(a)/B(s)/Start(enter) buttons to play. Close the window to exit.", self._parameters)
         if self.headless:
             log_error("Human play mode requires headless=False. Change the initialization", self._parameters)    
         self.reset()
@@ -922,9 +926,11 @@ class Emulator():
         Args:
             max_steps (int, optional): Maximum number of steps to play. Defaults to gameboy_hard_max_steps in configs.
         """
+        if not hasattr(self.game_state_parser, "rom_data_path"):
+            log_error("Development play mode requires a GameStateParser with rom_data_path attribute.", self._parameters)
         if max_steps is None:
             max_steps = self._parameters["gameboy_hard_max_steps"]
-        log_info("Starting human play mode. Use arrow keys and A/B/Start buttons to play. Close the window to exit. Open configs/gameboy_vars.yaml and set gameboy_dev_play_stop to true to enable development mode.", self._parameters)
+        log_info("Starting human play mode. Use arrow keys and A(a)/B(s)/Start(enter) buttons to play. Close the window to exit. Open configs/gameboy_vars.yaml and set gameboy_dev_play_stop to true to enable development mode.", self._parameters)
         if self.headless:
             log_error("Human play mode requires headless=False. Change the initialization", self._parameters)
         self.reset()
@@ -938,9 +944,10 @@ class Emulator():
                 In development mode.
                 Enter 'e' to close the emulator.
                 Enter '' to re-enter normal play mode (remember to change gameboy_dev_play_stop back to false in configs or it'll stop again). 
-                Enter 's <state_path(.state)>' to save the current state as a .state file.
-                Enter 'c <region_name> <save_path(.npy)/ None if region.target_path is set>' to capture a named region and save it as a .npy file.
-                Enter 'd <region_name> to draw a named region and display the current screen with the region drawn.
+                Enter 's <state_name>' to save the current state as a .state file.
+                Enter 'l <state_name>' to load a .state file.
+                Enter 'c <region_name> <save_name / None if region.target_path is set>' to capture a named region and save it as a .npy file.
+                Enter 'd <None / region_name>' to draw a named region and display the current screen with the region drawn.
                 Enter 'b' to enter a breakpoint.
                 Valid region names are: {valid_regions}
                 """
@@ -948,7 +955,7 @@ class Emulator():
                 user_input = input("Dev mode input: ")
                 user_input = user_input.lower().strip()
                 first_char = user_input[0] if len(user_input) > 0 else ""
-                allowed_inputs = ["e", "", "c", "s", "d", "b"]
+                allowed_inputs = ["e", "", "c", "s", "l", "d", "b"]
                 if first_char not in allowed_inputs:
                     log_warn(f"Invalid input {user_input}. Valid inputs are: {allowed_inputs}", self._parameters)
                     continue
@@ -958,49 +965,65 @@ class Emulator():
                 elif first_char == "":
                     log_info("Exiting development mode. Resuming normal play.", self._parameters)
                     continue
-                elif first_char == "s":
+                elif first_char == "s" or first_char == "l":
                     parts = user_input.split(" ")
                     if len(parts) != 2:
-                        log_warn(f"Invalid input {user_input}. To save state, use 's <state_path(.state)>'", self._parameters)
+                        log_warn(f"Invalid input {user_input}.", self._parameters)
                         continue
-                    state_path = parts[1]
-                    if os.path.exists(state_path):
-                        confirm_input = input(f"State file {state_path} already exists. Overwrite? (y/n): ")
-                        if confirm_input.lower().strip() != "y":
-                            log_info("Aborting save state.", self._parameters)
+                    state_name = parts[1]
+                    if not state_name.endswith(".state"):
+                        state_name = state_name + ".state"
+                    state_path = os.path.join(self.game_state_parser.rom_data_path, "states", state_name)
+                    if first_char == "s":
+                        if os.path.exists(state_path):
+                            confirm_input = input(f"State file {state_path} already exists. Overwrite? (y/n): ")
+                            if confirm_input.lower().strip() != "y":
+                                log_info("Aborting save state.", self._parameters)
+                                continue
+                        self.save_state(state_path)
+                    else:
+                        if not os.path.exists(state_path):
+                            log_warn(f"State file {state_path} does not exist. Cannot load.", self._parameters)
                             continue
-                    self.save_state(state_path)
+                        self.set_init_state(state_path)
                 elif first_char == "b":
                     breakpoint()
                 else:
+                    current_frame = self.get_current_frame(reduce_res=False)                    
                     # draw it even if c, so we can see what we're capturing
                     save_path = None
                     if first_char == "c":
                         parts = user_input.split(" ")
                         if len(parts) != 3:
                             if len(parts) != 2:
-                                log_warn(f"Invalid input {user_input}. To capture region, use 'c <region_name> <save_path(.npy)>'", self._parameters)
+                                log_warn(f"Invalid input {user_input}.", self._parameters)
                                 continue
                             else:                                
                                 region_name = parts[1]
                                 region = self.game_state_parser.named_screen_regions[region_name]
                                 save_path = region.target_path
                                 if save_path is None:
-                                    log_warn(f"Region {region_name} does not have a target path specified. Please provide a save path.", self._parameters)
+                                    log_warn(f"Region {region_name} does not have a target path specified. Please provide a save name.", self._parameters)
                                     continue
                         else:
-                            save_path = parts[2]
-                        if not save_path.endswith(".npy"):
-                            save_path = save_path + ".npy"
+                            save_name = parts[2]
+                            if not save_name.endswith(".npy"):
+                                save_name = save_name + ".npy"
+                                save_path = os.path.join(self.game_state_parser.rom_data_path, "captures", save_name)
                         file_makedir(save_path)
                     elif first_char == "d":
                         parts = user_input.split(" ")
-                        if len(parts) != 2:
-                            log_warn(f"Invalid input {user_input}. To draw region, use 'd <region_name>'", self._parameters)
+                        if len(parts) == 2:
+                            region_name = parts[1]
+                        elif len(parts) == 1:
+                            region_name = "Full Screen"
+                        else:
+                            log_warn(f"Invalid input {user_input}.", self._parameters)
                             continue
-                        region_name = parts[1]
-                    current_frame = self.get_current_frame(reduce_res=False)
-                    drawn_frame = self.game_state_parser.draw_named_region(current_frame, region_name)
+                    if region_name == "Full Screen":
+                        drawn_frame = current_frame
+                    else:
+                        drawn_frame = self.game_state_parser.draw_named_region(current_frame, region_name)
                     plt.imshow(drawn_frame[:, :, 0], cmap="gray")
                     plt.title(f"Region: {region_name}")
                     plt.show()

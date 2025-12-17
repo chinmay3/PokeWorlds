@@ -121,8 +121,22 @@ This will run the game with the option to enter dev mode. If you want to save a 
 4. Go to the [registry](src/poke_env/emulators/pokemon/__init__.py) and add the ROM hack to `VARIANT_TO_GB_NAME`, `_VARIANT_TO_BASE_MAP`, `_VARIANT_TO_PARSER`
 5. Run `python dev/create_first_state.py --variant <variant_name>`. This will create a default state. You will not be able to run the `Emulator` on this ROM before doing this. 
 6. Run `python dev/dev_play.py` (with the [`gameboy_dev_play_stop` parameter](configs/gameboy_vars.yaml) set to `false`) and proceed through the game until you reach a satisfactory default starting state. Then, open the [config file](configs/gameboy_vars.yaml) and set `gameboy_dev_play_stop` to `true` and save the file. This will trigger a dev mode and ask you for a terminal input. Enter `s <rom_data_path>/states/default.state` and you will set that as the new default state.
-7. TODO: WALK THROUGH HOW TO DO SCREEN CAPTURES PROPERLY. 
 
+#### Capturing Screens
+This repo uses screen captures and comparison of screen renders to determine state (e.g. menu open, in battle). In Pokémon, the screen markers occur in regular places, and the ROM hacks don't change this much either, making it a reliable way to check for events / flags. For the basic regions, run in dev play mode, stop the game at the flag and run `c <region_name>` to save the screen region at that point. The exact screens vary with the base game
+
+##### Common:
+* `dialogue_bottom_right`: Speak to someone or interact with an object. When the popup appears, capture. 
+* `menu_top_right`: Open the menu and capture. 
+* `battle_enemy_hp_text`/`battle_player_hp_text`: Get into a battle and capture 
+* `dialogue_choice_bottom_right`: Get into a situation where the dialogue asks you to choose between options (e.g. confirmation of Yes/No when picking starter Pokémon). Capture that. 
+
+#### Known Bugs / Missing Features:
+* the map screenshot for crystal assumes a Jhoto map. Must do a similar process for Kanto. To add Kanto we should add another named screen region called map_bottom_right_kanto with same boundary as player_card_middle and then recapture it. 
+
+##### Pokémon Red Base:
+
+##### Pokémon Crystal Base:
 
 ## Citation
 

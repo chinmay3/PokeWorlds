@@ -1,6 +1,6 @@
 from poke_env.utils import load_parameters, log_error, verify_parameters
 from poke_env.emulators.emulator import Emulator
-from poke_env.emulators.pokemon.parsers import PokemonRedGameStateParser, PokemonBrownGameStateParser
+from poke_env.emulators.pokemon.parsers import PokemonRedGameStateParser, PokemonBrownGameStateParser, PokemonCrystalGameStateParser
 from typing import Optional
 
 VARIANT_TO_GB_NAME = {
@@ -28,7 +28,7 @@ _VARIANT_TO_BASE_MAP = {
 _VARIANT_TO_PARSER = {
     "pokemon_red": PokemonRedGameStateParser,
     "pokemon_brown": PokemonBrownGameStateParser,
-    "pokemon_crystal": None,  # To be implemented
+    "pokemon_crystal": PokemonCrystalGameStateParser,  # To be implemented
     "pokemon_fools_gold": None,  # To be implemented
     "pokemon_prism": None,  # To be implemented
     "pokemon_quarantine_crystal": None,  # To be implemented
