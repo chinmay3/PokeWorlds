@@ -751,22 +751,14 @@ class Emulator():
         self.close_video()
         return
 
-    def get_current_frame(self, reduce_res: bool = None) -> np.ndarray:
+    def get_current_frame(self) -> np.ndarray:
         """
         Renders the currently rendered screen of the emulator and returns it as a numpy array.
-        Args:
-            reduce_res (bool, optional): Whether to reduce the resolution of the rendered image. Defaults to gameboy_reduce_video_resolution.
+
         Returns:
             np.ndarray: The rendered image as a numpy array.
         """ 
-        game_pixels_render = self._pyboy.screen.ndarray[:,:,0:1]  # (144, 160, 3)
-        if reduce_res is None:
-            reduce_res = self._reduce_video_resolution
-        if reduce_res:
-            game_pixels_render = (
-                downscale_local_mean(game_pixels_render, (2,2,1))
-            ).astype(np.uint8)
-        return game_pixels_render
+        return self.state_parser.get_current_frame()
     
     def step(self, action: LowLevelActions = None) -> bool:
         """ 
@@ -788,11 +780,10 @@ class Emulator():
             
         if self.save_video and self.step_count == 0:
             self.start_video()
-        
-        if self.save_video or self.video_running: # TODO: Consider alternative ways of handling this
-            self.add_video_frame()
 
         frames = self.run_action_on_emulator(action)
+        if self.save_video and self.video_running:
+            self.add_video_frames(frames)
 
         self.step_count += 1
         self.state_tracker.step()
@@ -839,7 +830,7 @@ class Emulator():
             press_step = self.press_step
             self._pyboy.tick(press_step, render_screen)
             if render:
-                frames.append(self.get_current_frame(reduce_res=False))
+                frames.append(self.get_current_frame())
             if profile:
                 start_time = perf_counter()
             self._pyboy.send_input(ReleaseActions.release_actions.value[action])
@@ -847,19 +838,49 @@ class Emulator():
                 mid_time = perf_counter()
             self._pyboy.tick(self.act_freq - press_step - 1, render_screen)
             if render:
-                frames.append(self.get_current_frame(reduce_res=False))
+                frames.append(self.get_current_frame())
             if profile:
                 end_time = perf_counter()
             # Releasing action LowLevelActions.PRESS_ARROW_LEFT took 0.00 ms, followed by 16.13 ms for remaining ticks
             self._pyboy.tick(1, True)
             if render:
-                frames.append(self.get_current_frame(reduce_res=False))
+                frames.append(self.get_current_frame())
                 frames = np.stack(frames, axis=0)
         else:
             log_warn("No action provided to run_action_on_emulator. Skipping action. You probably should only ever use this in debugging mode. Idk maybe wait is a command.", self._parameters)
             self._pyboy.tick(self.act_freq, True)
         return frames
-            
+
+    def reduce_resolution(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Reduces the resolution of the given frame by a factor of 2 using local mean downscaling.
+        Args:
+            frame (np.ndarray): The frame to reduce the resolution of.
+        Returns:
+            np.ndarray: The reduced resolution frame.
+        """
+        reduced = (
+                downscale_local_mean(frame, (2,2,1))
+            ).astype(np.uint8)
+        return reduced
+
+    def save_render(self, reduce_res: bool = None):
+        """
+        Saves the current rendered screen of the emulator as a JPEG image in the renders directory.
+
+        Args:
+            reduce_res (bool, optional): Whether to reduce the resolution of the saved image. 
+                If None, uses the default setting from the config files.
+        """
+        render_path = os.path.join(self.session_path, "renders", f"step_{self.step_count}_id{self.instance_id}.jpeg")
+        file_makedir(render_path)
+        if reduce_res is None:
+            reduce_res = self._reduce_video_resolution
+        current_frame = self.get_current_frame()
+        if reduce_res:
+            current_frame = self.reduce_resolution(current_frame)
+        plt.imsave(render_path, current_frame[:,:, 0])
+
     def get_free_video_id(self) -> str:
         """
         Returns a new unique video ID for saving video files.
@@ -903,15 +924,21 @@ class Emulator():
         self.video_running = True
         log_info(f"Started recording video to: {video_path}", self._parameters)
 
-    def add_video_frame(self):
+    def add_video_frames(self, frames: np.ndarray):
         """
-        Adds the current frame of the emulator to the video being recorded.
+        Adds a list of frame from the emulator to the video being recorded.
+
+        Args:
+            frames (np.ndarray): A stack of frames to add to the video. Shape is [n_frames, height, width, channels].
         """
-        current_frame = self.get_current_frame(reduce_res=self._reduce_video_resolution)[:, :, 0]
+
         # frame_size = (current_frame.shape[1], current_frame.shape[0]) # Width, Height, should be equal to self.output_shape
         # Create VideoWriter object
-        frame = current_frame
-        self.frame_writer.write(frame)
+        for frame in frames:
+            if self._reduce_video_resolution:
+                frame = self.reduce_resolution(frame)
+            self.frame_writer.write(frame)
+        return
                     
     def check_if_done(self):
         """
@@ -1064,7 +1091,7 @@ class Emulator():
                 elif first_char == "b":
                     breakpoint()
                 else:
-                    current_frame = self.get_current_frame(reduce_res=False)                    
+                    current_frame = self.get_current_frame()
                     # draw it even if c, so we can see what we're capturing
                     save_path = None
                     if first_char == "c":
@@ -1118,14 +1145,6 @@ class Emulator():
             if self.step_count >= max_steps:
                 break
         self.close()
-        
-    def save_render(self):
-        """
-        Saves the current rendered screen of the emulator as a JPEG image in the renders directory.
-        """
-        render_path = os.path.join(self.session_path, "renders", f"step_{self.step_count}_id{self.instance_id}.jpeg")
-        file_makedir(render_path)
-        plt.imsave(render_path, self.render(reduce_res=False)[:,:, 0])
 
     def save_state(self, state_path: str):
         """
