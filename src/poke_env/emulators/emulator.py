@@ -128,6 +128,8 @@ class NamedScreenRegion:
             bool: True if the MSE is below the epsilon threshold, False otherwise.
         """
         if self.target is None:
+            if self._parameters["debug_mode"]:
+                return False
             log_error(f"No target image set for NamedScreenRegion {self.name}. Cannot compare.", self._parameters)
         if reference.shape != self.target.shape:
             if strict_shape:
@@ -141,13 +143,13 @@ class NamedScreenRegion:
         return False
 
 
-class GameStateParser(ABC):
+class StateParser(ABC):
     """
     Abstract base class for parsing game state variables from the GameBoy emulator.
     """
     def __init__(self, pyboy, parameters, named_screen_regions: Optional[list[NamedScreenRegion]] = None):
         """
-        Initializes the GameStateParser.
+        Initializes the StateParser.
         Args:
             pyboy: An instance of the PyBoy emulator.
             parameters: A dictionary of parameters for configuration.
@@ -158,8 +160,6 @@ class GameStateParser(ABC):
         if not isinstance(pyboy, PyBoy):
             log_error("pyboy must be an instance of PyBoy", self._parameters)
         self._pyboy = pyboy
-        self.parsed_variables = {"done": False}
-        """Dictionary to hold all parsed game state variables.""" # TODO: Revisit Design
         self.named_screen_regions: dict[str, NamedScreenRegion] = {}
         """ Dictionary of NamedScreenRegion objects for easy access to specific screen regions. """
         if named_screen_regions is not None:
@@ -169,12 +169,6 @@ class GameStateParser(ABC):
                 if region.name in self.named_screen_regions:
                     log_error(f"Duplicate named screen region: {region.name}", self._parameters)
                 self.named_screen_regions[region.name] = region
-
-    def clear(self):
-        """
-        Resets the parsed variables dictionary. Typically called at the start of a new episode.
-        """
-        self.parsed_variables = {"done": False}
 
     def bit_count(self, bits: int) -> int:
         """
@@ -435,34 +429,77 @@ class GameStateParser(ABC):
         Name of the parser for logging purposes.
         :return: string name of the parser
         """
-        raise NotImplementedError
-    
-    def __str__(self) -> str:
-        start = f"***\tGameStateParser({self.__repr__()})\t***"
-        body = nested_dict_to_str(self.parsed_variables, indent=1)
-        return f"{start}\n{body}"
-    
+        raise NotImplementedError    
 
 # TODO: Think about design for this.
-class GameInfo(ABC):
-    def __init__(self, parameters):
-        self.data = {}
-        self.parameters = parameters        
-    
+class StateTracker(ABC):
+    def __init__(self, name: str, session_name: str, instance_id: str, state_parser: StateParser, parameters: dict):
+        """
+        Initializes the StateTracker.
+        Args:
+            name (str): Name of the game.
+            session_name (str): Name of the session.
+            instance_id (str): Unique identifier for this environment instance.
+            state_parser (StateParser): An instance of the StateParser to parse game state variables.
+            parameters (dict): A dictionary of parameters for configuration.
+        """
+        verify_parameters(parameters)
+        self.name = name
+        """ Name of the game. """
+        self.session_name = session_name
+        """ Name of the session. """
+        self.instance_id = instance_id
+        """ Unique identifier for this environment instance. """
+        self.state_parser = state_parser
+        """ An instance of the StateParser to parse game state variables. """
+        self._parameters = parameters
+        self.metrics = {}
+        self.reset()
+        """ Dictionary to store tracked metrics. TODO: Review design. """
+
     def reset(self):
-        self.data = {}
+        """
+        Is called once per environment reset.
+
+        At this level, only manages the step counter
+        """
+        self.metrics["steps"] = 0
+
+    def step(self):
+        """
+        Is called once per environment step to update any tracked metrics.
+
+        At this level, only manages the step counter
+        """
+        self.metrics["steps"] =  self.metrics.get("steps", 0) + 1
+    
+    @abstractmethod
+    def close(self):
+        """
+        Is called once when the environment is closed to finalize any tracked metrics.
+        """
+        raise NotImplementedError
+    
+    def __repr__(self) -> str:
+        return f"<StateTracker(name={self.name}, session_name={self.session_name}, instance_id={self.instance_id})>"
+
+    def __str__(self) -> str:
+        start = f"***\t{self.__repr__()}\t***"
+        body = nested_dict_to_str(self.metrics, indent=1)
+        return f"{start}\n{body}"
 
 
 
 class Emulator():
-    def __init__(self, name: str, gb_path: str, game_state_parser_class: Type[GameStateParser], init_state: str, parameters: dict, headless: bool = True, max_steps: int = None, save_video: bool = None, session_name: str = None, instance_id: str = None):
+    def __init__(self, name: str, gb_path: str, state_parser_class: Type[StateParser], state_tracker_class: Type[StateTracker], init_state: str, parameters: dict, headless: bool = True, max_steps: int = None, save_video: bool = None, session_name: str = None, instance_id: str = None):
         """
         Start the GameBoy emulator with the given ROM file and initial state.
 
         Args:
             name (str): Name of the emulator instance.
             gb_path (str): Path to the GameBoy ROM file.
-            game_state_parser_class (Type[GameStateParser]): A class that inherits from GameStateParser to parse game state variables.
+            state_parser_class (Type[StateParser]): A class that inherits from StateParser to parse game state variables.
+            state_tracker_class (Type[StateTracker]): A class that inherits from StateTracker to track game state metrics.
             init_state (str): Path to the initial state file to load.
             parameters (dict): Dictionary of parameters for the environment.
             headless (bool, optional): Whether to run the environment in headless mode. 
@@ -476,8 +513,10 @@ class Emulator():
             log_error("You must provide a name for the emulator instance.", self._parameters)
         if gb_path is None:
             log_error("You must provide a path to the GameBoy ROM file.", self._parameters)
-        if not issubclass(game_state_parser_class, GameStateParser):
-            log_error("game_state_parser_class must be a subclass of GameStateParser.", self._parameters)
+        if not issubclass(state_parser_class, StateParser):
+            log_error("state_parser_class must be a subclass of StateParser.", self._parameters)
+        if not issubclass(state_tracker_class, StateTracker):
+            log_error("state_tracker_class must be a subclass of StateTracker.", self._parameters)
         if init_state is None:
             log_error("You must provide an initial state file to load.", self._parameters)
         if headless not in [True, False]:
@@ -546,8 +585,11 @@ class Emulator():
             self._gb_path,
             window=head,
         )
-        self.game_state_parser = game_state_parser_class(self._pyboy, self._parameters)
-        """ Instance of the GameStateParser to parse game state variables. """
+        self.state_parser = state_parser_class(self._pyboy, self._parameters)
+        """ Instance of the StateParser to parse game state variables. """
+
+        self.state_tracker = state_tracker_class(self.name, self.session_name, self.instance_id, self.state_parser, self._parameters)
+        """ Instance of the StateTracker to track game state metrics. """
 
         #self.screen = self.pyboy.botsupport_manager().screen()
 
@@ -556,11 +598,15 @@ class Emulator():
                 self._pyboy.set_emulation_speed(int(self._parameters["gameboy_headed_emulation_speed"]))        
             
     @staticmethod
-    def create_first_state(gb_path, state_path):
+    def create_first_state(gb_path: str, state_path: str):
         """
         Creates a basic state for the emulator. This can be used to create an initial, default state file for a new game.
 
         Warning: This method uses parameter free logging, so if you override the log_file with a command prompt argument, it will be ignored here.
+
+        Args:
+            gb_path (str): Path to the GameBoy ROM file.
+            state_path (str): Path to save the initial state file.
         """
         # error out if gb_path does not exist or is not a .gb or .gbc file
         if not os.path.exists(gb_path):
@@ -676,6 +722,7 @@ class Emulator():
 
         self.reset_count += 1
         self.step_count = 0
+        self.state_tracker.reset()
         self.close_video()
         return
 
@@ -722,21 +769,18 @@ class Emulator():
 
         frames = self.run_action_on_emulator(action)
 
-        if self.check_if_done():
-            self.game_state_parser.parsed_variables["done"] = True
-
         self.step_count += 1
+        self.state_tracker.step()
+        return self.check_if_done()
 
-        return
-
-    def get_game_state(self) -> GameStateParser:
+    def get_state_parser(self) -> StateParser:
         """
         Returns the current game state parser instance.
 
         Returns:
-            GameStateParser: The current game state parser.
+            StateParser: The current game state parser.
         """
-        return self.game_state_parser
+        return self.state_parser
 
     def run_action_on_emulator(self, action: LowLevelActions = None, profile: bool = False, render: bool = None) -> Optional[np.ndarray]:
         """ 
@@ -869,6 +913,7 @@ class Emulator():
         """
         self._pyboy.stop(save=False)
         self.close_video()
+        self.state_tracker.close()
         # check if session directory is empty, and if so delete it
         if os.path.exists(self.session_path) and len(os.listdir(self.session_path)) == 0:
             os.rmdir(self.session_path)
@@ -885,16 +930,11 @@ class Emulator():
         if self.headless:
             log_error("Human play mode requires headless=False. Change the initialization", self._parameters)    
         self.reset()
-        starting_state = str(self.game_state_parser)
         while True:
             self._pyboy.tick(1, True)
-            new_state = str(self.game_state_parser)
-            if new_state != starting_state:
-                log_info(f"Current game state:\n{new_state}", self._parameters)
-                starting_state = new_state
+            self.state_tracker.step()
             if self.step_count >= max_steps:
                 break
-
         self.close()
         # wait for pyboy
         #sleep(1) TODO: See how to close properly in this setting. 
@@ -912,8 +952,10 @@ class Emulator():
         pbar = tqdm(total=max_steps, desc="Random Play Steps")
         while self.step_count < max_steps:
             action = np.random.choice(list(LowLevelActions))
-            self.step(action)
+            done = self.step(action)
             pbar.update(1)
+            if done:
+                break
         pbar.close()
         self.close()
         log_info("Random play mode ended.", self._parameters)
@@ -926,8 +968,8 @@ class Emulator():
         Args:
             max_steps (int, optional): Maximum number of steps to play. Defaults to gameboy_hard_max_steps in configs.
         """
-        if not hasattr(self.game_state_parser, "rom_data_path"):
-            log_error("Development play mode requires a GameStateParser with rom_data_path attribute.", self._parameters)
+        if not hasattr(self.state_parser, "rom_data_path"):
+            log_error("Development play mode requires a StateParser with rom_data_path attribute.", self._parameters)
         if max_steps is None:
             max_steps = self._parameters["gameboy_hard_max_steps"]
         log_info("Starting human play mode. Use arrow keys and A(a)/B(s)/Start(enter) buttons to play. Close the window to exit. Open configs/gameboy_vars.yaml and set gameboy_dev_play_stop to true to enable development mode.", self._parameters)
@@ -938,8 +980,10 @@ class Emulator():
             self._parameters = load_parameters()
             if not self._parameters["gameboy_dev_play_stop"]:
                 self._pyboy.tick(1, True)
+                self.state_tracker.step()
             else:
-                valid_regions = list(self.game_state_parser.named_screen_regions.keys())
+                valid_regions = list(self.state_parser.named_screen_regions.keys())
+                unassigned_regions = [name for name in valid_regions if self.state_parser.named_screen_regions[name].target_path is None]
                 dev_instructions = f"""
                 In development mode.
                 Enter 'e' to close the emulator.
@@ -950,6 +994,9 @@ class Emulator():
                 Enter 'd <None / region_name>' to draw a named region and display the current screen with the region drawn.
                 Enter 'b' to enter a breakpoint.
                 Valid region names are: {valid_regions}
+                Currently unassigned regions (no target_path set) are: {unassigned_regions}
+                Current State: 
+                {str(self.state_tracker)}
                 """
                 log_info(dev_instructions, self._parameters)
                 user_input = input("Dev mode input: ")
@@ -973,7 +1020,7 @@ class Emulator():
                     state_name = parts[1]
                     if not state_name.endswith(".state"):
                         state_name = state_name + ".state"
-                    state_path = os.path.join(self.game_state_parser.rom_data_path, "states", state_name)
+                    state_path = os.path.join(self.state_parser.rom_data_path, "states", state_name)
                     if first_char == "s":
                         if os.path.exists(state_path):
                             confirm_input = input(f"State file {state_path} already exists. Overwrite? (y/n): ")
@@ -1000,7 +1047,7 @@ class Emulator():
                                 continue
                             else:                                
                                 region_name = parts[1]
-                                region = self.game_state_parser.named_screen_regions[region_name]
+                                region = self.state_parser.named_screen_regions[region_name]
                                 save_path = region.target_path
                                 if save_path is None:
                                     log_warn(f"Region {region_name} does not have a target path specified. Please provide a save name.", self._parameters)
@@ -1009,7 +1056,7 @@ class Emulator():
                             save_name = parts[2]
                             if not save_name.endswith(".npy"):
                                 save_name = save_name + ".npy"
-                                save_path = os.path.join(self.game_state_parser.rom_data_path, "captures", save_name)
+                                save_path = os.path.join(self.state_parser.rom_data_path, "captures", save_name)
                         file_makedir(save_path)
                     elif first_char == "d":
                         parts = user_input.split(" ")
@@ -1023,12 +1070,12 @@ class Emulator():
                     if region_name == "Full Screen":
                         drawn_frame = current_frame
                     else:
-                        drawn_frame = self.game_state_parser.draw_named_region(current_frame, region_name)
+                        drawn_frame = self.state_parser.draw_named_region(current_frame, region_name)
                     plt.imshow(drawn_frame[:, :, 0], cmap="gray")
                     plt.title(f"Region: {region_name}")
                     plt.show()
                     if first_char == "c":
-                        captured_region = self.game_state_parser.capture_named_region(current_frame, region_name)
+                        captured_region = self.state_parser.capture_named_region(current_frame, region_name)
                         plt.imshow(captured_region[:, :, 0], cmap="gray")
                         plt.title(f"Captured Region: {region_name}")
                         plt.show()
@@ -1043,58 +1090,6 @@ class Emulator():
             if self.step_count >= max_steps:
                 break
         self.close()
-    
-    def _human_step_play(self, max_steps: int = None, init_state: str = None):
-        """ 
-        Allows a human to play the emulator using keyboard inputs. This routes the code through the step function. Only for debugging.         
-        Args:
-            max_steps (int, optional): Maximum number of steps to play. Defaults to gameboy_hard_max_steps in configs.
-        """
-        if self.headless:
-            log_error("Human play mode requires headless=False. Change the initialization", self._parameters)    
-        if max_steps is None:
-            max_steps = self._parameters["gameboy_hard_max_steps"]
-        self._set_init_state(init_state)
-        character_to_action = {
-            "a": LowLevelActions.PRESS_BUTTON_A,
-            "b": LowLevelActions.PRESS_BUTTON_B,
-            "s": LowLevelActions.PRESS_BUTTON_START,
-            "u": LowLevelActions.PRESS_ARROW_UP,
-            "d": LowLevelActions.PRESS_ARROW_DOWN,
-            "l": LowLevelActions.PRESS_ARROW_LEFT,
-            "r": LowLevelActions.PRESS_ARROW_RIGHT,            
-            "": None,
-        }
-        msg = "Starting human play mode. Use keyboard inputs: a,b,s,u,d,l,r to play. Type v to start recording, c to end recording, i1 to save state and i2 to identify the addresses that have changed, and e to exit."
-        log_info(msg, self._parameters)
-        log_info(f"Character to action mapping: \n{character_to_action}", self._parameters)
-        self.reset()
-        exited = False
-        while not exited:
-            user_input = input(msg + "\nYour input: ")
-            user_input = user_input.lower().strip()
-            if user_input == "e":
-                exited = True
-                log_info("Exiting human play mode.", self._parameters)
-                break
-            if user_input == "v":
-                self.start_video()
-                continue
-            if user_input == "c":
-                self.close_video()
-                log_info("Stopped recording video.", self._parameters)                
-                continue
-            if user_input == "i":
-                    breakpoint()
-                    continue
-            if user_input not in character_to_action:
-                log_warn(f"Invalid input {user_input}. Valid inputs are: {list(character_to_action.keys())} or e to exit.", self._parameters)
-                continue
-            action = character_to_action[user_input]
-            state = self.step(action)
-            if state.parsed_variables["done"]:
-                log_info("Max steps reached. Exiting human play mode.", self._parameters)
-                break
         
     def save_render(self):
         """

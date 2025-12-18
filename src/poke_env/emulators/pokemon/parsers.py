@@ -3,13 +3,11 @@ Pokemon specific game state parser implementations for both PokemonRed and Pokem
 While this code base started from: Borrowing heavily from https://github.com/PWhiddy/PokemonRedExperiments/ (v2) and was initially read from memory states https://github.com/thatguy11325/pokemonred_puffer/blob/main/pokemonred_puffer/global_map.py, this is no longer the case as we have moved to visual based state parsing.
 This decision was primarily made to facilitate easier extension to other games and rom hacks in the future, as well as to avoid reliance on specific memory addresses which may vary between different versions of the game.
 
-However, the code base supports reading from memory addresses to extract game state information, which can be useful for incorporating domain knowledge into reward structures or other aspects of the environment. Examples of how to do this are provided in the PokemonRedGameStateParser class.
-
-See the MemoryBasedPokemonRedGameStateParser class for examples of how to read game state information from memory addresses.
+However, the code base supports reading from memory addresses to extract game state information, which can be useful for incorporating domain knowledge into reward structures or other aspects of the environment. See the MemoryBasedPokemonRedStateParser class for examples of how to read game state information from memory addresses.
 """
 
 from poke_env.utils import log_warn, log_info, log_error, load_parameters, verify_parameters
-from poke_env.emulators.emulator import GameStateParser, NamedScreenRegion
+from poke_env.emulators.emulator import StateParser, NamedScreenRegion
 
 from typing import Set, List, Type, Dict, Optional, Tuple
 import os
@@ -36,7 +34,7 @@ class AgentState(Enum):
     IN_MENU = 2
     IN_BATTLE = 3
 
-class PokemonGameStateParser(GameStateParser, ABC):
+class PokemonStateParser(StateParser, ABC):
     """
     Base class for Pokemon game state parsers. Uses visual screen regions to parse game state.
     Defines common named screen regions and methods for determining game states such as being in battle, menu, or dialogue.
@@ -44,7 +42,7 @@ class PokemonGameStateParser(GameStateParser, ABC):
     Can be used to determine the exact AgentState
     """
     COMMON_REGIONS = [
-                ("dialogue_bottom_right", 151, 135, 10, 10), 
+                ("dialogue_bottom_right", 153, 135, 10, 10), 
                 ("menu_top_right", 152, 1, 6, 6),
                 ("pc_top_left", 0, 0, 6, 6),
                 ("battle_enemy_hp_text", 15, 17, 10, 5), 
@@ -58,7 +56,7 @@ class PokemonGameStateParser(GameStateParser, ABC):
 
     def __init__(self, variant: str, pyboy: PyBoy, parameters: dict, additional_named_screen_region_details: List[Tuple[str, int, int, int, int]] = []):
         """
-        Initializes the PokemonGameStateParser.
+        Initializes the PokemonStateParser.
         Args:
             variant (str): The variant of the Pokemon game.
             pyboy (PyBoy): The PyBoy emulator instance.
@@ -172,7 +170,7 @@ class PokemonGameStateParser(GameStateParser, ABC):
         else:
             return AgentState.FREE_ROAM
 
-class BasePokemonRedGameStateParser(PokemonGameStateParser, ABC):
+class BasePokemonRedStateParser(PokemonStateParser, ABC):
     """
     Game state parser for all PokemonRed-based games.
     """
@@ -190,10 +188,10 @@ class BasePokemonRedGameStateParser(PokemonGameStateParser, ABC):
         return self.named_region_matches_target(current_screen, "pokedex_top_left") or self.named_region_matches_target(current_screen, "pokedex_info_mid_left")
     
     def __repr__(self):
-        return f"PokemonRedBase(variant={self.variant})"
+        return f"<PokemonRedParser(variant={self.variant})>"
 
 
-class BasePokemonCrystalGameStateParser(PokemonGameStateParser, ABC):
+class BasePokemonCrystalStateParser(PokemonStateParser, ABC):
     """
     Game state parser for all PokemonCrystal-based games.
 
@@ -238,22 +236,30 @@ class BasePokemonCrystalGameStateParser(PokemonGameStateParser, ABC):
             return True
         if self.is_in_pokegear(current_screen):
             return True
-        return False
+        # Finally, when transitioning to PC screens, maps etc, the screen goes white. Catch that here.
+        print(f"Checking for white screen... Pixel stats: {np.min(current_screen)}, {np.max(current_screen)}, {np.mean(current_screen)}") # I get 248, 248, 248.0
+        # The following doesn't catch all white screens (e.g town maps), but does catch some important ones like PC screens.
+        if np.mean(current_screen) > 245 and np.min(current_screen) > 245:
+            return True
+        elif np.mean(current_screen) > 210: # screen coming down from full white
+            return True
+        else:
+            return False
 
     def __repr__(self):
-        return f"PokemonCrystalBase(variant={self.variant})"
+        return f"<PokemonCrystalParser(variant={self.variant})>"
 
 
-class PokemonRedGameStateParser(BasePokemonRedGameStateParser):
+class PokemonRedStateParser(BasePokemonRedStateParser):
     def __init__(self, pyboy, parameters):
         super().__init__(pyboy, variant="pokemon_red", parameters=parameters)
 
-class PokemonBrownGameStateParser(BasePokemonRedGameStateParser):
+class PokemonBrownStateParser(BasePokemonRedStateParser):
     def __init__(self, pyboy, parameters):
         super().__init__(pyboy, variant="pokemon_brown", parameters=parameters)
 
 
-class PokemonCrystalGameStateParser(BasePokemonCrystalGameStateParser):
+class PokemonCrystalStateParser(BasePokemonCrystalStateParser):
     def __init__(self, pyboy, parameters):
         super().__init__(pyboy, variant="pokemon_crystal", parameters=parameters)
 
@@ -265,7 +271,7 @@ The below code shows how to add domain information into the game state parser an
 
 This is not actually used in any of the current environments, but is left here to show that if you want to bake in more domain knowledge and create explicit reward schedules etc., you can read the information required to do so in this class. 
 """
-class MemoryBasedPokemonRedGameStateParser(BasePokemonRedGameStateParser):
+class MemoryBasedPokemonRedStateParser(BasePokemonRedStateParser):
     """
     Game state parser for Pokemon Red. Uses memory addresses to parse game state.
     Can be used to reproduce https://github.com/PWhiddy/PokemonRedExperiments/ (v2) and facilitates reward engineering based on memory states.
