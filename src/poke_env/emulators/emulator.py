@@ -704,15 +704,13 @@ class Emulator():
         self.init_state = init_state
         log_info(f"Set new initial state file to {self.init_state}", self._parameters)
 
-    def reset(self, new_init_state: str = None, seed: int = None):
+    def reset(self, new_init_state: str = None):
         """
-        Resets the environment to the initial state. Optionally loads a new initial state file and sets a random seed.
+        Resets the environment to the initial state. Optionally loads a new initial state file.
 
         Args:
             new_init_state (str, optional): Path to a new initial state file to load. 
-            seed (int, optional): Sets a random seed for the environment. TODO: implement seeding.
         """
-        self.seed = seed # TODO: implement seeding
         # validate the new_init_state if provided
         if new_init_state is not None:
             self._set_init_state(new_init_state)
