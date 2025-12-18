@@ -4,6 +4,7 @@ from typing import Type, Optional, Tuple
 
 
 import os
+import re
 from time import perf_counter
 import sys
 import shutil
@@ -22,7 +23,7 @@ from tqdm import tqdm
 
 class LowLevelActions(Enum):
     """
-    Enum for low-level actions that can be performed on the GameBoy emulator and their associated release actions.
+    Enum for low-level actions that can be performed on the GameBoy emulator.
     """
     PRESS_ARROW_DOWN = WindowEvent.PRESS_ARROW_DOWN
     PRESS_ARROW_LEFT = WindowEvent.PRESS_ARROW_LEFT
@@ -33,6 +34,9 @@ class LowLevelActions(Enum):
     PRESS_BUTTON_START = WindowEvent.PRESS_BUTTON_START
     
 class ReleaseActions(Enum):
+    """
+    Enum for release actions corresponding to low-level actions.
+    """
     release_actions = {
         LowLevelActions.PRESS_ARROW_DOWN: WindowEvent.RELEASE_ARROW_DOWN,
         LowLevelActions.PRESS_ARROW_LEFT: WindowEvent.RELEASE_ARROW_LEFT,
@@ -543,13 +547,19 @@ class Emulator():
             save_video = self._parameters["gameboy_default_save_video"]
         self.save_video = save_video
         """ Whether to save video of the episodes. """
+        self.session_name = None
         if session_name is None:
             session_name = self._allocate_new_session_name()
+        elif not isinstance(session_name, str) or session_name == "":
+            log_error(f"session_name must be a non-empty string. Recieved {session_name}", self._parameters)
         self.session_name = session_name
         """ Name of the session. Decides the directory where artifacts are saved. """
         self.session_path = os.path.join(self.get_session_path(), self.session_name)
         """ Path to the session directory. This is where all artifacts for this session are saved. """
         os.makedirs(self.session_path, exist_ok=True)
+        will_save_artifacts = self.save_video # may add more artifact types later. Tracker will also save metrics to disk perhaps
+        if will_save_artifacts and self._is_digit_session(self.session_name):
+            log_warn(f"Session name {self.session_name} is in the form session_X where X is an integer. This is the pattern for an automatically assigned session and it will be cleared every time you start a new emulator. Name the session to make sure its saved artifacts persist.", self._parameters)
         if instance_id is None:
             instance_id = str(uuid.uuid4())[:8]
         self.instance_id = instance_id
@@ -558,8 +568,6 @@ class Emulator():
         """ Number of emulator ticks per action. Defaults to value specified in config files. """
         self.press_step = parameters["gameboy_press_step"]
         """ Number of emulator ticks to hold down a button press. Defaults to value specified in config files. """
-        self.frame_stacks = parameters["gameboy_video_frame_stacks"]
-        """ TODO: IDK YET """
         self.render_headless = parameters["gameboy_headless_render"]
         """ Whether to render the emulator screen even in headless mode. This must be true for methods that rely on image observations (e.g. VLMs) to access the screen. Defaults to value specified in config files. """
         if not self.render_headless:
@@ -574,9 +582,9 @@ class Emulator():
         self._reduce_video_resolution = parameters["gameboy_reduce_video_resolution"]
         pokemon_frame_size = (160, 144) # TODO: confirm this is universal if you want other GB games. 
         if self._reduce_video_resolution:
-            self.output_shape = (pokemon_frame_size[0]//2, pokemon_frame_size[1]//2, self.frame_stacks)
+            self.output_shape = (pokemon_frame_size[0]//2, pokemon_frame_size[1]//2)
         else:
-            self.output_shape = (pokemon_frame_size[0], pokemon_frame_size[1], self.frame_stacks)
+            self.output_shape = (pokemon_frame_size[0], pokemon_frame_size[1])
             """ Shape of the output observations. This is the resolution of the rendered screen. """
 
         head = "null" if self.headless else "SDL2"
@@ -627,11 +635,28 @@ class Emulator():
         pyboy.stop()
         log_info(f"Created initial state file at {state_path}")
     
+    def _is_digit_session(self, session_name: str) -> bool:
+        """
+        Checks if the given session name is in the form session_X where X is an integer.
+
+        Args:
+            session_name (str): The session name to check.
+        """
+        if not session_name.startswith("session_"):
+            return False
+        pattern = r"^session_(\d+)$" # This is AI generated. I hope it works. It knows regex better than I do.
+        match = re.match(pattern, session_name)
+        if match:
+            return True
+        return False
+
+
     def _allocate_new_session_name(self) -> str:
         """
         Allocates a new session name based on existing sessions in the session directory.
         :return: new session name
         """
+        self.clear_unnamed_sessions()
         storage_dir = self._parameters["storage_dir"]
         session_path = os.path.join(storage_dir, "sessions", self.get_env_variant())
         os.makedirs(session_path, exist_ok=True)
@@ -654,20 +679,22 @@ class Emulator():
         if not os.path.exists(session_path):
             return
         existing_sessions = os.listdir(session_path)
-        saved_sessions = [self.session_name]
+        saved_sessions = []
+        if self.session_name is not None:
+            saved_sessions.append(self.session_name)
         for session in existing_sessions:
-            if session.startswith("session_"):
-                session_id = session.split("_")[-1]
-                if session_id.isdigit():
-                    full_path = os.path.join(session_path, session)
-                    # delete the session directory and all its contents
-                    import shutil
-                    shutil.rmtree(full_path)
-                    log_info(f"Deleted unnamed session {full_path}", self._parameters)
-                    continue
+            if session in saved_sessions:
+                continue
+            if self._is_digit_session(session):
+                full_path = os.path.join(session_path, session)
+                # delete the session directory and all its contents
+                import shutil
+                shutil.rmtree(full_path)
+                log_info(f"Deleted unnamed session {full_path}", self._parameters)
+                continue
             saved_sessions.append(session)
-        log_info(f"Kept sessions: {saved_sessions}", self._parameters)
-                
+        log_info(f"Deleted {len(existing_sessions) - len(saved_sessions)} sessions. Kept {len(saved_sessions)} sessions: \n{saved_sessions}", self._parameters)
+
     def get_session_path(self) -> str:
         """
         Returns the path to the session directory for this environment variant.
@@ -870,17 +897,18 @@ class Emulator():
             video_id = self.get_free_video_id()
         base_dir = os.path.join(self.session_path, "videos")
         os.makedirs(base_dir, exist_ok=True)
-        model_name = os.path.join(base_dir, f"{video_id}")
+        video_path = os.path.join(base_dir, f"{video_id}")
         self.close_video()
-        self.frame_writer = cv2.VideoWriter(model_name, cv2.VideoWriter_fourcc(*"mp4v"), 60, (self.output_shape[0], self.output_shape[1]), isColor=False)
+        self.frame_writer = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*"mp4v"), 60, (self.output_shape[0], self.output_shape[1]), isColor=False)
         self.video_running = True
+        log_info(f"Started recording video to: {video_path}", self._parameters)
 
     def add_video_frame(self):
         """
         Adds the current frame of the emulator to the video being recorded.
         """
         current_frame = self.get_current_frame(reduce_res=self._reduce_video_resolution)[:, :, 0]
-        # frame_size = (current_frame.shape[1], current_frame.shape[0]) # Width, Height, should be equal to self.output_shape[:2]
+        # frame_size = (current_frame.shape[1], current_frame.shape[0]) # Width, Height, should be equal to self.output_shape
         # Create VideoWriter object
         frame = current_frame
         self.frame_writer.write(frame)
@@ -934,8 +962,6 @@ class Emulator():
             if self.step_count >= max_steps:
                 break
         self.close()
-        # wait for pyboy
-        #sleep(1) TODO: See how to close properly in this setting. 
 
     def random_play(self, max_steps: int = None):
         """ 

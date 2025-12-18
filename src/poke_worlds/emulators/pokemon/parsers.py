@@ -4,6 +4,9 @@ While this code base started from: Borrowing heavily from https://github.com/PWh
 This decision was primarily made to facilitate easier extension to other games and rom hacks in the future, as well as to avoid reliance on specific memory addresses which may vary between different versions of the game.
 
 However, the code base supports reading from memory addresses to extract game state information, which can be useful for incorporating domain knowledge into reward structures or other aspects of the environment. See the MemoryBasedPokemonRedStateParser class for examples of how to read game state information from memory addresses.
+
+WARNING: The screen capture mechanisms of the parsers rely on a SPECIFIC FRAME being used in the game. This is not a concern with Gen I games, but Gen II games have options for frames. All states and captures in this repo assume a particular choice of frame, and often it is NOT the default Frame 1. 
+Ensure that your agents DO NOT change the frame settings in the game, or the state parsing will fail.
 """
 
 from poke_worlds.utils import log_warn, log_info, log_error, load_parameters, verify_parameters
