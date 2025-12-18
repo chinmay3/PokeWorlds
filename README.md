@@ -179,6 +179,8 @@ python dev/dev_play.py --variant <variant> --init_state pokedex
 ```
 You'll get a message letting you know what's left. You can finish them all off now. If any of the captures weren't clean and good, you should leave them for the end and override their named screen regions. 
 
+Using this process I'm able to set up all but one capture in [under 10 minutes](https://drive.google.com/file/d/1KkZZe3ON-0EWiBs_EhrAHc9D7lsQmCxW/view?usp=sharing) (the video cuts off with only `pokedex_info_height_text` unassigned because it needs to be manually repositioned as an override region). 
+
 ### I want to deepen the state / observation space or give a precise reward
 Perhaps you want to engineer the system a little more, like [the initial creators of this framework](https://www.youtube.com/watch?v=DcYLT37ImBY&feature=youtu.be) did. This repo tries to avoid reliance on reading from memory states etc., but certainly supports it at a deep level. See the [memory reader](src/poke_env/emulators/pokemon/parsers.py) state parser to get a sense of how you should go about this. 
 

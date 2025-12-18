@@ -345,7 +345,10 @@ class PokemonPrismStateParser(BasePokemonCrystalStateParser):
 
 class PokemonFoolsGoldStateParser(BasePokemonCrystalStateParser):
     def __init__(self, pyboy, parameters):
-        super().__init__(pyboy, variant="pokemon_fools_gold", parameters=parameters)
+        override_regions = [
+            ("pokedex_info_height_text", 66, 65, 5, 5)
+        ]
+        super().__init__(pyboy, variant="pokemon_fools_gold", parameters=parameters, override_regions=override_regions)
 
 """
 The below code shows how to add domain information into the game state parser and read from memory addresses to get descriptive state information. 
