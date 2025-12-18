@@ -237,7 +237,7 @@ class BasePokemonCrystalStateParser(PokemonStateParser, ABC):
         if self.is_in_pokegear(current_screen):
             return True
         # Finally, when transitioning to PC screens, maps etc, the screen goes white. Catch that here.
-        print(f"Checking for white screen... Pixel stats: {np.min(current_screen)}, {np.max(current_screen)}, {np.mean(current_screen)}") # I get 248, 248, 248.0
+        #print(f"Checking for white screen... Pixel stats: {np.min(current_screen)}, {np.max(current_screen)}, {np.mean(current_screen)}") # I get 248, 248, 248.0
         # The following doesn't catch all white screens (e.g town maps), but does catch some important ones like PC screens.
         if np.mean(current_screen) > 245 and np.min(current_screen) > 245:
             return True
