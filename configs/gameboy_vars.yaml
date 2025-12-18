@@ -6,5 +6,5 @@ gameboy_hard_max_steps: 1000000
 gameboy_random_play_max_steps: 500
 gameboy_default_save_video: false
 gameboy_headless_render: true # If true, will not open a window when running the emulator by default.
-gameboy_reduce_video_resolution: true
+gameboy_reduce_video_resolution: true # If true, will reduce the resolution of saved videos to 1/2 width and 1/2 height to save space.
 gameboy_dev_play_stop: false # If true, will immediately freeze the emulator and allow the user to perform useful state specific actions. Only for development.
