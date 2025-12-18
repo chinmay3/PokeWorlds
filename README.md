@@ -62,7 +62,6 @@ Next, you must legally acquire ROMs for Pokémon from Nintendo (perhaps by dumpi
 Additionally, our testing environment uses several Pokémon ROM patches / hacks that alter the game in some way. These can be obtained by acquiring the original ROM and applying a "patch" to it. After patching the original ROM, you will be left with a `.gb` or `.gbc` file. We support:
 * [Pokémon Brown](https://rainbowdevs.com/title/brown/) (save as `PokemonBrown.gbc`)
 * [Pokémon Prism](https://rainbowdevs.com/title/prism/) (save as `PokemonPrism.gbc`)
-* [Pokémon Quarantine Crystal](https://www.pokecommunity.com/threads/quarantinecrystal-full-fakedex-12-gym-demo-out-now-v-0-804-updated-03-02-2024.436807/) (save as `PokemonQuarantineCrystal.gbc`)
 * [Pokémon Fool's Gold](https://www.pokecommunity.com/threads/pok%C3%A9mon-fools-gold-a-hack-of-crystal-where-everything-is-familiar-yet-different.433723/) (save as `PokemonFoolsGold.gbc`)
 * [Pokémon Star Beasts](https://www.pokecommunity.com/threads/star-beasts-asteroid-version.530552/) (save as `PokemonStarBeasts.gb`)
 

@@ -179,7 +179,10 @@ results/
 rom_data/*/*.gb
 rom_data/*/*.gbc
 rom_data/*/*.gb.ram
+rom_data/*/*.gbc.ram
+rom_data/*/*.gbc.rtc
 rom_data/*/*.sav
 rom_data/*/*.gb.state
 rom_data/*/*.gbc.state
+
 download_roms.sh

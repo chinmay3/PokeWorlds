@@ -1125,7 +1125,10 @@ class Emulator():
         if sav_file is not None:
             expected_sav = sav_file
         else:
-            expected_sav = self._gb_path.replace(".gb", ".sav")
+            if ".gbc" in self._gb_path:
+                expected_sav = self._gb_path.replace(".gbc", ".sav")
+            else:
+                expected_sav = self._gb_path.replace(".gb", ".sav")
         if not os.path.exists(expected_sav):
             log_error(f"Expected .sav file at {expected_sav} to convert to .state file, but it does not exist.", self._parameters)
         if state_file is None or state_file == "":

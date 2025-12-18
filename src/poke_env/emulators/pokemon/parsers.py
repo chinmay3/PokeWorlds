@@ -343,10 +343,6 @@ class PokemonPrismStateParser(BasePokemonCrystalStateParser):
         ]
         super().__init__(pyboy, variant="pokemon_prism", parameters=parameters, override_regions=override_regions)
 
-class PokemonQuarantineCrystalStateParser(BasePokemonCrystalStateParser):
-    def __init__(self, pyboy, parameters):
-        super().__init__(pyboy, variant="pokemon_quarantine_crystal", parameters=parameters)
-
 class PokemonFoolsGoldStateParser(BasePokemonCrystalStateParser):
     def __init__(self, pyboy, parameters):
         super().__init__(pyboy, variant="pokemon_fools_gold", parameters=parameters)
