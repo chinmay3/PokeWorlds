@@ -965,7 +965,7 @@ class Emulator():
 
     def random_play(self, max_steps: int = None):
         """ 
-        Allows the emulator to play itself using random actions.
+        Allows the emulator to play itself using (sort of) random actions.
         Args:
             max_steps (int, optional): Maximum number of steps to play. Defaults to gameboy_hard_max_steps in configs.
         """
@@ -974,8 +974,11 @@ class Emulator():
         log_info("Starting random play mode.", self._parameters)
         self.reset()
         pbar = tqdm(total=max_steps, desc="Random Play Steps")
+        allowed_actions = list(LowLevelActions)
+        # remove the Start and Select actions from allowed actions to avoid menu spamming. 
+        allowed_actions.remove(LowLevelActions.PRESS_BUTTON_START)
         while self.step_count < max_steps:
-            action = np.random.choice(list(LowLevelActions))
+            action = np.random.choice(allowed_actions)
             frames, done = self.step(action)
             pbar.update(1)
             if done:
