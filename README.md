@@ -15,6 +15,8 @@
 
 <img src="assets/logo.png" width="70px"> is an AI research framework for training and evaluating generally capable agents in the world of Pokémon, complete with flexible Python simulators and unified environment wrappers around Gen I and Gen II Pokémon games. 
 
+![](assets/worlds_random.gif)
+
 
 Challenge your agents to explore, build general skills and master one of the most iconic game universes ever created.
 
