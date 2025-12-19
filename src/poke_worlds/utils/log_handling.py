@@ -45,7 +45,7 @@ def log_info(message: str, parameters: dict = None):
     logger = parameters["logger"]
     logger.info(message, stacklevel=2)
 
-def log_dict(meta_dict: dict, n_indents: int = 1, parameters: dict =None):
+def log_dict(meta_dict: dict,  parameters: dict = None, n_indents: int = 1):
     """
     Print a dictionary in a readable format
     Args:

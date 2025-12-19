@@ -31,7 +31,9 @@ class MetricGroup(ABC):
 
     def start(self):
         """
-        Called once when environment starts. All subclasses should call super() AFTER initializing their own variables.
+        Called once when environment starts. 
+        All subclasses should call super() AFTER initializing their own variables.
+        Only variables that will persist across episodes should be initialized here.
         """
         self.reset(first=True)
 
@@ -40,7 +42,7 @@ class MetricGroup(ABC):
         """Called when environment resets.
         
         Args:
-            first (bool): Whether this is the first reset of the environment.
+            first (bool): Whether this is the first reset of the environment. If True, might need to aggregate metrics into running final totals. 
         """
         raise NotImplementedError
     
@@ -85,6 +87,25 @@ class MetricGroup(ABC):
             dict: A dictionary containing the final metrics.
         """
         raise NotImplementedError
+    
+    def log_info(self, message: str):
+        """
+        Logs with MetricGroup's name
+        """
+        log_info(f"[Metric({self.NAME})]: {message}", self._parameters)
+
+    def log_warn(self, message: str):
+        """
+        Logs with MetricGroup's name
+        """
+        log_warn(f"[Metric({self.NAME})]: {message}", self._parameters)
+
+    def log_report(self):
+        """
+        Logs the current metrics report with MetricGroup's name. Primarily for debugging.
+        """
+        log_info(f"Metric({self.NAME}):\n")
+        log_dict(self.report(), self._parameters) 
 
 
 class CoreMetrics(MetricGroup):
@@ -126,11 +147,11 @@ class CoreMetrics(MetricGroup):
             min_steps = 0
             std_steps = 0.0
         self.final_metrics = {
-            "total_episodes": total_episodes,
-            "average_steps_per_episode": average_steps,
-            "max_steps": max_steps,
-            "min_steps": min_steps,
-            "std_steps": std_steps
+            "total_episodes": int(total_episodes),
+            "average_steps_per_episode": float(average_steps),
+            "max_steps": int(max_steps),
+            "min_steps": int(min_steps),
+            "std_steps": float(std_steps)
         }
 
     def step(self, current_frame: np.ndarray, recent_frames: Optional[np.ndarray]):
@@ -227,8 +248,6 @@ class StateTracker():
         Child classes must FIRST call super().start() and THEN set up their own metric classes.
         """
         self.metric_classes: List[Type[MetricGroup]] = [CoreMetrics]
-
-
 
     def reset(self):
         """

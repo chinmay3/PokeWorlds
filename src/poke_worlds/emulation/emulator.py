@@ -10,7 +10,7 @@ import shutil
 import uuid
 from poke_worlds.emulation.parser import StateParser
 from poke_worlds.emulation.tracker import StateTracker
-from poke_worlds.utils import load_parameters, log_error, log_warn, file_makedir, log_info, is_none_str, verify_parameters
+from poke_worlds.utils import load_parameters, log_error, log_warn, file_makedir, log_info, is_none_str, verify_parameters, log_dict
 
 
 import cv2
@@ -729,7 +729,9 @@ class Emulator():
                         log_info(f"Saved captured region {region_name} to {save_path}", self._parameters)
             if self.step_count >= max_steps:
                 break
-        self.close()
+        tracker = self.close()
+        log_info("Human play mode ended.", self._parameters)
+        log_dict(tracker.report_final(), self._parameters)
 
     def save_state(self, state_path: str):
         """

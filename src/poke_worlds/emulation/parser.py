@@ -120,16 +120,16 @@ class NamedScreenRegion:
     def __repr__(self) -> str:
         return self.__str__()
 
-
-    def matches_target(self, reference: np.ndarray, strict_shape: bool=True, epsilon=0.01) -> bool:
+    def compare_against_target(self, reference: np.ndarray, strict_shape: bool=True) -> float:
         """
-        Compares the given reference image to the target image using Absolute Error (AE).
+        Computes the Absolute Error (AE) between the given reference image and the target image.
         Args:
             reference (np.ndarray): The reference image to compare.
-            strict_shape (bool, optional): Whether to error out if the array shapes do not match. 
-            epsilon (float, optional): The threshold for considering a match. 
+            strict_shape (bool, optional): Whether to error out if the array shapes do not match.
+
         Returns:
-            bool: True if the AE is below the epsilon threshold, False otherwise.
+            float: The Absolute Error (AE) between the reference and target images.
+
         """
         if self.target is None:
             if self._parameters["debug_mode"]:
@@ -142,6 +142,37 @@ class NamedScreenRegion:
                 return False
         diff = np.abs(reference.astype(np.float32) - self.target.astype(np.float32))
         mae = np.mean(diff)
+        return mae
+    
+    def compare_against_multi_target(self, target_name: str, reference: np.ndarray, strict_shape: bool=True) -> float:
+        """
+        Computes the Absolute Error (AE) between the given reference image and one of the multiple target images.
+        Args:
+            target_name (str): The name of the target image to compare against.
+            reference (np.ndarray): The reference image to compare.
+            strict_shape (bool, optional): Whether to error out if the array shapes do not match.
+        Returns:
+            float: The Absolute Error (AE) between the reference and specified target images.
+        """
+        if self.multi_targets is None or target_name not in self.multi_targets:
+            log_error(f"No multi target image set for NamedScreenRegion {self.name} with target name {target_name}. Cannot compare.", self._parameters)
+        self.target = self.multi_targets[target_name]
+        mae = self.compare_against_target(reference, strict_shape)
+        self.target = None
+        return mae
+
+    
+    def matches_target(self, reference: np.ndarray, strict_shape: bool=True, epsilon=0.01) -> bool:
+        """
+        Compares the given reference image to the target image using Absolute Error (AE).
+        Args:
+            reference (np.ndarray): The reference image to compare.
+            strict_shape (bool, optional): Whether to error out if the array shapes do not match. 
+            epsilon (float, optional): The threshold for considering a match. 
+        Returns:
+            bool: True if the AE is below the epsilon threshold, False otherwise.
+        """
+        mae = self.compare_against_target(reference, strict_shape)
         if mae <= epsilon:
             return True
         return False
@@ -393,6 +424,24 @@ class StateParser(ABC):
         x, y, w, h = region.start_x, region.start_y, region.width, region.height
         return self.capture_box(current_frame, x, y, w, h)
 
+    def compare_named_region_against_target(self, current_frame: np.ndarray, name: str, strict_shape: bool=True) -> float:
+        """
+        Computes the Absolute Error (AE) between a named region from the current frame and its target image.
+
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+            name (str): The name of the region to compare.
+            strict_shape (bool, optional): Whether to error out if the array shapes do not match.
+        Returns:
+            float: The Absolute Error (AE) between the named region and its target image.
+        """
+        if name not in self.named_screen_regions:
+            log_error(f"Named screen region {name} not found.", self._parameters)
+        region = self.named_screen_regions[name]
+        captured_region = self.capture_named_region(current_frame, name)
+        return region.compare_against_target(captured_region, strict_shape)
+    
+    
     def named_region_matches_target(self, current_frame: np.ndarray, name: str) -> bool:
         """
         Compares a named region from the current frame to its target image using Absolute Error (AE).
@@ -408,6 +457,25 @@ class StateParser(ABC):
         region = self.named_screen_regions[name]
         captured_region = self.capture_named_region(current_frame, name)
         return region.matches_target(captured_region)
+
+    def compare_named_region_against_multi_target(self, current_frame: np.ndarray, name: str, target_name: str, strict_shape: bool=True) -> float:
+        """
+        Computes the Absolute Error (AE) between a named region from the current frame and one of its multiple target images.
+
+        Args:
+            current_frame (np.ndarray): The current frame from the emulator.
+            name (str): The name of the region to compare.
+            target_name (str): The name of the target image to compare against.
+            strict_shape (bool, optional): Whether to error out if the array shapes do not match.
+        Returns:
+            float: The Absolute Error (AE) between the named region and the specified target image.
+        """
+        if name not in self.named_screen_regions:
+            log_error(f"Named screen region {name} not found.", self._parameters)
+        region = self.named_screen_regions[name]
+        captured_region = self.capture_named_region(current_frame, name)
+        return region.compare_against_multi_target(target_name, captured_region, strict_shape)
+
 
     def named_region_matches_multi_target(self, current_frame: np.ndarray, name: str, target_name: str) -> bool:
         """
