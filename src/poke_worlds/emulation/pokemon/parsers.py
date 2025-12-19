@@ -531,7 +531,7 @@ class MemoryBasedPokemonRedStateParser(BasePokemonRedStateParser):
             MAP_DATA = json.load(map_data)["regions"]
         self._MAP_DATA = {int(e["id"]): e for e in MAP_DATA}
         
-    def local_to_global(self, r: int, c: int, map_n: int) -> tuple[int, int]:
+    def local_to_global(self, r: int, c: int, map_n: int) -> Tuple[int, int]:
         """
         Converts local map coordinates to global map coordinates.
         Args:
@@ -566,7 +566,7 @@ class MemoryBasedPokemonRedStateParser(BasePokemonRedStateParser):
         """
         return self.get_raised_flags(self.defeated_opponent_events)
     
-    def get_local_coords(self) -> tuple[int, int, int]:
+    def get_local_coords(self) -> Tuple[int, int, int]:
         """
         Gets the local game coordinates (x, y, map number).
         Returns:

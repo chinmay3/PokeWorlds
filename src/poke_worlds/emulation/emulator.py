@@ -158,6 +158,7 @@ class Emulator():
         if not self.headless:
             if not is_none_str(self._parameters["gameboy_headed_emulation_speed"]):
                 self._pyboy.set_emulation_speed(int(self._parameters["gameboy_headed_emulation_speed"]))        
+        self.reset()
             
     @staticmethod
     def create_first_state(gb_path: str, state_path: str):
@@ -208,7 +209,9 @@ class Emulator():
     def _allocate_new_session_name(self) -> str:
         """
         Allocates a new session name based on existing sessions in the session directory.
-        :return: new session name
+
+        Returns:
+            str: The newly allocated session name.
         """
         self.clear_unnamed_sessions()
         storage_dir = self._parameters["storage_dir"]
@@ -325,6 +328,7 @@ class Emulator():
 
         Returns:
             np.ndarray: The stack of frames that passed while performing the action, if rendering is enabled. Is of shape [n_frames (3 right now), height, width, channels]. Otherwise, None.
+            
             bool: Whether the max_steps limit is reached.
         """
         if action is not None:
