@@ -1,6 +1,6 @@
 gameboy_action_freq: 24
 gameboy_press_step: 8
-gameboy_headed_emulation_speed: None # Set this to a multiplier to speed up emulation with a window, e.g. 2 for 2x speed
+gameboy_headed_emulation_speed: 15 # Set this to a multiplier to speed up emulation with a window, e.g. 2 for 2x speed
 gameboy_max_steps: 10000
 gameboy_hard_max_steps: 1000000
 gameboy_random_play_max_steps: 200

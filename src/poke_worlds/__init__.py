@@ -8,7 +8,7 @@ There are two ways to navigate the documentation:
 2. **Search Functionality**: Use the search bar at the top of the sidebar to quickly find specific classes, methods, or keywords within the documentation.
 
 ### Overview
-The `emulators` subpackage does most of the heavy lifting in this project. It defines the most high level abstractions of the fundamental classes:
+The `emulation` submodule does most of the heavy lifting in this project. It defines the most high level abstractions of the fundamental classes:
 1. `Emulator`: The core class that handles the emulation of Pokémon games.
 2. `StateParser`: Responsible for parsing the game state from the emulator when called. Is called by a `StateTracker`.
 3. `StateTracker`: Keeps track of the game state over time, allowing for state comparisons and history tracking. Is called once per step in the `Emulator`. 
@@ -24,5 +24,5 @@ This is what you should familiarize yourself with most deeply if you wish to use
 * `get_pokemon_emulator`: Factory function to get an emulator instance for a specified Pokémon game variant.
 
 """
-from poke_worlds.emulators.emulator import LowLevelActions
-from poke_worlds.emulators.pokemon import AVAILABLE_POKEMON_VARIANTS, get_pokemon_emulator
+from poke_worlds.emulation.emulator import LowLevelActions
+from poke_worlds.emulation.pokemon import AVAILABLE_POKEMON_VARIANTS, get_pokemon_emulator

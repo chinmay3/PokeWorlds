@@ -1,5 +1,4 @@
 from enum import Enum
-from abc import ABC, abstractmethod
 from typing import Type, Optional, Tuple
 
 
@@ -9,7 +8,9 @@ from time import perf_counter
 import sys
 import shutil
 import uuid
-from poke_worlds.utils import load_parameters, log_error, log_warn, file_makedir, log_info, is_none_str, nested_dict_to_str, verify_parameters
+from poke_worlds.emulation.parser import StateParser
+from poke_worlds.emulation.tracker import StateTracker
+from poke_worlds.utils import load_parameters, log_error, log_warn, file_makedir, log_info, is_none_str, verify_parameters
 
 
 import cv2
@@ -45,453 +46,6 @@ class ReleaseActions(Enum):
         LowLevelActions.PRESS_BUTTON_A: WindowEvent.RELEASE_BUTTON_A,
         LowLevelActions.PRESS_BUTTON_B: WindowEvent.RELEASE_BUTTON_B,
         LowLevelActions.PRESS_BUTTON_START: WindowEvent.RELEASE_BUTTON_START}
-
-
-class NamedScreenRegion:
-    """
-    Saves a reference to a named screen region (always a rectangle) for easy access.
-    """
-    def __init__(self, name: str, start_x: int, start_y: int, width: int, height: int, parameters: dict, target_path: Optional[str] = None):
-        """
-        Initializes a named screen region.
-
-        Args:
-            name (str): The name of the screen region.
-            start_x (int): The starting x-coordinate of the region in pixel space of the full resolution game screen. 
-            start_y (int): The starting y-coordinate of the region in pixel space of the full resolution game screen.
-            width (int): The width of the region in pixels.
-            height (int): The height of the region in pixels.
-            target (str): Optional path to a .npy file containing a screen capture of this region. Non-existent paths are only allowed if parameters['debug_mode'] (from configs/project_vars.yaml) is set to True. 
-        """
-        self.name = name
-        """ Name of the screen region. """
-        self.start_x = start_x
-        """ The starting x-coordinate of the region. """
-        self.start_y = start_y
-        """ The starting y-coordinate of the region. """
-        self.width = width
-        """ The width of the region. """
-        self.height = height
-        """ The height of the region. """
-        self._parameters = parameters
-        self.target_path = target_path
-        """ Path to npy file of a screen capture that we will be comparing this region against. Optional. """
-        self.target : Optional[np.ndarray]= None
-        if target_path is not None:
-            if not target_path.endswith(".npy"):
-                target_path = target_path + ".npy"
-            if not os.path.exists(target_path):
-                if not self._parameters['debug_mode']:
-                    log_error(f"Target file {target_path} does not exist. This is only allowed in debug_mode (can be set in configs/project_vars.yaml)", self._parameters)
-                else:
-                    log_warn(f"Target file {target_path} does not exist. Continuing since debug_mode is enabled.", self._parameters)
-            else:
-                self.target = np.load(target_path)
-
-    def get_end_x(self) -> int:
-        """
-        Returns the end x-coordinate of the named screen region.
-        
-        Returns:
-            int: The end x-coordinate of the named screen region.
-        """
-        return self.start_x + self.width
-    
-    def get_end_y(self) -> int:
-        """
-        Returns the end y-coordinate of the named screen region.
-        Returns:
-            int: The end y-coordinate of the named screen region.
-        """
-        return self.start_y + self.height
-    
-    def get_corners(self) -> Tuple[int, int, int, int]:
-        """
-        Returns the corners of the named screen region as (start_x, start_y, end_x, end_y).
-
-        Returns:
-            Tuple[int, int, int, int]: The corners of the named screen region.
-        """
-        return (self.start_x, self.start_y, self.get_end_x(), self.get_end_y())
-    
-    def __str__(self) -> str:
-        return f"NamedScreenRegion(name={self.name}, start_x={self.start_x}, start_y={self.start_y}, width={self.width}, height={self.height})"
-    
-    def __repr__(self) -> str:
-        return self.__str__()
-    
-    
-    def matches_target(self, reference: np.ndarray, strict_shape: bool=True, epsilon=0.01) -> bool:
-        """
-        Compares the given reference image to the target image using Absolute Error (AE).
-        Args:
-            reference (np.ndarray): The reference image to compare.
-            strict_shape (bool, optional): Whether to error out if the array shapes do not match. 
-            epsilon (float, optional): The threshold for considering a match. 
-        Returns:
-            bool: True if the MSE is below the epsilon threshold, False otherwise.
-        """
-        if self.target is None:
-            if self._parameters["debug_mode"]:
-                return False
-            log_error(f"No target image set for NamedScreenRegion {self.name}. Cannot compare.", self._parameters)
-        if reference.shape != self.target.shape:
-            if strict_shape:
-                log_error(f"Reference image shape {reference.shape} does not match target image shape {self.target.shape} for NamedScreenRegion {self.name}.", self._parameters)
-            else:
-                return False
-        diff = np.abs(reference.astype(np.float32) - self.target.astype(np.float32))
-        mae = np.mean(diff)
-        if mae <= epsilon:
-            return True
-        return False
-
-
-class StateParser(ABC):
-    """
-    Abstract base class for parsing game state variables from the GameBoy emulator.
-    """
-    def __init__(self, pyboy, parameters, named_screen_regions: Optional[list[NamedScreenRegion]] = None):
-        """
-        Initializes the StateParser.
-        Args:
-            pyboy: An instance of the PyBoy emulator.
-            parameters: A dictionary of parameters for configuration.
-            named_screen_regions (Optional[list[NamedScreenRegion]]): A list of NamedScreenRegion objects for easy access to specific screen regions.
-        """
-        verify_parameters(parameters)
-        self._parameters = parameters
-        if not isinstance(pyboy, PyBoy):
-            log_error("pyboy must be an instance of PyBoy", self._parameters)
-        self._pyboy = pyboy
-        self.named_screen_regions: dict[str, NamedScreenRegion] = {}
-        """ Dictionary of NamedScreenRegion objects for easy access to specific screen regions. """
-        if named_screen_regions is not None:
-            for region in named_screen_regions:
-                if not isinstance(region, NamedScreenRegion):
-                    log_error(f"named_screen_regions must be a list of NamedScreenRegion objects. Found {type(region)}", self._parameters)
-                if region.name in self.named_screen_regions:
-                    log_error(f"Duplicate named screen region: {region.name}", self._parameters)
-                self.named_screen_regions[region.name] = region
-
-    def bit_count(self, bits: int) -> int:
-        """
-        Counts the number of set bits (1s) in the given integer.
-        Args:
-            bits (int): The integer to count set bits in.
-        Returns:
-            int: The number of set bits.
-        """
-        return bin(bits).count("1")    
-    
-    def read_m(self, addr: bytes) -> int:
-        """
-        Reads a byte from the specified memory address.
-        Args:
-            addr (int): The memory address to read from.
-        Returns:
-            int: The byte value at the specified memory address.
-        """
-        #return self.pyboy.get_memory_value(addr)
-        return self._pyboy.memory[addr]
-
-    def read_bits(self, addr) -> str:
-        """
-        Reads a memory address and returns the result as a binary string. Adds padding so that reading bit 0 works correctly. 
-        Args:
-            addr (int): The memory address to read from.
-        Returns:
-            str: The binary string representation of the byte at the specified memory address.
-        """
-        # add padding so zero will read '0b100000000' instead of '0b0'
-        return bin(256 + self.read_m(addr))
-
-    def read_bit(self, addr, bit: int) -> bool:
-        """
-        Reads a specific bit from a memory address.
-        Args:
-            addr (int): The memory address to read from.
-            bit (int): The bit position to read (0-7).
-        Returns:
-            bool: True if the bit is set (1), False otherwise.
-        """
-        # add padding so zero will read '0b100000000' instead of '0b0'
-        return self.read_bits(addr)[-bit - 1] == "1"
-    
-    def read_m_bit(self, addr_bit: str) -> bool:
-        """
-        Reads a specific addr-bit string from a memory address. 
-        Args:
-            addr_bit (str): The - concatenation of a memory address and the bit position (e.g. '0xD87D-5')
-        Returns:
-            bool: True if the bit at that memory address is set (1), False otherwise
-        """
-        if "-" not in addr_bit:
-            log_error(f"Incorrect format addr_bit: {addr_bit}", self._parameters)
-        addr, bit = addr_bit.split("-")        
-        flag = False
-        try:
-            addr = eval(addr)
-        except:
-            flag = True
-        if flag:
-            log_error(f"Could not eval byte string: {addr}. Check format", self._parameters)
-        if not bit.isdigit():
-            log_error(f"bit {bit} is not digit", self._parameters)
-        bit = int(bit)
-        return self.read_bit(addr, bit)
-
-    def get_raised_flags(self, item_dict: dict) -> set:
-        """
-        Reads a dictionary of the form {flag_name: memory_address-bit} and returns a set of all flag names that are currently raised (i.e. the bit at the memory address is 1).
-        Args:
-            item_dict (dict): A dictionary mapping flag names to memory address-bit strings.
-        Returns:
-            set: A set of flag names that are currently raised.
-        """
-        items = set()
-        for item_name, slot in item_dict.items():
-            if self.read_m_bit(slot):
-                items.add(item_name)
-        return items
-    
-    def get_current_frame(self) -> np.ndarray:
-        """
-        Reads the pyboy screen and returns a full resolution numpy array
-        
-        Returns:
-            np.ndarray: The rendered image as a numpy array.
-        """
-        screen = self._pyboy.screen.ndarray[:,:,0:1]  # (144, 160, 3)
-        return screen
-    
-    def capture_box(self, current_frame: np.ndarray, start_x: int, start_y: int, width: int, height: int) -> np.ndarray:
-        """
-        Captures a rectangular region from the current frame.
-
-        Args:
-            current_frame (np.ndarray): The current frame from the emulator.
-            start_x (int): The starting x-coordinate of the region.
-            start_y (int): The starting y-coordinate of the region.
-            width (int): The width of the region.
-            height (int): The height of the region.
-        Returns:
-            np.ndarray: The captured rectangular region.
-        """
-        # first check that the box is within the frame
-        end_x = start_x + width
-        end_y = start_y + height
-        if start_x < 0 or start_y < 0 or end_x > current_frame.shape[1] or end_y > current_frame.shape[0]:
-            start_x = max(0, start_x)
-            start_y = max(0, start_y)
-            end_x = min(current_frame.shape[1], end_x)
-            end_y = min(current_frame.shape[0], end_y)
-        return current_frame[start_y:end_y, start_x:end_x, :]
-     
-    def capture_square_centered(self, current_frame: np.ndarray, center_x: int, center_y: int, box_size: int) -> np.ndarray:
-        """
-        Captures a square region from the current frame centered at (center_x, center_y) with the given box size.
-        
-        Args:
-            current_frame (np.ndarray): The current frame from the emulator.
-            center_x (int): The x-coordinate of the center of the square.
-            center_y (int): The y-coordinate of the center of the square.
-            box_size (int): The size of the square box to capture.
-        
-        Returns:
-            np.ndarray: The captured square region.
-        """
-        half_box = box_size // 2
-        start_x = max(center_x - half_box, 0)
-        end_x = min(center_x + half_box, current_frame.shape[1])
-        start_y = max(center_y - half_box, 0)
-        end_y = min(center_y + half_box, current_frame.shape[0])
-        return current_frame[start_y:end_y, start_x:end_x, :]
-    
-    def draw_box(self, current_frame: np.ndarray, start_x: int, start_y: int, width: int, height: int, color: tuple = (0, 0, 0), thickness: int = 1) -> np.ndarray:
-        """
-        Draws a rectangle on the current frame.
-
-        Args:
-            current_frame (np.ndarray): The current frame from the emulator.
-            start_x (int): The starting x-coordinate of the rectangle.
-            start_y (int): The starting y-coordinate of the rectangle.
-            width (int): The width of the rectangle.
-            height (int): The height of the rectangle.
-            color (tuple, optional): The color of the rectangle in BGR format.
-            thickness (int, optional): The thickness of the rectangle border. 
-
-        Returns:
-            np.ndarray: The frame with the drawn rectangle.
-        """
-        end_x = start_x + width
-        end_y = start_y + height
-        if start_x < 0 or start_y < 0 or end_x > current_frame.shape[1] or end_y > current_frame.shape[0]:
-            start_x = max(0, start_x)
-            start_y = max(0, start_y)
-            end_x = min(current_frame.shape[1], end_x)
-            end_y = min(current_frame.shape[0], end_y)
-        frame_with_box = current_frame.copy()
-        cv2.rectangle(frame_with_box, (start_x, start_y), (end_x, end_y), color, thickness)
-        return frame_with_box
-    
-    def draw_square_centered(self, current_frame: np.ndarray, center_x: int, center_y: int, box_size: int, color: tuple = (0, 0, 0), thickness: int = 1) -> np.ndarray:
-        """
-        Draws a square on the current frame centered at (center_x, center_y) with the given box size.
-        
-        Args:
-            current_frame (np.ndarray): The current frame from the emulator.
-            center_x (int): The x-coordinate of the center of the square.
-            center_y (int): The y-coordinate of the center of the square.
-            box_size (int): The size of the square box to draw.
-            color (tuple, optional): The color of the square in BGR format. 
-            thickness (int, optional): The thickness of the square border.
-        
-        Returns:
-            np.ndarray: The frame with the drawn square.
-        """
-        half_box = box_size // 2
-        start_x = max(center_x - half_box, 0)
-        end_x = min(center_x + half_box, current_frame.shape[1])
-        start_y = max(center_y - half_box, 0)
-        end_y = min(center_y + half_box, current_frame.shape[0])
-        frame_with_square = current_frame.copy()
-        cv2.rectangle(frame_with_square, (start_x, start_y), (end_x, end_y), color, thickness)
-        return frame_with_square
-    
-    def capture_named_region(self, current_frame: np.ndarray, name: str) -> np.ndarray:
-        """
-        Captures a named region from the current frame.
-
-        Args:
-            current_frame (np.ndarray): The current frame from the emulator.
-            name (str): The name of the region to capture.
-
-        Returns:
-            np.ndarray: The captured region.
-        """
-        if name not in self.named_screen_regions:
-            log_error(f"Named screen region {name} not found.", self._parameters)
-        region = self.named_screen_regions[name]
-        x, y, w, h = region.start_x, region.start_y, region.width, region.height
-        return self.capture_box(current_frame, x, y, w, h)
-    
-    def named_region_matches_target(self, current_frame: np.ndarray, name: str) -> bool:
-        """
-        Compares a named region from the current frame to its target image using Absolute Error (AE).
-
-        Args:
-            current_frame (np.ndarray): The current frame from the emulator.
-            name (str): The name of the region to compare.
-        Returns:
-            bool: True if the region matches the target image, False otherwise.
-        """
-        if name not in self.named_screen_regions:
-            log_error(f"Named screen region {name} not found.", self._parameters)
-        region = self.named_screen_regions[name]
-        captured_region = self.capture_named_region(current_frame, name)
-        return region.matches_target(captured_region)
-
-    def draw_named_region(self, current_frame: np.ndarray, name: str, color: tuple = (0, 0, 0), thickness: int = 1) -> np.ndarray:
-        """
-        Draws a named region on the current frame.
-
-        Args:
-            current_frame (np.ndarray): The current frame from the emulator.
-            name (str): The name of the region to draw.
-            color (tuple, optional): The color of the rectangle in BGR format. 
-            thickness (int, optional): The thickness of the rectangle border.
-
-        Returns:
-            np.ndarray: The frame with the drawn rectangle.
-        """
-        if name not in self.named_screen_regions:
-            log_error(f"Named screen region {name} not found.", self._parameters)
-        region = self.named_screen_regions[name]
-        x, y, w, h = region.start_x, region.start_y, region.width, region.height
-        return self.draw_box(current_frame, x, y, w, h, color, thickness)
-    
-    def draw_grid_overlay(self, current_frame: np.ndarray, grid_skip: int=20) -> np.ndarray:
-        """
-        Draws a grid overlay on the current frame for easier region identification.
-        Args:
-            current_frame (np.ndarray): The current frame from the emulator.
-            grid_skip (int, optional): The number of pixels between grid lines. 
-        Returns:
-            np.ndarray: The frame with the grid overlay.            
-        """
-        frame_with_grid = current_frame.copy()
-        for x in range(0, current_frame.shape[1], grid_skip):
-            cv2.line(frame_with_grid, (x, 0), (x, current_frame.shape[0]), (0, 0, 255), 1, lineType=cv2.LINE_AA)
-        for y in range(0, current_frame.shape[0], grid_skip):
-            cv2.line(frame_with_grid, (0, y), (current_frame.shape[1], y), (0, 0, 255), 1, lineType=cv2.LINE_AA)
-        return frame_with_grid
-    
-    @abstractmethod
-    def __repr__(self) -> str:
-        """
-        Name of the parser for logging purposes.
-        :return: string name of the parser
-        """
-        raise NotImplementedError    
-
-# TODO: Think about design for this.
-class StateTracker(ABC):
-    def __init__(self, name: str, session_name: str, instance_id: str, state_parser: StateParser, parameters: dict):
-        """
-        Initializes the StateTracker.
-        Args:
-            name (str): Name of the game.
-            session_name (str): Name of the session.
-            instance_id (str): Unique identifier for this environment instance.
-            state_parser (StateParser): An instance of the StateParser to parse game state variables.
-            parameters (dict): A dictionary of parameters for configuration.
-        """
-        verify_parameters(parameters)
-        self.name = name
-        """ Name of the game. """
-        self.session_name = session_name
-        """ Name of the session. """
-        self.instance_id = instance_id
-        """ Unique identifier for this environment instance. """
-        self.state_parser = state_parser
-        """ An instance of the StateParser to parse game state variables. """
-        self._parameters = parameters
-        self.metrics = {}
-        self.reset()
-        """ Dictionary to store tracked metrics. TODO: Review design. """
-
-    def reset(self):
-        """
-        Is called once per environment reset.
-
-        At this level, only manages the step counter
-        """
-        self.metrics["steps"] = 0
-
-    def step(self):
-        """
-        Is called once per environment step to update any tracked metrics.
-
-        At this level, only manages the step counter
-        """
-        self.metrics["steps"] =  self.metrics.get("steps", 0) + 1
-    
-    @abstractmethod
-    def close(self):
-        """
-        Is called once when the environment is closed to finalize any tracked metrics.
-        """
-        raise NotImplementedError
-    
-    def __repr__(self) -> str:
-        return f"<StateTracker(name={self.name}, session_name={self.session_name}, instance_id={self.instance_id})>"
-
-    def __str__(self) -> str:
-        start = f"***\t{self.__repr__()}\t***"
-        body = nested_dict_to_str(self.metrics, indent=1)
-        return f"{start}\n{body}"
-
 
 
 class Emulator():
@@ -760,7 +314,7 @@ class Emulator():
         """ 
         return self.state_parser.get_current_frame()
     
-    def step(self, action: LowLevelActions = None) -> bool:
+    def step(self, action: LowLevelActions = None) -> Tuple[np.ndarray, bool]:
         """ 
         
         Takes a step in the environment by performing the given action on the emulator.
@@ -770,6 +324,7 @@ class Emulator():
             action (LowLevelActions, optional): Lowest level action to perform on the emulator.
 
         Returns:
+            np.ndarray: The stack of frames that passed while performing the action, if rendering is enabled. Is of shape [n_frames (3 right now), height, width, channels]. Otherwise, None.
             bool: Whether the max_steps limit is reached.
         """
         if action is not None:
@@ -1030,9 +585,18 @@ class Emulator():
         if self.headless:
             log_error("Human play mode requires headless=False. Change the initialization", self._parameters)
         self.reset()
-        valid_regions = list(self.state_parser.named_screen_regions.keys())
-        unassigned_regions = [name for name in valid_regions if self.state_parser.named_screen_regions[name].target is None]
-        log_info(f"Unassigned regions (target array not set) are: {unassigned_regions}", self._parameters)
+        valid_regions = []
+        unassigned_regions = []
+        for region_name, region in self.state_parser.named_screen_regions.items():
+            valid_regions.append(region_name)
+            if region.multi_targets is None:
+                if region.target is None:
+                    unassigned_regions.append(region_name)
+            else:
+                for target_name in region.multi_targets.keys():
+                    if region.multi_targets[target_name] is None:
+                        unassigned_regions.append((region_name, target_name))
+        log_warn(f"Unassigned regions (target array not set) are: {unassigned_regions}", self._parameters)
         while True:
             self._parameters = load_parameters()
             if not self._parameters["gameboy_dev_play_stop"]:
@@ -1043,9 +607,11 @@ class Emulator():
                 In development mode.
                 Enter 'e' to close the emulator.
                 Enter '' to re-enter normal play mode (remember to change gameboy_dev_play_stop back to false in configs or it'll stop again). 
+                Enter 'p' to print the current state.
+                Enter 'w' to pass a single tick without any action.
                 Enter 's <state_name>' to save the current state as a .state file.
                 Enter 'l <state_name>' to load a .state file.
-                Enter 'c <region_name> <save_name / None if region.target_path is set>' to capture a named region and save it as a .npy file.
+                Enter 'c <region_name> <save_name / None if region.target_path is set>' to capture a named region and save it as a .npy file. To enter a multi-target region use the format "c <region_name>,<target_name> <save_name>" (no spaces in between region and target name)
                 Enter 'd <None / region_name>' to draw a named region and display the current screen with the region drawn.
                 Enter 'b' to enter a breakpoint.
                 Valid region names are: {valid_regions}
@@ -1057,7 +623,7 @@ class Emulator():
                 user_input = input("Dev mode input: ")
                 user_input = user_input.lower().strip()
                 first_char = user_input[0] if len(user_input) > 0 else ""
-                allowed_inputs = ["e", "", "c", "s", "l", "d", "b"]
+                allowed_inputs = ["e", "", "p", "w", "c", "s", "l", "d", "b"]
                 if first_char not in allowed_inputs:
                     log_warn(f"Invalid input {user_input}. Valid inputs are: {allowed_inputs}", self._parameters)
                     continue
@@ -1066,6 +632,13 @@ class Emulator():
                     break
                 elif first_char == "":
                     log_info("Exiting development mode. Resuming normal play.", self._parameters)
+                    continue
+                elif first_char == "p":
+                    log_info(f"Current State:\n{str(self.state_tracker)}", self._parameters)
+                    continue
+                elif first_char == "w":
+                    self._pyboy.tick(1, True)
+                    self.state_tracker.step()
                     continue
                 elif first_char == "s" or first_char == "l":
                     parts = user_input.split(" ")
@@ -1101,9 +674,19 @@ class Emulator():
                                 log_warn(f"Invalid input {user_input}.", self._parameters)
                                 continue
                             else:                                
-                                region_name = parts[1]
+                                region_name = parts[1].split(",")[0]
                                 region = self.state_parser.named_screen_regions[region_name]
-                                save_path = region.target_path
+                                if region.multi_targets is None:
+                                    save_path = region.target_path
+                                else:
+                                    if "," not in parts[1]:
+                                        log_warn(f"Region {region_name} is a multi-target region. Specify target", self._parameters)
+                                        continue
+                                    target_name = parts[1].split(",")[1]
+                                    if target_name not in region.multi_target_paths:
+                                        log_warn(f"Target name {target_name} not found in region {region_name} with targets {region.multi_targets.keys()}.", self._parameters)
+                                        continue
+                                    save_path = region.multi_target_paths[target_name]
                                 if save_path is None:
                                     log_warn(f"Region {region_name} does not have a target path specified. Please provide a save name.", self._parameters)
                                     continue
@@ -1116,7 +699,7 @@ class Emulator():
                     elif first_char == "d":
                         parts = user_input.split(" ")
                         if len(parts) == 2:
-                            region_name = parts[1]
+                            region_name = parts[1].split(",")[0] # Shouldn't need but anyway.
                         elif len(parts) == 1:
                             region_name = "Full Screen"
                         else:

@@ -1,7 +1,7 @@
 from poke_worlds.utils import load_parameters, log_error, verify_parameters
-from poke_worlds.emulators.emulator import Emulator
-from poke_worlds.emulators.pokemon.parsers import PokemonRedStateParser, PokemonBrownStateParser, PokemonCrystalStateParser, PokemonStarBeastsStateParser, PokemonPrismStateParser, PokemonFoolsGoldStateParser
-from poke_worlds.emulators.pokemon.trackers import EmptyTracker
+from poke_worlds.emulation.emulator import Emulator, LowLevelActions
+from poke_worlds.emulation.pokemon.parsers import PokemonStateParser, PokemonRedStateParser, PokemonBrownStateParser, PokemonCrystalStateParser, PokemonStarBeastsStateParser, PokemonPrismStateParser, PokemonFoolsGoldStateParser
+from poke_worlds.emulation.pokemon.trackers import EmptyTracker
 from typing import Optional
 
 VARIANT_TO_GB_NAME = {
@@ -73,6 +73,31 @@ def _infer_variant(variant: str, parameters: dict) -> str:
     log_error(f"Could not infer variant from '{variant}'. Available variants are: {options}", parameters)
 
 
+class PokemonEmulator(Emulator):
+    """
+    Almost the exact same as Emulator, but forces the agent to not mess with the menu options cursor.
+    """
+    def __init__(self, *args, **kwargs):
+        if "state_parser_class" not in kwargs:
+            if len(args) < 3:
+                log_error("Malformed initialization of Emulator")
+            else:
+                state_parser_class = args[2]
+        else:
+            state_parser_class = kwargs["state_parser_class"]
+        if not issubclass(state_parser_class, PokemonStateParser):
+            log_error("state_parser_class must be a subclass of PokemonStateParser")
+        super().__init__(*args, **kwargs)
+
+    def step(self, action):
+        rets = super().step(action)
+        if self.state_parser.is_hovering_over_options_in_menu(self.get_current_frame()):
+            # force the agent to click the up button to get off the options
+            self.run_action_on_emulator(LowLevelActions.PRESS_ARROW_UP)
+        return rets
+
+
+
 def get_pokemon_emulator(variant: str, parameters: Optional[dict] = None, init_state_name: str = None, **kwargs) -> Emulator:
     """ 
     Factory method to get a Pokemon emulator instance based on the specified variant.
@@ -100,7 +125,7 @@ def get_pokemon_emulator(variant: str, parameters: Optional[dict] = None, init_s
     state_tracker_class = _VARIANT_TO_TRACKER[variant]
     if state_tracker_class is None:
         log_error(f"StateTracker for variant '{variant}' is not yet implemented.", parameters)
-    emulator = Emulator(name=variant, gb_path=gb_path, 
+    emulator = PokemonEmulator(name=variant, gb_path=gb_path,
                         state_parser_class=state_parser_class, state_tracker_class=state_tracker_class,
                         init_state=init_state, parameters=parameters, **kwargs)
     return emulator
