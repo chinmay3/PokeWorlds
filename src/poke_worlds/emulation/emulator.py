@@ -598,7 +598,8 @@ class Emulator():
                 for target_name in region.multi_targets.keys():
                     if region.multi_targets[target_name] is None:
                         unassigned_regions.append((region_name, target_name))
-        log_warn(f"Unassigned regions (target array not set) are: {unassigned_regions}", self._parameters)
+        if len(unassigned_regions) > 0:
+            log_warn(f"Unassigned regions (target array not set) are: {unassigned_regions}", self._parameters)
         while True:
             self._parameters = load_parameters()
             if not self._parameters["gameboy_dev_play_stop"]:
@@ -619,7 +620,7 @@ class Emulator():
                 Valid region names are: {valid_regions}
                 Initially unassigned regions (target array not set) were: {unassigned_regions}\n\t Note: This list does not update as you assign targets during this session.
                 Current State: 
-                {str(self.state_tracker)}
+                {self.state_tracker.report()}
                 """
                 log_info(dev_instructions, self._parameters)
                 user_input = input("Dev mode input: ")

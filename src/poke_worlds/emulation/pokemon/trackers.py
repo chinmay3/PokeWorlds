@@ -171,4 +171,13 @@ class CorePokemonTracker(StateTracker):
     """
     def start(self):
         super().start()
-        self.metric_classes.extend([CorePokemonMetrics, PokemonRedStarter])
+        self.metric_classes.extend([CorePokemonMetrics])
+
+
+class PokemonRedStarterTracker(CorePokemonTracker):
+    """
+    Example StateTracker that tracks the starter Pokémon chosen in Pokémon Red.
+    """
+    def start(self):
+        super().start()
+        self.metric_classes.extend([PokemonRedStarter])

@@ -8,7 +8,7 @@ import click
 @click.option("--sav_file", type=str, default=None, help="Path to save the .sav file")
 @click.option("--state_name", type=str, default="tmp", help="Name of the state")
 def main(variant, sav_file, state_name):
-    env = get_pokemon_emulator(variant=variant, headless=True)
+    env = get_pokemon_emulator(game_variant=variant, headless=True)
     if not hasattr(env.state_parser, "rom_data_path"):
         raise ValueError("Parsers without rom_data_path are not supported for save state creation.")
     state_dir = env.state_parser.rom_data_path + "/states/"

@@ -10,12 +10,12 @@ import click
 @click.option("--save_video", type=bool, default=None, help="Whether to save a video of the gameplay. If not specified, uses default from config.")
 def main(variant, init_state, play_mode, headless, save_video):
     if play_mode == "human":
-        env = get_pokemon_emulator(variant=variant, init_state_name=init_state, headless=False, save_video=save_video)
+        env = get_pokemon_emulator(game_variant=variant, init_state_name=init_state, headless=False, save_video=save_video)
         env.human_play()
     else:
         if headless != False:
             headless = True
-        env = get_pokemon_emulator(variant=variant, init_state_name=init_state, headless=headless, save_video=save_video)
+        env = get_pokemon_emulator(game_variant=variant, init_state_name=init_state, headless=headless, save_video=save_video)
         env.random_play()
 
 if __name__ == "__main__":

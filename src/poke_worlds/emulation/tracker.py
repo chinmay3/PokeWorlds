@@ -205,9 +205,36 @@ class CoreMetrics(MetricGroup):
 
 class StateTracker():
     """
-    Uses a StateParser to track the game state over time, allowing for state comparisons and history tracking.
-    Is called once per step in the `Emulator`.   
-    Tracks metrics across multiple episodes.  
+Tracks and provides API access to the game state / metrics over time and across episodes.
+The most hassle-free way to read from the StateTracker is to use the `report()` and `report_final()` methods to get nested dictionaries of all metrics tracked.
+
+**Example Usage:**
+
+```python
+import numpy as np
+from poke_worlds import get_pokemon_emulator
+emulator = get_pokemon_emulator(variant="pokemon_red")
+
+# We can access the StateTracker via the emulator
+state_tracker = emulator.state_tracker
+
+# Run a random action on the emulator
+emulator.reset()
+allowed_actions = list(LowLevelActions)
+action = np.random.choice(allowed_actions)
+_, _ = emulator.step(action) # also updates the StateTracker internally
+# We can access the current episode metrics via the StateTracker
+episode_metrics = state_tracker.report() # access all of them as a nested dict
+specific_metric = state_tracker.get_episode_metric(("core", "steps")) # access specific metrics
+
+# If we reset the emulator, the StateTracker will reset its inter-episode metrics as well
+emulator.reset()
+action = np.random.choice(allowed_actions)
+_, _ = emulator.step(action)
+emulator.close() # StateTracker will finalize its metrics internally
+final_metrics = state_tracker.report_final() # access all of them as a nested dict
+specific_final_metric = state_tracker.get_final_metric(("core", "average_steps_per_episode")) # access specific final metrics
+```
     """
     def __init__(self, name: str, session_name: str, instance_id: str, state_parser: StateParser, parameters: dict):
         """
