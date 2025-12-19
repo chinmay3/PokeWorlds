@@ -1,7 +1,7 @@
 from poke_worlds.utils import load_parameters, log_error, verify_parameters
 from poke_worlds.emulation.emulator import Emulator, LowLevelActions
 from poke_worlds.emulation.pokemon.parsers import PokemonStateParser, PokemonRedStateParser, PokemonBrownStateParser, PokemonCrystalStateParser, PokemonStarBeastsStateParser, PokemonPrismStateParser, PokemonFoolsGoldStateParser
-from poke_worlds.emulation.pokemon.trackers import EmptyTracker
+from poke_worlds.emulation.pokemon.trackers import CorePokemonMetrics, CorePokemonTracker
 from typing import Optional
 
 VARIANT_TO_GB_NAME = {
@@ -36,12 +36,12 @@ _VARIANT_TO_PARSER = {
 
 
 _VARIANT_TO_TRACKER = {
-    "pokemon_red": EmptyTracker,
-    "pokemon_brown": EmptyTracker,
-    "pokemon_crystal": EmptyTracker,
-    "pokemon_starbeasts": EmptyTracker,  # Empty is simple placeholder for now
-    "pokemon_fools_gold": EmptyTracker,  # To be implemented
-    "pokemon_prism": EmptyTracker,  # To be implemented
+    "pokemon_red": CorePokemonTracker,
+    "pokemon_brown": CorePokemonTracker,
+    "pokemon_crystal": CorePokemonTracker,
+    "pokemon_starbeasts": CorePokemonTracker,  # Empty is simple placeholder for now
+    "pokemon_fools_gold": CorePokemonTracker,  # To be implemented
+    "pokemon_prism": CorePokemonTracker,  # To be implemented
 }
 """ Mapping of variant names to their corresponding StateTracker classes. """
 

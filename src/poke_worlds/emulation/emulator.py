@@ -341,7 +341,7 @@ class Emulator():
             self.add_video_frames(frames)
 
         self.step_count += 1
-        self.state_tracker.step()
+        self.state_tracker.step(frames)
         return frames, self.check_if_done()
 
     def get_state_parser(self) -> StateParser:
@@ -514,17 +514,19 @@ class Emulator():
             self._model_frame_writer = None
         self.video_running = False
     
-    def close(self):
+    def close(self) -> StateTracker:
         """
         Closes the emulator and any associated resources.
         If the session directory is empty after closing, it will be deleted.
         """
+        self.state_tracker.close()
         self._pyboy.stop(save=False)
         self.close_video()
         self.state_tracker.close()
         # check if session directory is empty, and if so delete it
         if os.path.exists(self.session_path) and len(os.listdir(self.session_path)) == 0:
             os.rmdir(self.session_path)
+        return self.state_tracker
     
     def human_play(self, max_steps: int = None):
         """ 

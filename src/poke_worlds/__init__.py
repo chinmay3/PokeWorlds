@@ -15,7 +15,7 @@ The `emulation` submodule does most of the heavy lifting in this project. It def
 
 Briefly skim the documentation for each of these classes to understand their roles, the fundamental structure they impose and how they interact with each other.
 
-In practice, unless you are implementing new games, you will not need to interact with these base classes directly. The `StateParser` and `StateTracker` have subclasses that implement Pokémon specific logic and provides some additional structure.
+In practice, unless you are implementing new games, you will not need to interact with these base classes directly. Each have subclasses that implement Pokémon specific logic and provides some additional structure.
 This is what you should familiarize yourself with most deeply if you wish to use this package as a black box API and not care about the internals. Search for the `pokemon` submodule and look at the parsers and trackers defined there. 
 
 ### Notable Imports

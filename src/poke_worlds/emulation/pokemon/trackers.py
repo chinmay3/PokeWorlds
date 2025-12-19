@@ -1,29 +1,50 @@
-from poke_worlds.emulation.parser import StateParser
 from poke_worlds.utils import log_info
-from poke_worlds.emulation.tracker import StateTracker
-from poke_worlds.emulation.pokemon.parsers import PokemonStateParser
+from poke_worlds.emulation.tracker import MetricGroup, StateTracker
+from poke_worlds.emulation.pokemon.parsers import PokemonStateParser, AgentState
+from typing import Optional, Type
+import numpy as np
 
-class EmptyTracker(StateTracker):
-    """ A tracker that does nothing. Used as a placeholder and for debugging. """
 
-    def __init__(self, name: str, session_name: str, instance_id: str, state_parser: PokemonStateParser, parameters: dict):
-        super().__init__(name, session_name, instance_id, state_parser, parameters)
-        self.metrics["current_state"] = None
-    
-    def reset(self):
-        """ Called once per environment reset. """
-        self.metrics["current_state"] = None
+class CorePokemonMetrics(MetricGroup):
+    """
+    Pokémon-specific metrics.
+    """
+    NAME = "pokemon_core"
+    REQUIRED_PARSER = PokemonStateParser
 
-    def step(self):
-        """ Called once per environment step. """
-        current_frame = self.state_parser.get_current_frame()
-        new_state = self.state_parser.get_agent_state(current_frame)
-        if self.metrics["current_state"] != new_state:
-            previous_state = self.metrics["current_state"]
-            self.metrics["current_state"] = new_state
-            log_info(f"State changed from {previous_state} to: {self.metrics['current_state']}", self._parameters)
-
+    def reset(self, first = False):
+        self.current_state: AgentState = AgentState.IN_DIALOGUE # Start by default in dialogue because it has the least permissable actions. 
+        """ The current state of the agent in the game. """
+        self._previous_state = self.current_state
 
     def close(self):
-        """ Called once when the environment is closed to finalize any tracked metrics. """
         pass
+
+    def step(self, current_frame: np.ndarray, recent_frames: Optional[np.ndarray]):
+        self._previous_state = self.current_state
+        current_state = self.state_parser.get_agent_state(current_frame)
+        self.current_state = current_state
+        if self.current_state != self._previous_state:
+            log_info(f"Agent state changed from {self._previous_state} to {self.current_state}", self._parameters)
+
+    def report(self) -> dict:
+        """
+        Reports the current Pokémon core metrics.
+        Returns:
+            dict: A dictionary containing the current agent state.
+        """
+        return {
+            "agent_state": self.current_state.name
+        }
+    
+    def report_final(self) -> dict:
+        return {}
+
+
+class CorePokemonTracker(StateTracker):
+    """
+    StateTracker for core Pokémon metrics.
+    """
+    def start(self):
+        super().start()
+        self.metric_classes.extend([CorePokemonMetrics])
