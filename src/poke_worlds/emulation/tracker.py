@@ -114,7 +114,7 @@ class CoreMetrics(MetricGroup):
     1. steps: Number of steps taken in the episode.
     2. frame_changed:
             For every available recent frame, sees if any of them differ from the previous frame. If so sets frame_changed to True. Is not robust to jitter on screen. 
-    """    
+    """
     NAME = "core"
 
     def start(self):

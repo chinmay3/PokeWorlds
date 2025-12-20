@@ -20,10 +20,12 @@ There are two ways to navigate the documentation:
 * `AVAILABLE_POKEMON_VARIANTS`: List of available Pokémon game variants supported by the package.
 
 **Interface Submodule:**
-* `LowLevelController`: A controller that allows agents to directly execute low level actions on the emulator.
-* `RestrictedRandomController`: An example controller that randomly performs only game related Low Level actions.
-* `DummyEnvironment`: A dummy environment that does nothing special.
+* `get_pokemon_environment`: Factory function to create a Pokémon environment with the specified game variant and parameters.
+* `LowLevelController`: A controller that allows low-level interaction with the emulator.
+* `RandomPlayController`: A controller that samples random actions from fixed groups for gameplay. Is a minimal example of a higher-level controller.
+
 """
 from poke_worlds.emulation.pokemon import AVAILABLE_POKEMON_VARIANTS, get_pokemon_emulator
-from poke_worlds.interface.controller import LowLevelController, RestrictedRandomController
-from poke_worlds.interface.environment import DummyEnvironment
+from poke_worlds.interface.pokemon import get_pokemon_environment
+
+from poke_worlds.interface.controller import LowLevelController, RandomPlayController

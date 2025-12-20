@@ -1,7 +1,4 @@
 from poke_worlds import get_pokemon_emulator, AVAILABLE_POKEMON_VARIANTS
-from poke_worlds.interface.controller import RestrictedRandomController
-import numpy as np
-from tqdm import tqdm
 import click
 
 

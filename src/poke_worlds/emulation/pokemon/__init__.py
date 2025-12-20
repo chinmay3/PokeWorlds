@@ -63,7 +63,7 @@ AVAILABLE_POKEMON_VARIANTS = list(VARIANT_TO_GB_NAME.keys())
 """ List of available Pokemon game variants. """
 
 
-def _infer_variant(variant: str, parameters: dict) -> str:
+def infer_variant(variant: str, parameters: dict) -> str:
     """ 
     Try to infer the variant given a variant name 
     Args:
@@ -124,7 +124,7 @@ def get_pokemon_emulator(game_variant: str, *, parameters: Optional[dict] = None
         Emulator: An instance of the Emulator class configured for the specified variant.
     """
     parameters = load_parameters(parameters)
-    game_variant = _infer_variant(game_variant, parameters=parameters)
+    game_variant = infer_variant(game_variant, parameters=parameters)
     gb_path = parameters[f"{game_variant}_rom_data_path"] + "/" + VARIANT_TO_GB_NAME[game_variant]
     init_state = None
     if init_state_name is not None:

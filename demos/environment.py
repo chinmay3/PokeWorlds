@@ -1,7 +1,4 @@
-from poke_worlds import get_pokemon_emulator, AVAILABLE_POKEMON_VARIANTS
-from poke_worlds.interface.controller import LowLevelController, RestrictedRandomController
-from poke_worlds.interface.environment import DummyEnvironment
-import numpy as np
+from poke_worlds import AVAILABLE_POKEMON_VARIANTS, get_pokemon_environment, LowLevelController, RandomPlayController
 from tqdm import tqdm
 import click
 
@@ -15,25 +12,21 @@ import click
 def main(variant, init_state, play_mode, headless, save_video):
     if headless != False:
         headless = True
-    emulator = get_pokemon_emulator(game_variant=variant, init_state_name=init_state, headless=headless, save_video=save_video)
     if play_mode == "agent":
         raise NotImplementedError
     elif "random" in play_mode:
         if play_mode == "random":
             controller = LowLevelController()
         elif play_mode == "restricted_random":
-            controller = RestrictedRandomController()
+            controller = RandomPlayController()
         else:
             raise ValueError(f"Unknown play mode: {play_mode}")
-        environment = DummyEnvironment(emulator=emulator, controller=controller)
+        environment = get_pokemon_environment(game_variant=variant, controller=controller, headless=headless, save_video=save_video, init_state_name=init_state)
         steps = 0
         max_steps = 500
         pbar = tqdm(total=max_steps)
         while steps < max_steps:
-            valid_actions = controller.get_valid_actions()
-            if len(valid_actions) == 0:
-                break
-            action = np.random.choice(valid_actions)
+            action = environment.action_space.sample()
             observation, reward, terminated, truncated, info = environment.step(action)
             if terminated or truncated:
                 break

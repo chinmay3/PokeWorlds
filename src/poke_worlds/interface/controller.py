@@ -2,34 +2,68 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Tuple, List, Optional
 from enum import Enum
 from poke_worlds.utils import verify_parameters, log_info, log_warn, log_error, load_parameters
-from poke_worlds.emulation.emulator import LowLevelActions, Emulator
-from poke_worlds.emulation.tracker import StateTracker
+from poke_worlds.emulation.emulator import Emulator, LowLevelActions
+from poke_worlds.interface.action import HighLevelAction, LowLevelAction, RandomPlayAction
+
 import numpy as np
+from gymnasium.spaces import OneOf, Space
 
 
 class Controller(ABC):
-    """ Abstract base class for controllers interfacing with the emulator. """
-
-    REQUIRED_TRACKER = StateTracker
-    """ The state tracker that tracks the minimal state information required for the controller to function. """
-
-    class HighLevelActions(Enum):
-        """ Enum defining high level actions that can be performed by the controller. """
-        WAIT = 0
-        """ No operation. """
-        RANDOM_ACTION = 1
-        """ Perform a random LowLevelAction. """
-
-    def __init__(self, parameters: Optional[dict] = None):
+    """ 
+    Abstract base class for controllers interfacing with the emulator. 
+    Handles conversion between high level actions and Gym action spaces.
+    
+    """
+    ACTIONS = [HighLevelAction]
+    """ A list of HighLevelAction classes that define the possible high level actions. 
+    This is (almost) always, the only part that must be customized in subclasses.
+    """
+    def __init__(self, parameters: Optional[dict] = None, seed: Optional[int] = None):
         self._parameters = load_parameters(parameters)
+        self.actions = [action(self._parameters) for action in self.ACTIONS]
+        """ A list of instantiated high level actions. """
+        self.action_space = OneOf([action.get_action_space() for action in self.actions])
+        """ The Gym action Space consisting of a choice over all high level action spaces. """
         self.unassign_emulator()
+        if seed is not None:
+            self.set_seed(seed)
+
+    
+    def _infer_required_tracker(self):
+        """
+        Infers the required state tracker class from the controller's high level actions.
+        """
+        lowest_level_tracker = None
+        for action in self.actions:
+            if lowest_level_tracker is None:
+                lowest_level_tracker = action.REQUIRED_STATE_TRACKER
+            else:
+                if issubclass(action.REQUIRED_STATE_TRACKER, lowest_level_tracker):
+                    lowest_level_tracker = action.REQUIRED_STATE_TRACKER
+        self.REQUIRED_STATE_TRACKER = lowest_level_tracker
+
+    
+    def seed(self, seed: int):
+        """
+        Sets the random seed for the controller and its actions.
+        Args:
+            seed (int): The random seed to set.
+        """
+        self._rng = np.random.default_rng(seed)
+        self.action_space.seed(seed)
+        seed_value = seed
+        for action in self.actions:
+            seed_value = seed + 1 # Simple way to get different seeds for each action
+            action.seed(seed_value)
 
     def unassign_emulator(self):
         """
         Clears the reference to the emulator instance.
         """
         self._emulator = None
-        self._state_tracker = None
+        for action in self.actions:
+            action.unassign_emulator()
 
     def assign_emulator(self, emulator: Emulator):
         """
@@ -37,119 +71,157 @@ class Controller(ABC):
         Args:
             emulator (Emulator): The emulator instance to be tracked.
         """
+        for action in self.actions:
+            action.assign_emulator(emulator)
         self._emulator = emulator
-        self._state_tracker = emulator.state_tracker
-        if not issubclass(type(self._state_tracker), self.REQUIRED_TRACKER):
-            log_error(f"Controller requires a StateTracker of type {self.REQUIRED_TRACKER.NAME}, but got {type(self._state_tracker).NAME}", self._parameters)
 
-    def get_actions(self) -> Enum:
+    def get_action_space(self) -> OneOf:
         """
-        Getter for the HighLevelActions enum.
+        Getter for the controller's Gym action space.
+        Returns:
+            OneOf: The Gym action Space consisting of a choice over all high level action spaces.
         """
-        return self.HighLevelActions
+        return self.action_space
     
-    @abstractmethod
-    def _get_valid_actions(self) -> List[HighLevelActions]:
+    def sample(self) -> OneOf:
         """
-        Returns a list of valid high level actions that can be performed in the current state.
+        Samples a random action from the controller's action space.
+        Returns:
+            OneOf: A random action from the controller's action space.
+        """
+        return self.action_space.sample()
+    
+    def _space_action_to_high_level_action(self, space_action: OneOf) -> Tuple[HighLevelAction, Dict[str, Any]]:
+        """
+        Interprets a Gym space action into a high level action and its parameters.
+
+        Args:
+            space_action (OneOf): The action in the controller's action space.
+
+        Returns: 
+            Tuple[HighLevelAction, Dict[str, Any]]: The high level action and its parameters.
+        """
+        action_index, space_action = space_action
+        action = self.actions[action_index]
+        parameters = action.space_to_parameters(space_action)
+        return action, parameters
+
+    def _high_level_action_to_space_action(self, action: HighLevelAction, **kwargs) -> Space:
+        """
+        Converts a high level action and its parameters into a Gym Space action.
+
+        Args:
+            action (HighLevelAction): The high level action to convert.
+            **kwargs: Additional arguments required for the specific high level action.
+        Returns:
+            Space: The action in the controller's action space.
+        """
+        space_action = action.parameters_to_space(**kwargs)
+        action_index = self.actions.index(action)
+        return (action_index, space_action)
+    
+    def _emulator_running(self) -> bool:
+        """
+        Checks if the emulator is currently running.
 
         Returns:
-            List[HighLevelActions]: A list of valid high level actions.
-        """
-        raise NotImplementedError
-    
-    def get_valid_actions(self) -> List[HighLevelActions]:
-        """
-        Returns a list of valid high level actions that can be performed in the current state.
-
-        Returns:
-            List[HighLevelActions]: A list of valid high level actions.
+            bool: True if the emulator is running, False otherwise.
         """
         if self._emulator is None:
             log_error("Emulator reference not assigned to controller.", self._parameters)
-        if self._emulator.check_if_done():
-            return []
-        return self._get_valid_actions()
+        return not self._emulator.check_if_done()    
     
-    @abstractmethod
-    def _execute_action(self, action: HighLevelActions) -> Tuple[List[Dict[str, Dict[str, Any]]], bool]:
+    def get_valid_high_level_actions(self) -> Dict[HighLevelAction, List[Dict[str, Any]]]:
         """
-        Executes the specified high level action on the emulator. 
-        Does not check for validity or assignment of the emulator reference.
+        Returns a list of all valid high level actions (including valid parameter inputs) that can be performed in the current state.
 
+        Will fail if there are high level actions with infinite valid parameterizations.
+        Use get_possibly_valid_high_level_actions() instead if that is the case.
+        """
+        valid_actions = {}
+        if not self._emulator_running():
+            return valid_actions
+        for action in self.actions:
+            valid_parameters = action.get_all_valid_parameters()
+            if len(valid_parameters) > 0:
+                valid_actions[action] = valid_parameters
+        return valid_actions
+        
+    def get_valid_space_actions(self) -> Dict[HighLevelAction, Space]:
+        """
+        Returns a list of valid actions in the controller's action space that can be performed in the current state.
 
-        Args:
-            action (HighLevelActions): The high level action to execute.
         Returns:
-            List[Dict[str, Dict[str, Any]]]: A list of state tracker reports after each low level action executed.
-            bool: Whether the action was successful or not. (Is often an estimate.)
 
+            Dict[HighLevelAction, Space]: A dictionary mapping high level actions to their corresponding valid space actions.
         """
-        raise NotImplementedError
+        valid_space_actions = {}
+        if not self._emulator_running():
+            return valid_space_actions
+        valid_high_level_actions = self.get_valid_high_level_actions()
+        for action, parameter_list in valid_high_level_actions.items():
+            for parameters in parameter_list:
+                space_action = self._high_level_action_to_space_action(action, **parameters)
+                valid_space_actions[action] = space_action
+        return valid_space_actions
+
+    def get_possibly_valid_high_level_actions(self) -> List[HighLevelAction]:
+        """
+        Returns a list of valid high level actions that can be performed (with some parameterized input) in the current state.
+
+        Returns:
+            List[HighLevelAction]: A list of valid high level actions.
+        """
+        if not self._emulator_running():
+            return []
+        actions = []
+        for action in self.actions:
+            if action.is_valid():
+                actions.append(action)
+        return actions
     
-    def execute_action(self, action: HighLevelActions) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[bool]]:
+    def execute_space_action(self, action: OneOf) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[bool]]:
         """
         Executes the specified high level action on the emulator after checking for validity.
 
         Args:
-            action (HighLevelActions): The high level action to execute.
+            action (OneOf): The action in the controller's action space.
 
         Returns:
+
             List[Dict[str, Dict[str, Any]]]: A list of state tracker reports after each low level action executed. Length is equal to the number of low level actions executed.
 
             bool: Whether the action was successful or not. (Is often an estimate.)
         """
-        if action not in self.get_valid_actions():
-            #log_warn(f"Attempted to execute invalid action {action}. Valid actions are: {self.get_valid_actions()}", self._parameters)
-            return None, None
-        return self._execute_action(action)
+        action_index, space_action = action
+        executing_action = self.actions[action_index]
+        return executing_action.execute_space_action(space_action)
+    
+    def execute(self, action: HighLevelAction, **kwargs) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[bool]]:
+        """
+        Executes the specified high level action on the emulator after checking for validity.
 
+        Args:
+            action (HighLevelAction): The high level action to execute.
+            **kwargs: Additional arguments required for the specific high level action.
+
+        Returns:
+
+            List[Dict[str, Dict[str, Any]]]: A list of state tracker reports after each low level action executed. Length is equal to the number of low level actions executed.
+
+            bool: Whether the action was successful or not. (Is often an estimate.)
+        """
+        if action not in self.ACTIONS:
+            log_error("Action not recognized by controller.", self._parameters)
+        return action.execute(**kwargs)
+    
 
 class LowLevelController(Controller):
-    """ A controller that allows agents to directly execute low level actions on the emulator. """
-    HighLevelActions = LowLevelActions
+    """ A controller that executes low level actions directly on the emulator. """
+    ACTIONS = [LowLevelAction]
+    """ A HighLevelAction subclass that directly maps to low level actions. """
 
-    def _get_valid_actions(self) -> List[LowLevelActions]:
-        return list(LowLevelActions)
-    
-    def _execute_action(self, action: LowLevelActions) -> Tuple[List[Dict[str, Dict[str, Any]]], bool]:
-        all_reports = []
-        success = False
-        _, done = self._emulator.step(action)
-        report = self._state_tracker.report()
-        all_reports.append(report)
-        success = True
-        return all_reports, success
-
-
-class RestrictedRandomController(Controller):
-    """ An example controller that randomly performs only game related Low Level actions. """
-    class HighLevelActions(Enum):
-        """  Splits high level actions into two categories: movement and buttons """
-        RANDOM_MOVEMENT = 0
-        """ Perform a random movement action. """
-        RANDOM_BUTTON_PRESS = 1
-        """ Perform a random button press action. """
-
-    def _get_valid_actions(self) -> List[HighLevelActions]:
-        return list(self.HighLevelActions)
-    
-    def _execute_action(self, action: HighLevelActions) -> Tuple[List[Dict[str, Dict[str, Any]]], bool]:
-        all_reports = []
-        success = False
-        low_level_choices = []
-        if action == self.HighLevelActions.RANDOM_MOVEMENT:
-            low_level_choices = [
-                LowLevelActions.PRESS_ARROW_UP,
-                LowLevelActions.PRESS_ARROW_DOWN,
-                LowLevelActions.PRESS_ARROW_LEFT,
-                LowLevelActions.PRESS_ARROW_RIGHT
-            ]
-        else:
-            low_level_choices = [LowLevelActions.PRESS_BUTTON_A]
-        chosen_action = np.random.choice(low_level_choices)
-        _, done = self._emulator.step(chosen_action)
-        report = self._state_tracker.report()
-        all_reports.append(report)
-        success = True
-        return all_reports, success
+class RandomPlayController(Controller):
+    """ A controller that performs random play on the emulator using low level actions. """
+    ACTIONS = [RandomPlayAction]
+    """ A HighLevelAction subclass that performs random low level actions. """

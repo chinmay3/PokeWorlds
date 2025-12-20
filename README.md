@@ -126,24 +126,18 @@ The video gets saved to the `sessions` folder of your `storage_dir` directory.
 
 It doesn't take much to get started in <img src="assets/logo.png" width="70">. Below is a simple [example](demos/environment.py) of an agent that takes random actions in Pokémon Red:
 ```python
-import numpy as np
-from poke_worlds import get_pokemon_emulator, LowLevelController, RestrictedRandomController, DummyEnvironment
+from poke_worlds import get_pokemon_environment, LowLevelController, RestrictedRandomController
 
-# Get the Pokémon Red emulator
-emulator = get_pokemon_emulator(game_variant="pokemon_red", headless=True) # set headless=False to see the screen
-
-# Get a basic controller that performs joystick actions
 controller = LowLevelController()
-
-# Instantiate the Gym Environment
-environment = DummyEnvironment(emulator=emulator, controller=controller)
+# Get the Pokémon Red emulator
+environment = get_pokemon_environment(game_variant="pokemon_red", controller=controller, headless=True) 
+# set headless=False to see the screen
 
 # Run an episode in the environment
 done = False
 while not done:
   # Pick a random action from the available options
-  valid_actions = controller.get_valid_actions()
-  action = np.random.choice(valid_actions)
+  action = environment.action_space.sample()
   # Make a step with the action
   observation, reward, terminated, truncated, info = environment.step(action)
   done = terminated or truncated

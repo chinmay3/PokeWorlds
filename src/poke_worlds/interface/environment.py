@@ -4,9 +4,9 @@ from typing import Optional, Type, Dict, Any, List, Tuple
 from poke_worlds.utils import load_parameters, log_error, log_info, log_warn
 
 
-from poke_worlds.emulation.emulator import Emulator
-from poke_worlds.emulation.tracker import StateTracker
+from poke_worlds.emulation import Emulator, StateTracker
 from poke_worlds.interface.controller import Controller, LowLevelController
+from poke_worlds.interface.action import HighLevelAction
 
 import numpy as np
 import gymnasium as gym
@@ -19,9 +19,6 @@ class Environment(gym.Env, ABC):
 
     REQUIRED_TRACKER = StateTracker
     """ The state tracker that tracks the minimal state information required for the environment to function. """
-
-    REQUIRED_CONTROLLER = Controller
-    """ The highest level controller that provides actions to the emulator. """
 
     def __init__(self):
         """
@@ -39,12 +36,12 @@ class Environment(gym.Env, ABC):
             log_error(f"Environment requires an Emulator of type {self.REQUIRED_EMULATOR.NAME}, but got {type(self._emulator).NAME}", self._parameters)
         if not issubclass(type(self._emulator.state_tracker), self.REQUIRED_TRACKER):
             log_error(f"Environment requires a StateTracker of type {self.REQUIRED_TRACKER.NAME}, but got {type(self._emulator.state_tracker).NAME}", self._parameters)
-        if not issubclass(type(self._controller), self.REQUIRED_CONTROLLER):
-            log_error(f"Environment requires a Controller of type {self.REQUIRED_CONTROLLER.NAME}, but got {type(self._controller).NAME}", self._parameters)
-        self.action_space = gym.spaces.Discrete(len(self._controller.get_actions()))
         self._controller.assign_emulator(self._emulator)
-
-    
+        self.action_space = self._controller.get_action_space()
+        """ The Gym action Space provided by the controller. """
+        self.actions = self._controller.actions
+        """ A list of HighLevelActions provided by the controller. """
+        
     @abstractmethod
     def get_observation(self) -> gym.spaces.Space:
         """
@@ -85,6 +82,7 @@ class Environment(gym.Env, ABC):
         super().reset(seed=seed, options=options)
 
         self._emulator.reset()
+        self._controller.seed(seed)
         return self.get_observation(), self.get_info()
     
     @abstractmethod
@@ -113,14 +111,14 @@ class Environment(gym.Env, ABC):
             bool: Whether the episode is terminated.
         """
         pass
-
     
-    def step(self, action: gym.spaces.Space) -> Tuple[gym.spaces.Space, float, bool, bool, Dict[str, Dict[str, Any]]]:
+    def step(self, action: gym.spaces.OneOf) -> Tuple[gym.spaces.Space, float, bool, bool, Dict[str, Dict[str, Any]]]:
         """
-        Executes the given action in the environment via the controller.
+        Executes the given Gym Space action in the environment via the controller.
+        Use step_high_level_action to execute high level actions directly.
 
         Args:
-            action (gym.spaces.Space): The action to execute.
+            action (gym.spaces.OneOf): The action to execute. Must be a valid action in the controller's action space.
 
         Returns:
             observation (gym.spaces.Space): The observation after executing the action.
@@ -132,26 +130,63 @@ class Environment(gym.Env, ABC):
         if self._emulator.check_if_done():
             log_error("Cannot step environment because emulator indicates done. Please reset the environment.", self._parameters)
         start_state = self.get_info()
-        transition_states, action_success = self._controller.execute_action(action)
+        transition_states, action_success = self._controller.execute_space_action(action)
         truncated = self._emulator.check_if_done()
         observation = self.get_observation()
         current_state = self.get_info()
         terminated = self.determine_terminated(current_state)
         reward = self.determine_reward(start_state, action, transition_states, action_success)
         return observation, reward, terminated, truncated, current_state
+
+    def step_high_level_action(self, action: HighLevelAction, **kwargs) -> Tuple[gym.spaces.Space, float, bool, bool, Dict[str, Dict[str, Any]]]:
+        """
+        Executes the given aHigh Level action in the environment via the controller.
+
+        Args:
+            action (HighLevelAction): The high level action to execute.
+            **kwargs: Additional keyword arguments to pass to the action.
+
+        Returns:
+            observation (gym.spaces.Space): The observation after executing the action.
+            reward (float): The reward obtained from executing the action.
+            terminated (bool): Whether the episode has ended (reached the terminal state of the MDP).
+            truncated (bool): Whether the episode was truncated (exceeded the maximum allowed steps).
+            info (Dict[str, Dict[str, Any]]): Full state information.
+        """
+        if self._emulator.check_if_done():
+            log_error("Cannot step environment because emulator indicates done. Please reset the environment.", self._parameters)
+        start_state = self.get_info()
+        transition_states, action_success = self._controller.execute(action, **kwargs)
+        truncated = self._emulator.check_if_done()
+        observation = self.get_observation()
+        current_state = self.get_info()
+        terminated = self.determine_terminated(current_state)
+        reward = self.determine_reward(start_state, action, transition_states, action_success)
+        return observation, reward, terminated, truncated, current_state    
     
+    def close(self):
+        """
+        Closes the environment and the underlying emulator.
+        """
+        log_info("Closing environment and emulator.", self._parameters)
+        self._emulator.close()
+
 
 class DummyEnvironment(Environment):
     """ A dummy environment that does nothing special. """
 
-    REQUIRED_CONTROLLER = Controller
-
     def __init__(self, emulator: Emulator, controller: Controller, parameters: Optional[dict]=None):
+        """
+        Initializes the DummyEnvironment with the given emulator and controller.
+
+        It is safe to overwrite the self.observation_space in the subclass after calling this __init__ method.
+        """
         self._parameters = load_parameters(parameters)
         self._emulator = emulator
         self._controller = controller
         screen_shape = self._emulator.screen_shape
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=screen_shape, dtype=np.uint8)
+        """ The observation space is the raw pixel values of the emulator's screen. """
         super().__init__()
 
     def get_observation(self) -> gym.spaces.Space:
