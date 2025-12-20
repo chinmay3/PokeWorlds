@@ -29,25 +29,25 @@ env = OneOfToDiscreteWrapper(original_env)
 
 
 
-from stable_baselines3 import DQN
+from stable_baselines3 import DQN, PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 
 
 
 
 # Instantiate the agent
-model = DQN("MlpPolicy", env, verbose=1)
+model = PPO("MultiInputPolicy", env, verbose=1)
 # Train the agent and display a progress bar
 model.learn(total_timesteps=int(2e5), progress_bar=True)
 # Save the agent
-model.save("dqn_lunar")
+model.save("charmander_enthusiast_agent")
 del model  # delete trained model to demonstrate loading
 
 # Load the trained agent
 # NOTE: if you have loading issue, you can pass `print_system_info=True`
 # to compare the system on which the model was trained vs the current one
 # model = DQN.load("dqn_lunar", env=env, print_system_info=True)
-model = DQN.load("dqn_lunar", env=env)
+model = PPO.load("charmander_enthusiast_agent", env=env)
 
 # Evaluate the agent
 # NOTE: If you use wrappers with your environment that modify rewards,
