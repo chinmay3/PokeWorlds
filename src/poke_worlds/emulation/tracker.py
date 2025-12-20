@@ -130,6 +130,8 @@ class CoreMetrics(MetricGroup):
             """ Number of steps taken in the episode. """
             self.previous_frame = None
             """ Previous frame for detecting changes. """
+            self.current_frame = None
+            """ Current frame. """
             self.frame_changed = True
             """ Whether the frame has changed at all since last step. """
 
@@ -156,6 +158,7 @@ class CoreMetrics(MetricGroup):
 
     def step(self, current_frame: np.ndarray, recent_frames: Optional[np.ndarray]):
         self.steps += 1
+        self.current_frame = current_frame
         if self.previous_frame is None:
             self.previous_frame = current_frame
             self.frame_changed = True
@@ -180,12 +183,14 @@ class CoreMetrics(MetricGroup):
         Provides the following metrics:
         - `steps`: Number of steps taken in the episode.
         - `frame_changed`: Whether the frame has changed since the last step.
+        - `current_frame`: The current frame.
         Returns:
             dict: A dictionary containing the current metrics.
         """
         return {
             "steps": self.steps,
-            "frame_changed": self.frame_changed
+            "frame_changed": self.frame_changed,
+            "current_frame": self.current_frame
         }
     
     def report_final(self) -> dict:

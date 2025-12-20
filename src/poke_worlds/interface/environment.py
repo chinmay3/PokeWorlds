@@ -10,6 +10,8 @@ from poke_worlds.interface.action import HighLevelAction
 
 import numpy as np
 import gymnasium as gym
+import pygame
+
 
 
 
@@ -80,7 +82,13 @@ class Environment(gym.Env, ABC):
         """ The Gym action Space provided by the controller. """
         self.actions = self._controller.actions
         """ A list of HighLevelActions provided by the controller. """
-            
+        self.render_mode = "human"
+        """ The render mode of the environment. Supports 'human' and 'rgb_array', but strongly assumes 'human' as can just read the emulator screen from `get_info` """ 
+        self.window = None
+        """ The pygame window for rendering in 'human' mode. Initialized on first render call. """
+        self.clock = None
+        """ The pygame clock for rendering in 'human' mode. Initialized on first render call. """
+
     @abstractmethod
     def get_observation(self) -> gym.spaces.Space:
         """
@@ -209,6 +217,38 @@ class Environment(gym.Env, ABC):
         """
         log_info("Closing environment and emulator.", self._parameters)
         self._emulator.close()
+
+    def render(self) -> Optional[np.ndarray]:
+        """
+        Gets the current screen from the emulator and renders it. Mostly pointless, and is only here for Gym compatibility.
+
+        Do not call this method if the emulator is not headless, you should already have a PyBoy interactive window open in that case.
+
+        Returns:
+            If render_mode is 'rgb_array', returns the current screen as a numpy array. However this is always accessible via self.get_info()['core']['current_frame'], so this is mostly for Gym compatibility.
+        """
+        if self._emulator.headless == False:
+            log_error("You probably don't want to call render() when the emulator is not headless.", self._parameters)
+        if self.window is None and self.render_mode == "human":
+            pygame.init()
+            pygame.display.init()
+            self.window = pygame.display.set_mode(
+                (self._emulator.screen_shape[0], self._emulator.screen_shape[1])
+            ) # TODO: Check that width and height are in the right order
+        if self.clock is None and self.render_mode == "human":
+            self.clock = pygame.time.Clock()
+        screen = self._emulator.get_current_frame() # shape: 144, 160, 1
+        rgb = np.stack([screen[:, :, 0], screen[:, :, 0], screen[:, :, 0]], axis=2)
+        if self.render_mode == "human":
+            pygame.surfarray.blit_array(self.window, rgb.swapaxes(0,1))
+            pygame.display.flip()
+            self.clock.tick(60)  # Limit to 60 FPS
+        elif self.render_mode == "rgb_array":
+            return screen
+        else:
+            log_error(f"Unsupported render mode: {self.render_mode}", self._parameters)
+
+
 
 
 class DummyEnvironment(Environment):

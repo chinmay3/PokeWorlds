@@ -25,6 +25,7 @@ def main(variant, init_state, play_mode, headless, save_video):
     while steps < max_steps:
         action = environment.action_space.sample()
         observation, reward, terminated, truncated, info = environment.step(action)
+        environment.render()
         if terminated or truncated:
             break
         steps += 1
