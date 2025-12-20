@@ -10,6 +10,9 @@ from poke_worlds.interface.action import HighLevelAction
 
 import numpy as np
 import gymnasium as gym
+import warnings 
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html")
+# This is to ignore deprecation warnings from pygame about pkg_resources
 import pygame
 
 
