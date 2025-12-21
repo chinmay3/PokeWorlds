@@ -5,7 +5,6 @@ import numpy as np
 
 num_cpu = 4  # Number of processes to use
 batch_size = 64
-num_epochs = 10
 render = False # Whether to render the environment at test time
 
 
@@ -71,7 +70,7 @@ if __name__ == "__main__":
     env = SubprocVecEnv([make_env(i) for i in range(num_cpu)])
 
     # Instantiate the agent
-    model = DQN("MultiInputPolicy", env, verbose=1, gamma=0.999, batch_size=batch_size, n_epochs=num_epochs)
+    model = DQN("MultiInputPolicy", env, verbose=1, gamma=0.999, batch_size=batch_size)
     # Train the agent and display a progress bar
     model.learn(total_timesteps=int(2e5), progress_bar=True, callback=CallbackList(callbacks))
     # Save the agent
