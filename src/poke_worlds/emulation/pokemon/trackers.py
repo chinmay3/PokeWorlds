@@ -16,7 +16,7 @@ class CorePokemonMetrics(MetricGroup):
         Overall this mechanism absolutely does not work, but somehow sort of does?
         It does not actually catch when you exit battle, but it triggers in the very start of a battle most of the time.
         This means on aggregate, it still counts battles reasonably. 
-        But it should not be used for anything requiring precise per-episode battle counts.    
+        But battles_completed or n_battles_total should not be used for anything requiring precise per-episode battle counts.    
     """
 
     def start(self):
@@ -265,6 +265,18 @@ class CorePokemonTracker(StateTracker):
     def start(self):
         super().start()
         self.metric_classes.extend([CorePokemonMetrics])
+
+    def step(self, *args, **kwargs):
+        """
+        Calls on super().step(), but then modifies the 
+        """
+        super().step(*args, **kwargs)
+        state = self.episode_metrics["pokemon_core"]["agent_state"]
+        screen = self.episode_metrics["core"]["current_frame"]
+        # if agent_state is in FREE ROAM, draw the grid, otherwise do not
+        if state == AgentState.FREE_ROAM:
+            screen = self.state_parser.draw_grid_overlay(current_frame=screen, grid_skip=20)
+            self.episode_metrics["core"]["current_frame"] = screen
 
 
 class PokemonRedStarterTracker(CorePokemonTracker):

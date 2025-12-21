@@ -114,6 +114,8 @@ class CoreMetrics(MetricGroup):
     1. steps: Number of steps taken in the episode.
     2. frame_changed:
             For every available recent frame, sees if any of them differ from the previous frame. If so sets frame_changed to True. Is not robust to jitter on screen. 
+    3. current_frame
+    4. passed_frames (last element is equal to current_frame)
     """
     NAME = "core"
 
@@ -134,6 +136,8 @@ class CoreMetrics(MetricGroup):
             """ Current frame. """
             self.frame_changed = True
             """ Whether the frame has changed at all since last step. """
+            self.passed_frames = None
+            """ Stack of frames since the last step """
 
     def close(self):
         if len(self.steps_per_episode) > 0:
@@ -159,6 +163,7 @@ class CoreMetrics(MetricGroup):
     def step(self, current_frame: np.ndarray, recent_frames: Optional[np.ndarray]):
         self.steps += 1
         self.current_frame = current_frame
+        self.passed_frames = recent_frames
         if self.previous_frame is None:
             self.previous_frame = current_frame
             self.frame_changed = True
@@ -184,13 +189,15 @@ class CoreMetrics(MetricGroup):
         - `steps`: Number of steps taken in the episode.
         - `frame_changed`: Whether the frame has changed since the last step.
         - `current_frame`: The current frame.
+        - `passed_frames`: All frames that have passed since the last step.
         Returns:
             dict: A dictionary containing the current metrics.
         """
         return {
             "steps": self.steps,
             "frame_changed": self.frame_changed,
-            "current_frame": self.current_frame
+            "current_frame": self.current_frame,
+            "passed_frames": self.passed_frames
         }
     
     def report_final(self) -> dict:

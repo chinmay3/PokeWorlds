@@ -95,10 +95,11 @@ class Controller(ABC):
         """
         action_index, space_action = space_action
         action = self.actions[action_index]
+        action_class = self.ACTIONS[action_index]
         parameters = action.space_to_parameters(space_action)
-        return action, parameters
+        return action_class, parameters
 
-    def _high_level_action_to_space_action(self, action: HighLevelAction, **kwargs) -> Space:
+    def _high_level_action_to_space_action(self, action: HighLevelAction, **kwargs) -> OneOf:
         """
         Converts a high level action and its parameters into a Gym Space action.
 
@@ -106,7 +107,7 @@ class Controller(ABC):
             action (HighLevelAction): The high level action to convert.
             **kwargs: Additional arguments required for the specific high level action.
         Returns:
-            Space: The action in the controller's action space.
+            OneOf: The action in the controller's action space.
         """
         space_action = action.parameters_to_space(**kwargs)
         action_index = self.actions.index(action)
@@ -123,7 +124,7 @@ class Controller(ABC):
             log_error("Emulator reference not assigned to controller.", self._parameters)
         return not self._emulator.check_if_done()    
     
-    def get_valid_high_level_actions(self) -> Dict[HighLevelAction, List[Dict[str, Any]]]:
+    def get_valid_high_level_actions(self) -> Dict[Type[HighLevelAction], List[Dict[str, Any]]]:
         """
         Returns a list of all valid high level actions (including valid parameter inputs) that can be performed in the current state.
 
@@ -139,10 +140,10 @@ class Controller(ABC):
                 valid_actions[action] = valid_parameters
         return valid_actions
         
-    def get_valid_space_actions(self) -> Dict[HighLevelAction, Space]:
+    def get_valid_space_actions(self) -> Dict[Type[HighLevelAction], OneOf]:
         """
         Returns a list of valid actions in the controller's action space that can be performed in the current state.
-
+        # TODO: Seems fishy bro
         Returns:
 
             Dict[HighLevelAction, Space]: A dictionary mapping high level actions to their corresponding valid space actions.
@@ -157,7 +158,7 @@ class Controller(ABC):
                 valid_space_actions[action] = space_action
         return valid_space_actions
 
-    def get_possibly_valid_high_level_actions(self) -> List[HighLevelAction]:
+    def get_possibly_valid_high_level_actions(self) -> List[Type[HighLevelAction]]:
         """
         Returns a list of valid high level actions that can be performed (with some parameterized input) in the current state.
 
@@ -167,9 +168,10 @@ class Controller(ABC):
         if not self._emulator_running():
             return []
         actions = []
-        for action in self.actions:
+        for i, action_class in self.ACTIONS:
+            action = self.actions[i]
             if action.is_valid():
-                actions.append(action)
+                actions.append(action_class)
         return actions
     
     def execute_space_action(self, action: OneOf) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[bool]]:
@@ -209,6 +211,42 @@ class Controller(ABC):
         action_index = self.ACTIONS.index(action)
         executing_action = self.actions[action_index]
         return executing_action.execute(**kwargs)
+    
+    def string_to_space_action(self, input_str: str) -> Space:
+        """
+        Converts a string input to a space action        
+        """
+        action, kwargs = self.string_to_high_level_action(input_str=input_str)
+        return self._high_level_action_to_space_action(action, kwargs)
+    
+    def execute_string(self, input_str: str) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[bool]]:
+        """
+        Executes a string command after checking for validity
+        # TODO: Docstring
+        Args
+        """
+        action, kwargs = self.string_to_high_level_action(input_str=input_str)
+        if action is None:
+            return None, None
+        return self.execute(action, kwargs)
+
+    def string_to_high_level_action(self, input_str: str) -> Tuple[Type[HighLevelAction], Dict[str, Any]]:
+        """
+        Provide a way to map a string input to a HighLevelAction and parameters. 
+
+        Implement if you want to use the human_step_play method, or if you want to allow a LM based agent to give its actions in text. 
+        Must return None, None if the input_str does not map to an action. 
+        """
+        raise NotImplementedError
+    
+    def get_action_strings(self) -> str:
+        """
+        Provide a way to verbalize the allowed high level actions, along with the format of the input parameters
+
+        This should match the mapping in string_to_high_level_action
+        """
+        raise NotImplementedError
+
 
 
 class LowLevelController(Controller):
@@ -221,6 +259,32 @@ class LowLevelPlayController(Controller):
     """ A controller that executes low level actions directly, but no menu button presses. """
     ACTIONS = [LowLevelPlayAction]
     """ A HighLevelAction subclass that directly maps to low level actions, but no menu button presses. """
+
+    def string_to_high_level_action(self, input_str):
+        string_low = input_str.lower()
+        low_level_action = None
+        mapper = {
+            "a": LowLevelActions.PRESS_BUTTON_A,
+            "u": LowLevelActions.PRESS_ARROW_UP,
+            "b": LowLevelActions.PRESS_BUTTON_B,
+            "d": LowLevelActions.PRESS_ARROW_DOWN,
+            "l": LowLevelActions.PRESS_ARROW_LEFT,
+            "r": LowLevelActions.PRESS_ARROW_RIGHT
+        }
+        for map_opt in mapper:
+            if map_opt in string_low:
+                low_level_action = mapper[map_opt]
+                break
+        if low_level_action is None:
+            return None, None
+        return LowLevelPlayAction, {"low_level_action": low_level_action}
+    
+    def get_action_strings(self):
+        msg = f"""
+        A, B for button. L, R, U, D for arrow keys
+        """
+        return msg
+
 
 
 class RandomPlayController(Controller):

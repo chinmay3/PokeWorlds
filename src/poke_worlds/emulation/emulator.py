@@ -50,6 +50,12 @@ class ReleaseActions(Enum):
 
 
 class Emulator():
+    REQUIRED_STATE_PARSER = StateParser
+    """ The minimal functionality StateParser needed for this emulator to run """
+
+    REQUIRED_STATE_TRACKER = StateTracker
+    """ The minimal functionality StateTracker needed for this emulator to run """
+
     def __init__(self, name: str, gb_path: str, state_parser_class: Type[StateParser], state_tracker_class: Type[StateTracker], init_state: str, parameters: dict, *, headless: bool = True, max_steps: int = None, save_video: bool = None, session_name: str = None, instance_id: str = None):
         """
         Start the GameBoy emulator with the given ROM file and initial state.
@@ -72,10 +78,10 @@ class Emulator():
             log_error("You must provide a name for the emulator instance.", self._parameters)
         if gb_path is None:
             log_error("You must provide a path to the GameBoy ROM file.", self._parameters)
-        if not issubclass(state_parser_class, StateParser):
-            log_error("state_parser_class must be a subclass of StateParser.", self._parameters)
-        if not issubclass(state_tracker_class, StateTracker):
-            log_error("state_tracker_class must be a subclass of StateTracker.", self._parameters)
+        if not issubclass(state_parser_class, self.REQUIRED_STATE_PARSER):
+            log_error(f"state_parser_class must be a subclass of {self.REQUIRED_STATE_PARSER.__name__}, got {state_parser_class_.__name__}.", self._parameters)
+        if not issubclass(state_tracker_class, self.REQUIRED_STATE_TRACKER):
+            log_error(f"state_tracker_class must be a subclass of {self.REQUIRED_STATE_TRACKER.__name__}, got {state_tracker_class.__name__}.", self._parameters)
         if init_state is None:
             log_error("You must provide an initial state file to load.", self._parameters)
         if headless not in [True, False]:
@@ -369,7 +375,7 @@ class Emulator():
         Args:
             action (LowLevelActions): Lowest level action to perform on the emulator.
             profile (bool, optional): Whether to profile the action execution time. 
-            render (bool, optional): Whether to render the emulator screen during action execution. 
+            render (bool, optional): Whether to render the emulator screen during action execution. Is always True in PokemonEnvs project. 
         Returns:
             Optional[np.ndarray]: The stack of frames that passed while performing the action, if rendering is enabled. Is of shape [n_frames (3 right now), height, width, channels]. Otherwise, None.
         """

@@ -1,7 +1,7 @@
 from abc import abstractmethod, ABC
 from typing import Optional, Type, Dict, Any, List, Tuple
 
-from poke_worlds.utils import load_parameters, log_error, log_info, log_warn, get_lowest_level_subclass, verify_parameters
+from poke_worlds.utils import load_parameters, log_error, log_info, log_warn, get_lowest_level_subclass, verify_parameters, log_dict
 
 
 from poke_worlds.emulation import Emulator, StateTracker
@@ -14,6 +14,7 @@ import warnings
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html")
 # This is to ignore deprecation warnings from pygame about pkg_resources
 import pygame
+import matplotlib.pyplot as plt
 
 
 
@@ -68,13 +69,23 @@ class Environment(gym.Env, ABC):
         Ensures that the environment has the required attributes.
         All subclasses must call this __init__ method AFTER setting up the required attributes.
 
+        If you are implementing a subclass, ensure that the following attributes are set:
+            - _parameters: dict of config parameters
+            - _emulator: emulator instance
+            - _controller: controller instance
+            - observation_space: gym space defining observation space structure
         """
         if not hasattr(self, "_parameters"):
             raise ValueError("Environment must have a '_parameters' attribute.")
+        self._parameters: dict = self._parameters
         required_attributes = ["_emulator", "_controller", "observation_space"]
         for attr in required_attributes:
             if not hasattr(self, attr):
                 log_error(f"Environment requires attribute '{attr}' to be set. Implement this in the subclass __init__", self._parameters)
+        self._emulator: Emulator = self._emulator
+        self._controller: Controller = self._controller
+        self.observation_space: gym.spaces.Space = self.observation_space
+        # For Intellisence lol
         if not issubclass(type(self._emulator), self.REQUIRED_EMULATOR):
             log_error(f"Environment requires an Emulator of type {self.REQUIRED_EMULATOR.NAME}, but got {type(self._emulator).NAME}", self._parameters)
         if not isinstance(self._controller, Controller):
@@ -89,9 +100,9 @@ class Environment(gym.Env, ABC):
         """ A list of HighLevelAction Types provided by the controller. """
         self.render_mode = "human"
         """ The render mode of the environment. Supports 'human' and 'rgb_array', but strongly assumes 'human' as can just read the emulator screen from `get_info` """ 
-        self.window = None
+        self._window = None
         """ The pygame window for rendering in 'human' mode. Initialized on first render call. """
-        self.clock = None
+        self._clock = None
         """ The pygame clock for rendering in 'human' mode. Initialized on first render call. """
 
     @abstractmethod
@@ -179,20 +190,12 @@ class Environment(gym.Env, ABC):
             truncated (bool): Whether the episode was truncated (exceeded the maximum allowed steps).
             info (Dict[str, Dict[str, Any]]): Full state information.
         """
-        if self._emulator.check_if_done():
-            log_error("Cannot step environment because emulator indicates done. Please reset the environment.", self._parameters)
-        start_state = self.get_info()
-        transition_states, action_success = self._controller.execute_space_action(action)
-        truncated = self._emulator.check_if_done()
-        observation = self.get_observation()
-        current_state = self.get_info()
-        reward = self.determine_reward(start_state, action, transition_states, action_success)
-        terminated = self.determine_terminated(current_state)
-        return observation, reward, terminated, truncated, current_state
+        high_level_action, kwargs = self._controller._space_action_to_high_level_action(action)
+        return self.step_high_level_action(high_level_action, **kwargs)
 
     def step_high_level_action(self, action: HighLevelAction, **kwargs) -> Tuple[gym.spaces.Space, float, bool, bool, Dict[str, Dict[str, Any]]]:
         """
-        Executes the given aHigh Level action in the environment via the controller.
+        Executes the given High Level action in the environment via the controller.
 
         Args:
             action (HighLevelAction): The high level action to execute.
@@ -209,12 +212,23 @@ class Environment(gym.Env, ABC):
             log_error("Cannot step environment because emulator indicates done. Please reset the environment.", self._parameters)
         start_state = self.get_info()
         transition_states, action_success = self._controller.execute(action, **kwargs)
+        if transition_states is None: # then the action was not a valid one according to the controller. Will return Nones for all
+            return None, None, None, None, None
         truncated = self._emulator.check_if_done()
         observation = self.get_observation()
         current_state = self.get_info()
         terminated = self.determine_terminated(current_state)
         reward = self.determine_reward(start_state, action, transition_states, action_success)
         return observation, reward, terminated, truncated, current_state    
+    
+    def step_str(self, input_str: str)  -> Tuple[gym.spaces.Space, float, bool, bool, Dict[str, Dict[str, Any]]]:
+        """
+        Attempts to execute an input string representation of an action
+        """
+        action, kwargs = self._controller.string_to_high_level_action(input_str)
+        if action is None: # not a valid action, will not perform an action and will simply return Nones
+            return None, None, None, None, None
+        return self.step_high_level_action(action, **kwargs)
     
     def close(self):
         """
@@ -223,6 +237,25 @@ class Environment(gym.Env, ABC):
         log_info("Closing environment and emulator.", self._parameters)
         self._emulator.close()
 
+    
+    def _screen_render(self, screen: np.ndarray):
+        """
+        TODO: Docstring
+        """
+        if self._window is None:
+            pygame.init()
+            pygame.display.init()
+            self._window = pygame.display.set_mode(
+                (self._emulator.screen_shape[0], self._emulator.screen_shape[1])
+            )
+        if self._clock is None:
+            self._clock = pygame.time.Clock()        
+        rgb = np.stack([screen[:, :, 0], screen[:, :, 0], screen[:, :, 0]], axis=2)
+        pygame.surfarray.blit_array(self._window, rgb.swapaxes(0,1))
+        pygame.display.flip()
+        self._clock.tick(60)  # Limit to 60 FPS
+
+    
     def render(self) -> Optional[np.ndarray]:
         """
         Gets the current screen from the emulator and renders it. 
@@ -236,20 +269,9 @@ class Environment(gym.Env, ABC):
         """
         if self._emulator.headless == False:
             log_error("You probably don't want to call render() when the emulator is not headless.", self._parameters)
-        if self.window is None and self.render_mode == "human":
-            pygame.init()
-            pygame.display.init()
-            self.window = pygame.display.set_mode(
-                (self._emulator.screen_shape[0], self._emulator.screen_shape[1])
-            ) # TODO: Check that width and height are in the right order
-        if self.clock is None and self.render_mode == "human":
-            self.clock = pygame.time.Clock()
         screen = self._emulator.get_current_frame() # shape: 144, 160, 1
-        rgb = np.stack([screen[:, :, 0], screen[:, :, 0], screen[:, :, 0]], axis=2)
         if self.render_mode == "human":
-            pygame.surfarray.blit_array(self.window, rgb.swapaxes(0,1))
-            pygame.display.flip()
-            self.clock.tick(60)  # Limit to 60 FPS
+            self._screen_render(screen)
         elif self.render_mode == "rgb_array":
             return screen
         else:
@@ -263,6 +285,53 @@ class Environment(gym.Env, ABC):
             seed (int, optional): The seed value.
         """
         self._controller.seed(seed)
+
+    def render_obs(self):
+        """
+        Provide a way to render the output of get_observation to a human. 
+        Implement if you want to use the human_step_play method.
+        """
+        raise NotImplementedError
+    
+    def render_info(self):
+        """
+        Provide a way to render the output of get_info to a human. 
+        Implement if you want to use the human_step_play method with show_info=True
+        """
+        raise NotImplementedError
+    
+    
+    def human_step_play(self, max_steps: int=50, show_info: bool=False):
+        """
+        Opens a render window and allow the human to play through the environment as an agent would
+
+        Args:
+            max_steps (int): max steps to take
+            show_info (bool): whether to show the state space (as opposed to just observation space)
+        """
+        observation, info = self.reset()
+        self.render_mode = "human"
+        log_info(f"Doing human step play for {max_steps} max steps...")
+        steps = 0
+        done = False
+        action_input_str = self._controller.get_action_strings()
+        rewards = []
+        log_info(f"Allowed Actions: \n{action_input_str}", self._parameters)
+        while not done and steps < max_steps:
+            self.render()
+            if show_info:
+                self.render_info()
+            input_str = input("Enter Action: ").strip()
+            possible_obs, possible_reward, possible_terminated, possible_truncated, possible_info = self.step_str(input_str)
+            if possible_obs is not None:
+                observation, reward, terminated, truncated, info = possible_obs, possible_reward, possible_terminated, possible_truncated, possible_info
+            else:
+                log_warn("That was not a valid input. did nothing", self._parameters)
+            rewards.append(reward)
+            if terminated or truncated:
+                break
+            steps += 1
+
 
 
 class DummyEnvironment(Environment):
@@ -290,3 +359,15 @@ class DummyEnvironment(Environment):
     
     def determine_terminated(self, state):
         return 0.0
+    
+    def render_obs(self): # Might cause issues if you try to render() as well
+        info = self.get_info()
+        screen = info["core"]["current_frame"]
+        #self._screen_render(screen)
+
+    def render_info(self):
+        info = self.get_info()
+        info["core"].pop("current_frame")
+        info["core"].pop("passed_frames")
+        log_info("State: ", self._parameters)
+        log_dict(info, self._parameters)

@@ -1,7 +1,8 @@
+from poke_worlds.emulation.pokemon.emulators import PokemonEmulator
 from poke_worlds.utils import load_parameters, log_error, verify_parameters
-from poke_worlds.emulation.emulator import Emulator, LowLevelActions
+from poke_worlds.emulation.emulator import Emulator
 from poke_worlds.emulation.tracker import StateTracker
-from poke_worlds.emulation.pokemon.parsers import PokemonStateParser, MemoryBasedPokemonRedStateParser, PokemonBrownStateParser, PokemonCrystalStateParser, PokemonStarBeastsStateParser, PokemonPrismStateParser, PokemonFoolsGoldStateParser
+from poke_worlds.emulation.pokemon.parsers import MemoryBasedPokemonRedStateParser, PokemonBrownStateParser, PokemonCrystalStateParser, PokemonStarBeastsStateParser, PokemonPrismStateParser, PokemonFoolsGoldStateParser
 from poke_worlds.emulation.pokemon.trackers import CorePokemonMetrics, CorePokemonTracker, PokemonRedStarterTracker
 from typing import Optional, Union, Type
 
@@ -90,31 +91,6 @@ def infer_variant(variant: str, parameters: dict) -> str:
         if variant == option.strip("pokemon_"):
             return option
     log_error(f"Could not infer variant from '{variant}'. Available variants are: {options}", parameters)
-
-
-class PokemonEmulator(Emulator):
-    """
-    Almost the exact same as Emulator, but forces the agent to not mess with the menu options cursor.
-    """
-    def __init__(self, *args, **kwargs):
-        if "state_parser_class" not in kwargs:
-            if len(args) < 3:
-                log_error("Malformed initialization of Emulator")
-            else:
-                state_parser_class = args[2]
-        else:
-            state_parser_class = kwargs["state_parser_class"]
-        if not issubclass(state_parser_class, PokemonStateParser):
-            log_error("state_parser_class must be a subclass of PokemonStateParser")
-        super().__init__(*args, **kwargs)
-
-    def step(self, action):
-        rets = super().step(action)
-        if self.state_parser.is_hovering_over_options_in_menu(self.get_current_frame()):
-            # force the agent to click the up button to get off the options
-            self.run_action_on_emulator(LowLevelActions.PRESS_ARROW_UP)
-        return rets
-
 
 
 def get_pokemon_emulator(game_variant: str, *, parameters: Optional[dict] = None, init_state: str = None, state_tracker_class: Union[str, Type[StateTracker]] = "default", **kwargs) -> Emulator:
