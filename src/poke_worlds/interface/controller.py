@@ -205,8 +205,11 @@ class Controller(ABC):
         """
         if action not in self.ACTIONS:
             log_error("Action not recognized by controller. Are you passing in an instance of the action class?", self._parameters)
-        return action.execute(**kwargs)
-    
+        # Find the action instance
+        action_index = self.ACTIONS.index(action)
+        executing_action = self.actions[action_index]
+        return executing_action.execute(**kwargs)
+
 
 class LowLevelController(Controller):
     """ A controller that executes low level actions directly on the emulator. """

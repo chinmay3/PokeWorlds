@@ -102,7 +102,7 @@ Think: (your reasoning about the current situation). Should be extremely brief.
     
 
 environment = get_pokemon_environment(game_variant="pokemon_red", controller=LowLevelPlayController(), save_video=True,
-                                        init_state="starter", max_steps=1000, headless=True)   
+                                        init_state="starter", max_steps=1000, headless=True)
 vl = VL(environment)
 steps = 0
 max_steps = 500
