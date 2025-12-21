@@ -22,7 +22,7 @@ import numpy as np
 from tqdm import tqdm
 import warnings
 
-warnings.filterwarnings("ignore", message="UserWarning: Using SDL2 binaries from pysdl2-dll 2.32.0")
+warnings.filterwarnings("ignore", message="Using SDL2 binaries from pysdl2-dll 2.32.0")
 
 
 class LowLevelActions(Enum):
