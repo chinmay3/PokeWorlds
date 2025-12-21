@@ -40,6 +40,7 @@ Think: (your reasoning about the current situation)
         self.actions = self.env.actions
 
     def infer(self, current_frame):
+        current_frame = current_frame.reshape(current_frame.shape[0], current_frame.shape[1])
         messages = [
             {
                 "role": "user",
