@@ -79,25 +79,25 @@ Think: (your reasoning about the current situation)
         if "<action>" in output_text and "</action>" in output_text:
             action = output_text.split("<action>")[1].split("</action>")[0].strip()
             if "up" in action.strip().lower():
-                kwargs["action"] = LowLevelActions.PRESS_ARROW_UP
+                kwargs["low_level_action"] = LowLevelActions.PRESS_ARROW_UP
             elif "down" in action.strip().lower():
-                kwargs["action"] = LowLevelActions.PRESS_ARROW_DOWN
+                kwargs["low_level_action"] = LowLevelActions.PRESS_ARROW_DOWN
             elif "right" in action.strip().lower():
-                kwargs["action"] = LowLevelActions.PRESS_ARROW_RIGHT
+                kwargs["low_level_action"] = LowLevelActions.PRESS_ARROW_RIGHT
             elif "left" in action.strip().lower():
-                kwargs["action"] = LowLevelActions.PRESS_ARROW_LEFT
+                kwargs["low_level_action"] = LowLevelActions.PRESS_ARROW_LEFT
             elif "a" in action.strip().lower():
-                kwargs["action"] = LowLevelActions.PRESS_BUTTON_A
+                kwargs["low_level_action"] = LowLevelActions.PRESS_BUTTON_A
             elif "b" in action.strip().lower():
-                kwargs["action"] = LowLevelActions.PRESS_BUTTON_B
+                kwargs["low_level_action"] = LowLevelActions.PRESS_BUTTON_B
             else:
-                kwargs["action"] = None
+                kwargs["low_level_action"] = None
         else:
-            kwargs["action"] = None
-        if kwargs["action"] is None:
+            kwargs["low_level_action"] = None
+        if kwargs["low_level_action"] is None:
             # pick random action
             print("Random Action")
-            kwargs["action"] = np.random.choice(valid_actions)
+            kwargs["low_level_action"] = np.random.choice(valid_actions)
         return action, kwargs
     
 
