@@ -56,9 +56,6 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.callbacks import CallbackList
 
 
-from wandb.integration.sb3 import WandbCallback
-import wandb
-
 @click.command()
 @click.option("--num_cpu", type=int, default=4, help="Number of CPU cores to use for training.")
 @click.option("--batch_size", type=int, default=64, help="Batch size for training.")
@@ -66,6 +63,8 @@ import wandb
 @click.option("--gamma", type=float, default=0.999, help="Discount factor for training.")
 @click.option("--total_timesteps", type=int, default=int(2e5), help="Total timesteps for training.")
 def train(num_cpu, batch_size, exploration_fraction, gamma, total_timesteps):
+    from wandb.integration.sb3 import WandbCallback
+    import wandb
     callbacks = []
     run = wandb.init(
     project="PokeWorlds",
