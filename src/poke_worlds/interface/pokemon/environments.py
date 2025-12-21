@@ -80,9 +80,17 @@ class PokemonRedChooseCharmanderFastEnv(Environment):
                 return -5.0 # Penalty for not choosing a starter within max steps
             starter_spots = [(5, 3), (6, 4), (7, 4), (8, 4), (9, 3), (8, 2), (7, 2), (6, 2)]
             player_pos = current_state["pokemon_red_location"]["current_local_location"][:2]
-            dists = [np.linalg.norm(np.array(player_pos) - np.array(spot)) for spot in starter_spots]
+            # compute manhattan distance to closest starter spot
+            dists = [abs(player_pos[0]-spot[0]) + abs(player_pos[1]-spot[1]) for spot in starter_spots]
             min_dist = min(dists)
-            return -0.1 * min_dist
+            if min_dist == 0:
+                return 1 # Small reward for being on a starter spot
+            elif min_dist < 2:
+                return 0.0 # Neutral for being closish
+            elif min_dist < 4:
+                return -1.0 # Small penalty for being farther
+            else:
+                return -5.0 # Ridiculous penalty for being far away
         step_bonus = 100 / (n_steps+1)
         if starter_chosen == "charmander":
             return 500.0 + step_bonus

@@ -2,13 +2,14 @@ from poke_worlds import get_pokemon_environment, LowLevelPlayController
 import gymnasium as gym
 from gymnasium.spaces import Discrete, OneOf
 import numpy as np
+import click
 
 num_cpu = 4  # Number of processes to use
 batch_size = 64
 exploration_fraction = 0.75
 gamma = 0.999
 total_timesteps = int(2e5)
-render = False # Whether to render the environment at test time
+render = True # Whether to render the environment at test time
 
 
 
@@ -58,8 +59,13 @@ from stable_baselines3.common.callbacks import CallbackList
 from wandb.integration.sb3 import WandbCallback
 import wandb
 
-
-if __name__ == "__main__":
+@click.command()
+@click.option("--num_cpu", type=int, default=4, help="Number of CPU cores to use for training.")
+@click.option("--batch_size", type=int, default=64, help="Batch size for training.")
+@click.option("--exploration_fraction", type=float, default=0.75, help="Exploration fraction for training.")
+@click.option("--gamma", type=float, default=0.999, help="Discount factor for training.")
+@click.option("--total_timesteps", type=int, default=int(2e5), help="Total timesteps for training.")
+def train(num_cpu, batch_size, exploration_fraction, gamma, total_timesteps):
     callbacks = []
     run = wandb.init(
     project="PokeWorlds",
@@ -78,8 +84,16 @@ if __name__ == "__main__":
     model.learn(total_timesteps=total_timesteps, progress_bar=True, callback=CallbackList(callbacks))
     # Save the agent
     model.save("charmander_enthusiast_agent")
+    mean_reward, std_reward = evaluate_policy(model, model.get_env(), n_eval_episodes=50)
+    print(f"Reward: {mean_reward} +/- {std_reward}")    
     del model  # delete trained model to demonstrate loading
 
+
+@click.command()
+@click.option("--render", type=bool, default=True, help="Whether to render the environment during evaluation.")
+def evaluate(render):
+    env = get_pokemon_environment(game_variant="pokemon_red", controller=LowLevelPlayController(),
+                                  environment_variant="charmander_enthusiast", max_steps=200, headless=True)
     # Load the trained agent
     # NOTE: if you have loading issue, you can pass `print_system_info=True`
     # to compare the system on which the model was trained vs the current one
@@ -101,3 +115,13 @@ if __name__ == "__main__":
             action, _states = model.predict(obs, deterministic=True)
             obs, rewards, dones, info = vec_env.step(action)
             vec_env.render()
+
+@click.group()
+def main():
+    pass
+
+main.add_command(train)
+main.add_command(evaluate)
+
+if __name__ == "__main__":
+    main()
