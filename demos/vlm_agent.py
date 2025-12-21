@@ -27,6 +27,8 @@ You should format your action output as follows:
 Input: frame image
 Think: (your reasoning about the current situation). Should be extremely brief.
 <action>(one of UP, DOWN, LEFT, RIGHT, A, B)</action>
+
+[PREV]
     """
     def __init__(self, env):
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
@@ -39,7 +41,16 @@ Think: (your reasoning about the current situation). Should be extremely brief.
         self.env = env
         self.actions = self.env.actions
 
-    def infer(self, current_frame):
+    def infer(self, current_frame, info):
+        use_prompt = self.system_prompt
+        if info.get("prev_action") is None:
+            use_prompt = use_prompt.replace("[PREV]", "")
+        else:
+            prev_act = info["prev_action"]
+            if info["core"]["frame_changed"]:
+                use_prompt = use_prompt.replace("[PREV]", f"Previous action was {prev_act}. The frame changed to this after the action.")
+            else:
+                use_prompt = use_prompt.replace("[PREV]", f"Previous action was {prev_act}. The frame did not change after the action. This likely means the action was invalid or does nothing in this context.")
         current_frame = current_frame.reshape(current_frame.shape[0], current_frame.shape[1])
         messages = [
             {
@@ -49,7 +60,7 @@ Think: (your reasoning about the current situation). Should be extremely brief.
                         "type": "image",
                         "image": Image.fromarray(current_frame),
                     },
-                    {"type": "text", "text": self.system_prompt},
+                    {"type": "text", "text": use_prompt},
                 ],
             }
         ]
@@ -108,9 +119,9 @@ vl = VL(environment)
 steps = 0
 max_steps = 500
 pbar = tqdm(total=max_steps)
-observation, state = environment.reset()
+observation, info = environment.reset()
 while steps < max_steps:
-    action, kwargs = vl.act(observation)
+    action, kwargs = vl.act(observation, info)
     observation, reward, terminated, truncated, info = environment.step_high_level_action(action, **kwargs)
     if terminated or truncated:
         break
