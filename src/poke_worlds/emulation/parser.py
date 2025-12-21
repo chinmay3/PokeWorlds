@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", message=".*SDL2 binaries.*")
+# To suppress pyBoy SDL2 warnings on some systems
 from pyboy import PyBoy
 from abc import ABC, abstractmethod
 from poke_worlds.utils import log_error, log_warn, verify_parameters

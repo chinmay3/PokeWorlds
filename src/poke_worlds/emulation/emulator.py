@@ -14,9 +14,6 @@ from poke_worlds.utils import load_parameters, log_error, log_warn, file_makedir
 
 
 import cv2
-import warnings
-warnings.filterwarnings("ignore", message=".*SDL2 binaries.*")
-# To suppress pyBoy SDL2 warnings on some systems
 
 from pyboy import PyBoy
 from pyboy.utils import WindowEvent
