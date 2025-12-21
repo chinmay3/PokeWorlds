@@ -19,20 +19,29 @@ class PokemonEmulator(Emulator):
     def step(self, action) -> Tuple[np.ndarray, bool]:
         frames, done = super().step(action)
         self.state_parser: PokemonStateParser
-        if self.state_parser.is_hovering_over_options_in_menu(self.get_current_frame()):
+        current_frame = self.get_current_frame()
+        if self.state_parser.is_hovering_over_options_in_menu(current_frame):
             # force the agent to click the up button to get off the options
             self.run_action_on_emulator(LowLevelActions.PRESS_ARROW_UP)
-        current_state = self.state_parser.get_agent_state
-        all_next_frames = []
-        n_clicks = 0
-        # Clicks through any dialogue popups. 
-        while (n_clicks < self._MAXIMUM_DIALOGUE_PRESSES) and current_state == AgentState.IN_DIALOGUE:
-            next_frames = self.run_action_on_emulator(LowLevelActions.PRESS_BUTTON_B)
-            all_next_frames.append(next_frames)
-            n_clicks += 1
-        if len(all_next_frames) != 0:
-            all_next_frames = np.stack(all_next_frames)
-            frames = np.concatenate([frames, all_next_frames]) # TODO: Check
+        all_next_frames = [frames]
+        # If we are on a naming screen, just don't pick a name and get out. 
+        if self.state_parser.named_region_matches_target(current_frame, name="name_entity_top_left"):
+            # then enter and get out
+            all_next_frames.append(self.run_action_on_emulator(LowLevelActions.PRESS_BUTTON_START))
+            all_next_frames.append(self.run_action_on_emulator(LowLevelActions.PRESS_BUTTON_A))
+        else:
+            current_state = self.state_parser.get_agent_state(current_frame)
+            n_clicks = 0
+            # Clicks through any dialogue popups. 
+            while (n_clicks < self._MAXIMUM_DIALOGUE_PRESSES) and current_state == AgentState.IN_DIALOGUE:
+                next_frames = self.run_action_on_emulator(LowLevelActions.PRESS_BUTTON_B)
+                current_state = self.state_parser.get_agent_state(next_frames[-1])
+                all_next_frames.append(next_frames)
+                n_clicks += 1
+        if len(all_next_frames) > 1:
+            frames = np.concatenate(all_next_frames)
+        # Must update the tracker too
+        self._after_actions(frames)
         return frames, done
     
     def run_action_on_emulator(self, *args, **kwargs):

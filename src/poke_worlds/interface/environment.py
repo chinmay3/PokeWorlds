@@ -318,7 +318,7 @@ class Environment(gym.Env, ABC):
         rewards = []
         log_info(f"Allowed Actions: \n{action_input_str}", self._parameters)
         while not done and steps < max_steps:
-            self.render()
+            self.render_obs()
             if show_info:
                 self.render_info()
             input_str = input("Enter Action: ").strip()
@@ -362,8 +362,12 @@ class DummyEnvironment(Environment):
     
     def render_obs(self): # Might cause issues if you try to render() as well
         info = self.get_info()
-        screen = info["core"]["current_frame"]
-        #self._screen_render(screen)
+        screens = info["core"]["passed_frames"]
+        if screens is None:
+            screens = [info["core"]["current_frame"]]
+        print(f"Passed Frames: " , len(screens))
+        for screen in screens:
+            self._screen_render(screen)
 
     def render_info(self):
         info = self.get_info()

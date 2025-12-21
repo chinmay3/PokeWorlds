@@ -327,6 +327,14 @@ class Emulator():
         """ 
         return self.state_parser.get_current_frame()
     
+    def _after_actions(self, frames: np.ndarray):
+        """
+        Must run after actions are run on the emulator
+        """
+        if self.save_video and self.video_running:
+            self.add_video_frames(frames)
+        self.state_tracker.step(frames)
+    
     def step(self, action: LowLevelActions = None) -> Tuple[np.ndarray, bool]:
         """ 
         
@@ -351,11 +359,8 @@ class Emulator():
             self.start_video()
 
         frames = self.run_action_on_emulator(action)
-        if self.save_video and self.video_running:
-            self.add_video_frames(frames)
-
         self.step_count += 1
-        self.state_tracker.step(frames)
+        self._after_actions(frames)
         return frames, self.check_if_done()
 
     def get_state_parser(self) -> StateParser:

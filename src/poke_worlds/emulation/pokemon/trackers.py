@@ -65,7 +65,7 @@ class CorePokemonMetrics(MetricGroup):
             dict: A dictionary containing the current agent state.
         """
         return {
-            "agent_state": self.current_state.name,
+            "agent_state": self.current_state,
             "n_battles_completed": self.n_battles_completed
         }
     
@@ -272,11 +272,15 @@ class CorePokemonTracker(StateTracker):
         """
         super().step(*args, **kwargs)
         state = self.episode_metrics["pokemon_core"]["agent_state"]
-        screen = self.episode_metrics["core"]["current_frame"]
         # if agent_state is in FREE ROAM, draw the grid, otherwise do not
         if state == AgentState.FREE_ROAM:
+            screen = self.episode_metrics["core"]["current_frame"]
             screen = self.state_parser.draw_grid_overlay(current_frame=screen, grid_skip=20)
             self.episode_metrics["core"]["current_frame"] = screen
+            previous_screens = self.episode_metrics["core"]["passed_frames"]
+            if previous_screens is not None:
+                self.episode_metrics["core"]["passed_frames"][-1, :] = screen
+
 
 
 class PokemonRedStarterTracker(CorePokemonTracker):
