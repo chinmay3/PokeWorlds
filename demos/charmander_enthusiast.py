@@ -4,14 +4,6 @@ from gymnasium.spaces import Discrete, OneOf
 import numpy as np
 import click
 
-num_cpu = 4  # Number of processes to use
-batch_size = 64
-exploration_fraction = 0.75
-gamma = 0.999
-total_timesteps = int(2e5)
-render = True # Whether to render the environment at test time
-
-
 
 class OneOfToDiscreteWrapper(gym.ActionWrapper):
     def __init__(self, env):

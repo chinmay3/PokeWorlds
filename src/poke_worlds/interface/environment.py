@@ -118,7 +118,7 @@ class Environment(gym.Env, ABC):
         """
         return self._emulator.state_tracker.report_final()
     
-    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
+    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple[gym.spaces.Space, Dict[str, Dict[str, Any]]]:
         """
         Resets the environment and emulator to the initial state.
         Args:
