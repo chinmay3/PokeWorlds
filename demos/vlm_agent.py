@@ -123,6 +123,7 @@ observation, info = environment.reset()
 while steps < max_steps:
     action, kwargs = vl.act(observation, info)
     observation, reward, terminated, truncated, info = environment.step_high_level_action(action, **kwargs)
+    info["prev_action"] = str(kwargs["low_level_action"])
     if terminated or truncated:
         break
     steps += 1
