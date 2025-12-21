@@ -17,7 +17,7 @@ The set of allowed actions are:
 - DOWN : Will either move the character down or navigate down in a menu.
 - LEFT : Will either move the character left or navigate left in a menu.
 - RIGHT : Will either move the character right or navigate right in a menu.
-- A : Press the A button to interact, confirm, or select.
+- A : Press the A button to interact, confirm, or select. You can only use this action to interact with an NPC or object if they are directly in front of you. Otherwise, use movement actions to position yourself.
 - B : Press the B button to cancel or go back.
 You must respond with exactly one of the above actions. Any other action is invalid. 
 
@@ -30,12 +30,12 @@ Think: (your reasoning about the current situation). Should be extremely brief.
     """
     def __init__(self, env):
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-            "Qwen/Qwen3-VL-2B-Instruct",
+            "Qwen/Qwen3-VL-4B-Instruct",
             dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
             device_map="auto",
         )
-        self.processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-2B-Instruct")
+        self.processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-4B-Instruct")
         self.env = env
         self.actions = self.env.actions
 
@@ -73,7 +73,7 @@ Think: (your reasoning about the current situation). Should be extremely brief.
     def act(self, current_frame):
         output_text = self.infer(current_frame)
         # parse the output text into an action here:
-        action = self.actions[0] # there's only one action here. 
+        action_c = self.actions[0] # there's only one action here. 
         kwargs = {} # "action key needs to map to a low level action"
         valid_actions = [LowLevelActions.PRESS_ARROW_DOWN, LowLevelActions.PRESS_ARROW_LEFT, LowLevelActions.PRESS_ARROW_UP, LowLevelActions.PRESS_ARROW_RIGHT, LowLevelActions.PRESS_BUTTON_A, LowLevelActions.PRESS_BUTTON_B]
         if "<action>" in output_text and "</action>" in output_text:
@@ -98,7 +98,8 @@ Think: (your reasoning about the current situation). Should be extremely brief.
             # pick random action
             print("Random Action")
             kwargs["low_level_action"] = np.random.choice(valid_actions)
-        return action, kwargs
+        print(f"Chosen action: {kwargs['low_level_action']} from model output: {output_text}")
+        return action_c, kwargs
     
 
 environment = get_pokemon_environment(game_variant="pokemon_red", controller=LowLevelPlayController(), save_video=True,
