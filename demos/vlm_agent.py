@@ -30,12 +30,12 @@ Think: (your reasoning about the current situation)
     """
     def __init__(self, env):
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-            "Qwen/Qwen3-VL-8B-Thinking",
+            "Qwen/Qwen3-VL-4B-Thinking",
             dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
             device_map="auto",
         )
-        self.processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-8B-Thinking")
+        self.processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-4B-Thinking")
         self.env = env
         self.actions = self.env.actions
 
@@ -100,7 +100,7 @@ Think: (your reasoning about the current situation)
         return action, kwargs
     
 
-environment = get_pokemon_environment(game_variant="pokemon_red", controller=LowLevelPlayController, save_video=True,
+environment = get_pokemon_environment(game_variant="pokemon_red", controller=LowLevelPlayController(), save_video=True,
                                         init_state="starter", max_steps=1000, headless=True)   
 vl = VL(environment)
 steps = 0
