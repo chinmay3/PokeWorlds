@@ -110,7 +110,7 @@ pbar = tqdm(total=max_steps)
 observation, state = environment.reset()
 while steps < max_steps:
     action, kwargs = vl.act(observation)
-    observation, reward, terminated, truncated, info = environment.step(action)
+    observation, reward, terminated, truncated, info = environment.step_high_level_action(action)
     if terminated or truncated:
         break
     steps += 1
