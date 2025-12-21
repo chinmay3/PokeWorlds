@@ -77,6 +77,8 @@ class Environment(gym.Env, ABC):
                 log_error(f"Environment requires attribute '{attr}' to be set. Implement this in the subclass __init__", self._parameters)
         if not issubclass(type(self._emulator), self.REQUIRED_EMULATOR):
             log_error(f"Environment requires an Emulator of type {self.REQUIRED_EMULATOR.NAME}, but got {type(self._emulator).NAME}", self._parameters)
+        if not isinstance(self._controller, Controller):
+            log_error(f"Environment requires a Controller instance, but got {type(self._controller)}", self._parameters)
         self.REQUIRED_STATE_TRACKER = get_lowest_level_subclass([self.REQUIRED_STATE_TRACKER, self._controller.REQUIRED_STATE_TRACKER])
         if not issubclass(type(self._emulator.state_tracker), self.REQUIRED_STATE_TRACKER):
             log_error(f"Environment requires a StateTracker of type {self.REQUIRED_STATE_TRACKER.NAME}, but got {type(self._emulator.state_tracker).NAME}", self._parameters)
