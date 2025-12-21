@@ -216,7 +216,7 @@ class Emulator():
         Returns:
             str: The newly allocated session name.
         """
-        self.clear_unnamed_sessions()
+        #self.clear_unnamed_sessions() # Commented out because it can cause race conditions in multiprocess setups.
         storage_dir = self._parameters["storage_dir"]
         session_path = os.path.join(storage_dir, "sessions", self.get_env_variant())
         os.makedirs(session_path, exist_ok=True)
@@ -234,6 +234,7 @@ class Emulator():
         """
         Clears all unnamed (integer based) sessions from the session directory.
         """
+        # first check if rank is 0. Only rank 0 should clear sessions to avoid race conditions.
         storage_dir = self._parameters["storage_dir"]
         session_path = os.path.join(storage_dir, "sessions", self.get_env_variant())
         if not os.path.exists(session_path):
