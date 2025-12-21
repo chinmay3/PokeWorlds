@@ -54,6 +54,7 @@ model = PPO.load("charmander_enthusiast_agent", env=env)
 #       this will be reflected here. To evaluate with original rewards,
 #       wrap environment in a "Monitor" wrapper before other wrappers.
 mean_reward, std_reward = evaluate_policy(model, model.get_env(), n_eval_episodes=10)
+print(f"Reward: {mean_reward} +/- {std_reward}")
 
 # Enjoy trained agent
 vec_env = model.get_env()

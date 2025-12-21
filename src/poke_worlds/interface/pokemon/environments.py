@@ -85,6 +85,6 @@ class PokemonRedChooseCharmanderFastEnv(Environment):
             return -0.1 * min_dist
         step_bonus = 100 / (n_steps+1)
         if starter_chosen == "charmander":
-            return 50.0 + step_bonus
+            return 500.0 + step_bonus
         else:
-            return 10.0 + step_bonus# Penalty for choosing the wrong starter. For now, just less reward.
+            return 100.0 + step_bonus# Penalty for choosing the wrong starter. For now, just less reward.
