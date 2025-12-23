@@ -113,7 +113,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             else:
                 if action == MoveStepsAction:
                     if action_success == 1:
-                        action_success_message = "You moved until you hit a wall, object, NPC or obstacle."
+                        action_success_message = "You moved until you hit a wall, object, NPC or obstacle. If it is an object or NPC, you can now interact with it. If it is an obstacle or wall, interacting will do nothing."
                     if action_success == -1:
                         action_success_message = "You could not move in that direction at all. There is most likely an obstacle in the way."
                     if action_success == 2:
