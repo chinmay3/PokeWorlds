@@ -45,11 +45,11 @@ class OCR:
         for i in range(0, len(all_images), batch_size):
             images = all_images[i:i+batch_size]
             texts = [text_prompt] * len(images)
-            outputs = self.pipeline(images=images, text=texts, max_new_tokens=self._parameters["ocr_model_max_new_tokens"], do_sample=False)
-            all_outputs.extend(outputs["generated_text"])
+            outputs = self.pipeline(images=images, text=texts, max_new_tokens=self._parameters["ocr_model_max_new_tokens"],)
+            all_outputs.extend(outputs)
         output_only = []
         for out in all_outputs:
-            output_only.append(out.split("assistant")[-1].strip())
+            output_only.append(out["generated_text"].split("assistant")[-1].strip())
         return output_only
 
 
