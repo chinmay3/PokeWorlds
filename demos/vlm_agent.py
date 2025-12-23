@@ -86,8 +86,6 @@ Now, based on the current frame and the context, first think and reason about yo
         full_text = self.processor.batch_decode(
             generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
-        full_text = full_text[0].split("Additional Context About Game:")[1].strip()
-        print(full_text)
         return output_text[0]
     
     def parse_validate_action(self, output_text):
@@ -187,8 +185,9 @@ def do(size):
         if action is None:
             print("VL agent failed to produce a valid action after multiple attempts. Exiting.")
             break
-        texts.append([steps, observation["messages"], action, kwargs, mission, output_text])
         observation, reward, terminated, truncated, info = environment.step_high_level_action(action, **kwargs)
+        texts.append([steps, observation["messages"], action, kwargs, mission, output_text])
+        print(f"Step {steps}: set mission {mission}. Took action {action} with args {kwargs}, got obs message {observation['messages']}")
         if steps % checkpoint_every == 0:
             df = pd.DataFrame(texts, columns=columns)
             df.to_csv(f"outputs_{size}.csv", index=False)
