@@ -29,12 +29,17 @@ class OCR:
         ).eval()
         self._processor = AutoProcessor.from_pretrained("PaddlePaddle/PaddleOCR-VL", trust_remote_code=True)
 
+    def make_image(arr):
+        rgb = np.stack([arr[:, :, 0], arr[:, :, 0], arr[:, :, 0]], axis=2)
+        return Image.fromarray(rgb)
+    
+    
     def extract_text(self, images: List[np.ndarray]) -> List[str]:
         """
         Extract text from a list of images.
         """
         prompt = ["<|begin_of_sentence|>User: <|IMAGE_START|><|IMAGE_PLACEHOLDER|><|IMAGE_END|>OCR:\nAssistant: "]
-        all_images = [Image.fromarray(img).convert("RGB") for img in images]
+        all_images = [self.make_image(img) for img in images]
         batch_size = self._parameters["ocr_model_batch_size"]
         all_outputs = []
         for i in range(0, len(all_images), batch_size):
