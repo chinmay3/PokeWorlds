@@ -158,8 +158,8 @@ Now, based on the current frame and the context, first think and reason about yo
                 return None, None, None
         if "mission" in output_text.lower() and "action" in output_text.lower():
             mission = output_text.lower().split("mission")[1].split("action")[0].strip()
-        elif "action" in output_text.lower():
-            mission = output_text.lower().split("action")[0].strip()
+        elif "think:" in output_text.lower():
+            mission = output_text.lower().split("think:")[1].strip()
         return action, action_kwargs, mission
         
         
