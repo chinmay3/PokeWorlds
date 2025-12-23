@@ -70,7 +70,7 @@ class HighLevelAction(ABC):
             space_action (Space): The action in the high level action's parameter space.
 
         Returns: 
-            Dict[str, Any]: The high level action's parameters that correspond to the space action.
+            - Dict[str, Any]: The high level action's parameters that correspond to the space action.
         """
         raise NotImplementedError
     
