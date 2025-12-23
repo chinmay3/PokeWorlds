@@ -187,7 +187,7 @@ class LowLevelAction(HighLevelAction):
             log_error("LowLevelAction requires a 'low_level_action' parameter of type LowLevelActions.", self._parameters)
         return low_level_action.value
 
-    def _execute(self, low_level_action: LowLevelActions) -> Tuple[List[Dict[str, Dict[str, Any]]], bool]:
+    def _execute(self, low_level_action: LowLevelActions) -> Tuple[List[Dict[str, Dict[str, Any]]], int]:
         """
         Executes the specified low level action on the emulator.
 
@@ -200,7 +200,7 @@ class LowLevelAction(HighLevelAction):
         """
         self._emulator.step(low_level_action)
         state_report = self._state_tracker.report()
-        return [state_report], True  # Low level actions are always successful in this context.
+        return [state_report], 0  # Low level actions are always successful in this context.
 
     def is_valid(self, low_level_action: LowLevelActions) -> bool:
         """
@@ -245,10 +245,10 @@ class LowLevelPlayAction(HighLevelAction):
             log_error("LowLevelPlayAction requires a 'low_level_action' parameter that is not a menu button press.", self._parameters)
         return self.allowed_actions.index(low_level_action)
 
-    def _execute(self, low_level_action: LowLevelActions) -> Tuple[List[Dict[str, Dict[str, Any]]], bool]:
+    def _execute(self, low_level_action: LowLevelActions) -> Tuple[List[Dict[str, Dict[str, Any]]], int]:
         self._emulator.step(low_level_action)
         state_report = self._state_tracker.report()
-        return [state_report], True  # Low level actions are always successful in this context.
+        return [state_report], 0  # Low level actions are always successful in this context.
 
     def is_valid(self, low_level_action: LowLevelActions) -> bool:
         return low_level_action in self.allowed_actions
@@ -280,7 +280,7 @@ class RandomPlayAction(HighLevelAction):
         else:
             log_error("RandomPlayAction requires a 'kind' parameter of either 'move' or 'press'.", self._parameters)
 
-    def _execute(self, kind: str) -> Tuple[List[Dict[str, Dict[str, Any]]], bool]:
+    def _execute(self, kind: str):
         if kind == "move":
             actions = [
                 LowLevelActions.PRESS_ARROW_DOWN,
@@ -296,8 +296,8 @@ class RandomPlayAction(HighLevelAction):
         action = self._rng.choice(actions)
         self._emulator.step(action)
         state_report = self._state_tracker.report()
-        success = state_report["core"]["frame_changed"] # Whether the frame changed after the action
-        return [state_report], success
+        not_success = not state_report["core"]["frame_changed"] # Whether the frame changed after the action
+        return [state_report], not_success
 
     def is_valid(self, kind: str) -> bool:
         if kind not in ["move", "press"]:

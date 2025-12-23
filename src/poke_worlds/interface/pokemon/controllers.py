@@ -1,10 +1,10 @@
 from poke_worlds.utils import log_error, log_info
-from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction
+from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction
 from poke_worlds.interface.controller import Controller
 
 
-class PokemonTestController(Controller):
-    ACTIONS = [MoveStepsAction, MenuAction]
+class PokemonStateWiseController(Controller):
+    ACTIONS = [MoveStepsAction, MenuAction, InteractAction, PassDialogueAction]
 
     def _parse_distance(self, distance_str):
         if distance_str.count(":") != 1:
@@ -28,7 +28,11 @@ class PokemonTestController(Controller):
             
 
     def string_to_high_level_action(self, input_str):
-        input_str = input_str.lower()
+        input_str = input_str.lower().strip()
+        if input_str == "a":
+            return InteractAction, {}
+        elif input_str == "p":
+            return PassDialogueAction, {}
         if ":" in input_str:
             return self._parse_distance(input_str)
         else:
@@ -42,12 +46,15 @@ class PokemonTestController(Controller):
                 return MenuAction, {"menu_action": "exit"}
             elif input_str == "m_o":
                 return MenuAction, {"menu_action": "open"}
+            elif input_str == "m_l":
+                return MenuAction, {"menu_action": "left"}
+            elif input_str == "m_r":
+                return MenuAction, {"menu_action": "right"}
         return None, None
 
         
-    
     def get_action_strings(self):
         msg = f"""
-        <direction(u,d,r,l)>: <steps(int)> or <menu(m_u, m_d, m_a, m_b, m_o)>
+        <direction(u,d,r,l)>: <steps(int)> or <menu(m_u, m_d, m_r, m_l, m_a, m_b, m_o)> or <interaction(a)> or <pass_dialogue(p)>
         """
         return msg    

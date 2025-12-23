@@ -192,6 +192,25 @@ class Environment(gym.Env, ABC):
             bool: Whether the episode is terminated.
         """
         pass
+        
+    def before_step(self, action: HighLevelAction, action_kwargs: dict):
+        """
+        Implement any logic that needs to be executed before each step in the environment.
+        """
+        return
+
+    def after_step(self, start_state: Dict[str, Dict[str, Any]], action: HighLevelAction, action_kwargs: dict, transition_states: List[Dict[str, Dict[str, Any]]], action_success: int):
+        """
+        Implement any logic that needs to be executed after each step in the environment.
+
+        Args:
+            start_state (Dict[str, Dict[str, Any]]): The state before the action was taken.
+            action (HighLevelAction): The HighLevelAction action taken.
+            action_kwargs (dict): The keyword arguments used for the action.
+            transition_states (List[Dict[str, Dict[str, Any]]]): A list of states observed during the action execution.
+            action_success (int): Whether the action was successful.
+        """
+        return
     
     def step(self, action: gym.spaces.OneOf) -> Tuple[gym.spaces.Space, float, bool, bool, Dict[str, Dict[str, Any]]]:
         """
@@ -230,9 +249,11 @@ class Environment(gym.Env, ABC):
         if self._emulator.check_if_done():
             log_error("Cannot step environment because emulator indicates done. Please reset the environment.", self._parameters)
         start_state = self.get_info()
+        self.before_step(action, kwargs)
         transition_states, action_success = self._controller.execute(action, **kwargs)
         if transition_states is None: # then the action was not a valid one according to the controller. Will return Nones for all
             return None, None, None, None, None
+        self.after_step(start_state, action, kwargs, transition_states, action_success)
         truncated = self._emulator.check_if_done()
         observation = self.get_observation(action=action, action_kwargs=kwargs, transition_states=transition_states, action_success=action_success)
         current_state = self.get_info(action=action, action_kwargs=kwargs, transition_states=transition_states, action_success=action_success)

@@ -24,6 +24,82 @@ def _plot(past: np.ndarray, current: np.ndarray):
     plt.show()
 
 
+class PassDialogueAction(HighLevelAction):
+    """
+    This only triggers in the gaps 
+    Is just a skip through dialogue action.
+    """
+    REQUIRED_STATE_PARSER = PokemonStateParser
+    REQUIRED_STATE_TRACKER = CorePokemonTracker
+
+    def is_valid(self, **kwargs):
+        """
+        Just checks if the agent is in dialogue state.
+        """
+        return self._state_tracker.get_episode_metric(("pokemon_core", "agent_state")) == AgentState.IN_DIALOGUE
+    
+    def _execute(self):
+        frames, done = self._emulator.step(LowLevelActions.PRESS_BUTTON_B)
+        # if we are still in dialogue, its a fail:
+        action_success = 0 if self._emulator.state_parser.get_agent_state(frames[-1]) != AgentState.IN_DIALOGUE else -1
+        return [self._state_tracker.report()], action_success
+    
+    def get_action_space(self):
+        return Discrete(1)
+    
+    def parameters_to_space(self):
+        return 0
+    
+    def space_to_parameters(self, space_action):
+        return {}
+
+
+class InteractAction(HighLevelAction):
+    """
+    Handles interaction actions in the Pokemon environment.
+    Currently only supports the "interact" action, which presses the A button.
+    """
+
+    REQUIRED_STATE_PARSER = PokemonStateParser    
+    REQUIRED_STATE_TRACKER = CorePokemonTracker
+
+    def is_valid(self, **kwargs):
+        """
+        Just checks if the agent is in free roam state.
+        """
+        return self._state_tracker.get_episode_metric(("pokemon_core", "agent_state")) == AgentState.FREE_ROAM
+
+    def _execute(self):
+        current_frame = self._emulator.get_current_frame()
+        frames, done = self._emulator.step(LowLevelActions.PRESS_BUTTON_A)
+        action_success = 0
+        # Check if the frames have changed. Be strict and require all to not permit jittering screens. #TODO: Test
+        prev_frames = []
+        for frame in frames:
+            if self._emulator.state_parser.get_agent_state(frame) != AgentState.FREE_ROAM: # something happened lol
+                action_success = 1
+                break
+            for past_frame in prev_frames:
+                if not frame_changed(past_frame, frame):
+                    action_success = -1
+                    break
+            if action_success != 0:
+                break
+            prev_frames.append(frame)        
+        return [self._state_tracker.report()], action_success # 0 means something likely happened. 1 means def happened. 
+    
+    def get_action_space(self):
+        return Discrete(1)
+    
+    def parameters_to_space(self):
+        return 0
+    
+    def space_to_parameters(self, space_action):
+        return {}
+    
+
+
+
 class BaseMovementAction(HighLevelAction, ABC):
     """
     Base class for movement actions in the Pokemon environment.
@@ -81,8 +157,6 @@ class BaseMovementAction(HighLevelAction, ABC):
             n_step += 1
             previous_frame = frames[-1]
 
-        #transition_frames = np.stack(transition_frames, axis=0)
-        #self._emulator.update_listeners_after_actions(transition_frames)
         if agent_state != AgentState.FREE_ROAM:
             action_success = 2
         else:
@@ -254,11 +328,13 @@ class MenuAction(HighLevelAction):
                 return False
         state = self._state_tracker.get_episode_metric(("pokemon_core", "agent_state"))
         if menu_action is None:
-            return (state != AgentState.IN_BATTLE) and (state != AgentState.IN_DIALOGUE)
+            return state != AgentState.IN_DIALOGUE
+            #return (state != AgentState.IN_BATTLE) and (state != AgentState.IN_DIALOGUE)
         if menu_action == "open":
             return state == AgentState.FREE_ROAM
         else:
-            return state == AgentState.IN_MENU
+            return state == AgentState.IN_MENU or state == AgentState.IN_BATTLE # TODO: For now we merge
+            #return state == AgentState.IN_MENU
             
     def get_action_space(self):
         """
@@ -291,8 +367,7 @@ class MenuAction(HighLevelAction):
     def _execute(self, menu_action):
         action = self._MENU_ACTION_MAP[menu_action]
         current_frame = self._emulator.get_current_frame()
-        frames = self._emulator.run_action_on_emulator(action)
-        self._emulator._update_listeners_after_actions(frames)
+        frames, done = self._emulator.step(action)
         action_success = frame_changed(current_frame, frames[-1])
         return [self._state_tracker.report()], action_success
         
