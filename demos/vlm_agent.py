@@ -7,6 +7,8 @@ from poke_worlds.emulation.emulator import LowLevelActions
 from tqdm import tqdm
 from PIL import Image
 import numpy as np
+import click
+
 
 class VL:
     system_prompt = """
@@ -42,13 +44,13 @@ Action: <action></action>
 
 Now, based on the current frame and the context, first think and reason about your situation. Then, output your next action in the proper format, do not forget to enclose it with action tags: <action>COMMAND</action>. 
     """
-    def __init__(self, env):
+    def __init__(self, env, size=32):
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-            "Qwen/Qwen3-VL-32B-Instruct",
+            f"Qwen/Qwen3-VL-{size}B-Instruct",
             dtype=torch.bfloat16,
             device_map="auto",
         )
-        self.processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-32B-Instruct")
+        self.processor = AutoProcessor.from_pretrained(f"Qwen/Qwen3-VL-{size}B-Instruct")
         self.env = env
         self.actions = self.env.actions
 
@@ -95,8 +97,12 @@ Now, based on the current frame and the context, first think and reason about yo
     def parse_validate_action(self, output_text):
         text = output_text.lower().strip()
         if "<action>" not in text or "</action>" not in text:
-            return "Bad <action>", "tags wrong", False
-        action_str = text.split("<action>")[1].split("</action>")[0].strip()
+            if "action:" not in text:
+                return "Bad <action>", "tags wrong", False
+            else:
+                action_str = text.split("action:")[-1].strip()
+        else:
+            action_str = text.split("<action>")[1].split("</action>")[0].strip()
         if "interact" in action_str.lower():
             return InteractAction, {}, self.env._controller.is_valid(InteractAction)
         elif "movesteps" in action_str.lower():
@@ -163,29 +169,32 @@ Now, based on the current frame and the context, first think and reason about yo
         return action, action_kwargs, mission
         
         
-    
-
-environment = get_pokemon_environment(game_variant="pokemon_red", controller=PokemonStateWiseController(), 
-                                      environment_variant="high_level",
-                                      save_video=True,
-                                        init_state="starter", session_name="high_level", headless=True)
-vl = VL(environment)
-steps = 0
-#max_steps = 10_000
-max_steps = 6000
-pbar = tqdm(total=max_steps)
-mission = "I am currently in professor oaks lab, he has offered me one of his three pokemon on the right and my goal is to obtain a pokemon and take it to the first gym. First, I will move towards the pokeballs on the table. Then, I will interact with the pokeball to obtain a pokemon. Then, I will leave the pokemon lab and head up to the first city and then re-assess my mission. "
-observation, info = environment.reset()
-while steps < max_steps:
-    action, kwargs, mission = vl.act(observation, mission)
-    if action is None:
-        print("VL agent failed to produce a valid action after multiple attempts. Exiting.")
-        break
-    observation, reward, terminated, truncated, info = environment.step_high_level_action(action, **kwargs)
-    if terminated or truncated:
-        break
-    steps += 1
-    pbar.update(1)
-pbar.close()    
-environment.close()
+@click.command()
+@click.option("--size", default=32, type=int)
+def do(size):
+    environment = get_pokemon_environment(game_variant="pokemon_red", controller=PokemonStateWiseController(), 
+                                        environment_variant="high_level",
+                                        save_video=True,
+                                            init_state="starter", session_name=f"high_level_{size}", headless=True)
+    vl = VL(environment, size=size)
+    steps = 0
+    max_steps = 10_000 if size == 8 else 500
+    pbar = tqdm(total=max_steps)
+    mission = "I am currently in professor oaks lab, he has offered me one of his three pokemon on the right and my goal is to obtain a pokemon and take it to the first gym. First, I will move towards the pokeballs on the table. Then, I will interact with the pokeball to obtain a pokemon. Then, I will leave the pokemon lab and head up to the first city and then re-assess my mission. "
+    observation, info = environment.reset()
+    while steps < max_steps:
+        action, kwargs, mission = vl.act(observation, mission)
+        if action is None:
+            print("VL agent failed to produce a valid action after multiple attempts. Exiting.")
+            break
+        observation, reward, terminated, truncated, info = environment.step_high_level_action(action, **kwargs)
+        if terminated or truncated:
+            break
+        steps += 1
+        pbar.update(1)
+    pbar.close()    
+    environment.close()
 # Plot rewards over time
+
+if __name__ == "__main__":
+    do()
