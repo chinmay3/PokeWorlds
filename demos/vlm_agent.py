@@ -10,7 +10,7 @@ import numpy as np
 
 class VL:
     system_prompt = """
-You are playing a Pokemon game, and the objective is to get as far into the game as possible. Go and interact with the pokeballs. then once there are fewer than 3 pokeballs on the table, leave the room.
+You are playing a Pokemon game, and the objective is to get as far into the game as possible. 
 You will be provided with images of the game screen. Based on the current screen, output the next action to take.
 
 The set of allowed actions are:
