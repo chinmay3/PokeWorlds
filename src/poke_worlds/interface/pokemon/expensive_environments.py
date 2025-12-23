@@ -17,15 +17,23 @@ from transformers import AutoModelForCausalLM, AutoProcessor
 
 from gymnasium import spaces
 
+
+from huggingface_hub import hf_hub_download
+import re
+from PIL import Image
+
+from transformers import NougatProcessor, VisionEncoderDecoderModel
+from datasets import load_dataset
+import torch
+
+
 class OCR:
     def __init__(self, parameters: dict = None):
         verify_parameters(parameters)
         self._parameters = load_parameters(parameters)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self._model = AutoModelForCausalLM.from_pretrained(
-            "PaddlePaddle/PaddleOCR-VL", trust_remote_code=True, dtype=torch.bfloat16,
-        ).to(self.device).eval()
-        self._processor = AutoProcessor.from_pretrained("PaddlePaddle/PaddleOCR-VL", trust_remote_code=True)
+        self._model = VisionEncoderDecoderModel.from_pretrained("facebook/nougat-base").to(self.device)
+        self._processor = NougatProcessor.from_pretrained("facebook/nougat-base")
 
     def make_image(self, arr):
         rgb = np.stack([arr[:, :, 0], arr[:, :, 0], arr[:, :, 0]], axis=2)
@@ -36,22 +44,19 @@ class OCR:
         """
         Extract text from a list of images.
         """
-        prompt = ["<|begin_of_sentence|>User: <|IMAGE_START|><|IMAGE_PLACEHOLDER|><|IMAGE_END|>OCR:\nAssistant: "]
         all_images = [self.make_image(img) for img in images]
         batch_size = self._parameters["ocr_model_batch_size"]
         all_outputs = []
         for i in range(0, len(all_images), batch_size):
             images = all_images[i:i+batch_size]
-            texts = prompt * len(images)
-
-            inputs = self._processor(
+            pixel_values = self._processor(
                 images=images,
-                text=texts,
                 return_tensors="pt",
                 padding=True,
-            ).to(self.device)
+            ).pixel_values.to(self.device)
 
-            outputs = self._model.generate(**inputs, max_new_tokens=self._parameters["ocr_model_max_new_tokens"])
+            outputs = self._model.generate(pixel_values, max_new_tokens=self._parameters["ocr_model_max_new_tokens"], 
+                                           bad_words_ids=[[self._processor.tokenizer.unk_token_id]])
             outputs = self._processor.batch_decode(outputs, skip_special_tokens=True)
             all_outputs.extend(outputs)
         output_only = []
