@@ -1,7 +1,14 @@
 from typing import Type, Union
-from poke_worlds.utils import load_parameters, log_info, log_error
+from poke_worlds.utils import load_parameters, log_info, log_error, log_warn
 from poke_worlds.emulation.pokemon import get_pokemon_emulator, infer_variant
 from poke_worlds.interface.pokemon.environments import PokemonEnvironment, PokemonRedChooseCharmanderFastEnv
+# check if transformers is installed, and only then import the expensive environments
+try:
+    import transformers  # noqa: F401
+except ImportError:
+    log_warn("Transformers library not found. Expensive Pokemon environments will not be available.")
+else:
+    from poke_worlds.interface.pokemon.expensive_environments import PokemonHighLevelEnvironment
 from poke_worlds.interface.controller import Controller, LowLevelController
 
 from typing import Optional
@@ -10,7 +17,8 @@ from typing import Optional
 _VARIANT_TO_ENVIRONMENT = {
     "pokemon_red": {
         "default": PokemonEnvironment,
-        "charmander_enthusiast": PokemonRedChooseCharmanderFastEnv
+        "charmander_enthusiast": PokemonRedChooseCharmanderFastEnv,
+        "high_level": PokemonHighLevelEnvironment
     },
     "pokemon_brown": {
         "default": PokemonEnvironment
