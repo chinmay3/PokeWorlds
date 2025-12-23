@@ -1,6 +1,7 @@
 from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 import torch
-from poke_worlds import AVAILABLE_POKEMON_VARIANTS, get_pokemon_environment, LowLevelController, RandomPlayController, LowLevelPlayController
+from poke_worlds import AVAILABLE_POKEMON_VARIANTS, get_pokemon_environment, LowLevelController, RandomPlayController, LowLevelPlayController, PokemonStateWiseController
+from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction
 from poke_worlds.interface.action import LowLevelPlayAction
 from poke_worlds.emulation.emulator import LowLevelActions
 from tqdm import tqdm
@@ -13,44 +14,41 @@ You are playing a Pokemon game, and the objective is to get as far into the game
 You will be provided with images of the game screen. Based on the current screen, output the next action to take.
 
 The set of allowed actions are:
-- UP : Will either move the character up or navigate up in a menu.
-- DOWN : Will either move the character down or navigate down in a menu.
-- LEFT : Will either move the character left or navigate left in a menu.
-- RIGHT : Will either move the character right or navigate right in a menu.
-- A : Press the A button to interact, confirm, or select. You can only use this action to interact with an NPC or object if they are directly in front of you. Otherwise, use movement actions to position yourself.
-- B : Press the B button to cancel or go back.
-You must respond with exactly one of the above actions. Any other action is invalid. 
+1. MoveSteps(direction: str, steps: int): Move the character in the specified direction ('up', 'down', 'left', 'right') for a certain number of steps (1-10). Can ONLY be used in the FREE ROAM state. Example usage: MoveSteps("up", 3)
+2. Interact(): Interact with the object or character directly in front of the player. Will fail if the player is not facing the object or is even one grid space away. Can ONLY be used in the FREE ROAM state. Example usage: Interact()   
+3. MenuAction(menu_action: str): Perform a menu action. The possible actions are: navigate menu options ("up", "down", "left", "right"), "confirm" to choose the highlighted option, and "back" to go back to the previous menu or exit the menu. Can ONLY be used when in a MENU or BATTLE state. Example usage: MenuAction("select")
+4. PassDialogue(): Advance the dialogue or text box by pressing the confirm button. Can ONLY be used when in a DIALOGUE state. Example usage: PassDialogue()
 
-First, think about what is happening in the current frame, then decide on the best action to take next.
+You must respond with exactly one of the above actions in the right format. Any other action is invalid. 
+
+First, think about what is happening in the current frame, and also consider your past actions. Make sure you are not getting stuck in a repetitive loop, and if you are, try something new to break out of it. 
 
 You should format your action output as follows:
 Input: frame image
 Think: (your reasoning about the current situation). Should be extremely brief.
-<action>(one of UP, DOWN, LEFT, RIGHT, A, B)</action>
+<action></action>
 
+Additional Context About Game:
 [PREV]
+[ALLOWED]
+Now, based on the current frame and the context, output your next action.
+Think: 
     """
     def __init__(self, env):
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-            "Qwen/Qwen3-VL-4B-Instruct",
+            "Qwen/Qwen3-VL-8B-Instruct",
             dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
             device_map="auto",
         )
-        self.processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-4B-Instruct")
+        self.processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-8B-Instruct")
         self.env = env
         self.actions = self.env.actions
 
-    def infer(self, current_frame, info):
+    def infer(self, current_frame, prev_message, allowed_string=""):
         use_prompt = self.system_prompt
-        if info.get("prev_action") is None:
-            use_prompt = use_prompt.replace("[PREV]", "")
-        else:
-            prev_act = info["prev_action"]
-            if info["core"]["frame_changed"]:
-                use_prompt = use_prompt.replace("[PREV]", f"Previous action was {prev_act}. The frame changed to this after the action.")
-            else:
-                use_prompt = use_prompt.replace("[PREV]", f"Previous action was {prev_act}. The frame did not change after the action. This likely means the action was invalid or does nothing in this context.")
+        use_prompt = use_prompt.replace("[ALLOWED]", allowed_string)
+        use_prompt = use_prompt.replace("[PREV]", prev_message)
         current_frame = current_frame.reshape(current_frame.shape[0], current_frame.shape[1])
         messages = [
             {
@@ -72,58 +70,93 @@ Think: (your reasoning about the current situation). Should be extremely brief.
             return_tensors="pt"
         )   
         inputs = inputs.to(self.model.device)
-        generated_ids = self.model.generate(**inputs, max_new_tokens=256, stop_strings=["</action>"], tokenizer=self.processor.tokenizer)
+        generated_ids = self.model.generate(**inputs, max_new_tokens=356, stop_strings=["</action>"], tokenizer=self.processor.tokenizer)
         generated_ids_trimmed = [
             out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
         ]
         output_text = self.processor.batch_decode(
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
+        full_text = self.processor.batch_decode(
+            generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )
+        print(full_text[0])
         return output_text[0]
     
-    def act(self, current_frame, info):
-        output_text = self.infer(current_frame, info)
-        # parse the output text into an action here:
-        action_c = self.actions[0] # there's only one action here. 
-        kwargs = {} # "action key needs to map to a low level action"
-        valid_actions = [LowLevelActions.PRESS_ARROW_DOWN, LowLevelActions.PRESS_ARROW_LEFT, LowLevelActions.PRESS_ARROW_UP, LowLevelActions.PRESS_ARROW_RIGHT, LowLevelActions.PRESS_BUTTON_A, LowLevelActions.PRESS_BUTTON_B]
-        if "<action>" in output_text and "</action>" in output_text:
-            action = output_text.split("<action>")[1].split("</action>")[0].strip()
-            if "up" in action.strip().lower():
-                kwargs["low_level_action"] = LowLevelActions.PRESS_ARROW_UP
-            elif "down" in action.strip().lower():
-                kwargs["low_level_action"] = LowLevelActions.PRESS_ARROW_DOWN
-            elif "right" in action.strip().lower():
-                kwargs["low_level_action"] = LowLevelActions.PRESS_ARROW_RIGHT
-            elif "left" in action.strip().lower():
-                kwargs["low_level_action"] = LowLevelActions.PRESS_ARROW_LEFT
-            elif "a" in action.strip().lower():
-                kwargs["low_level_action"] = LowLevelActions.PRESS_BUTTON_A
-            elif "b" in action.strip().lower():
-                kwargs["low_level_action"] = LowLevelActions.PRESS_BUTTON_B
-            else:
-                kwargs["low_level_action"] = None
+    def parse_validate_action(self, output_text):
+        text = output_text.lower().strip()
+        if "<action>" not in text or "</action>" not in text:
+            return "Bad <action>", "tags wrong", False
+        action_str = text.split("<action>")[1].split("</action>")[0].strip()
+        if "interact" in action_str.lower():
+            return InteractAction, {}, self.env._controller.is_valid(InteractAction, {})
+        elif "movesteps" in action_str.lower():
+            try:
+                dir_start = action_str.index('("') + 2
+                dir_end = action_str.index('",', dir_start)
+                direction = action_str[dir_start:dir_end].strip()
+                steps_start = action_str.index(',', dir_end) + 1
+                steps_end = action_str.index(')', steps_start)
+                steps = int(action_str[steps_start:steps_end].strip())
+                action_kwargs = {"direction": direction, "steps": steps}
+                return MoveStepsAction, action_kwargs, self.env._controller.is_valid(MoveStepsAction, action_kwargs)
+            except:
+                return "Bad MoveSteps", "parsing error", False
+        elif "menuaction" in action_str.lower():
+            try:
+                action_start = action_str.index('("') + 2
+                action_end = action_str.index('")', action_start)
+                menu_action = action_str[action_start:action_end].strip()
+                action_kwargs = {"menu_action": menu_action}
+                return MenuAction, action_kwargs, self.env._controller.is_valid(MenuAction, action_kwargs)
+            except:
+                return "Bad MenuAction", "parsing error", False
+        elif "passdialogue" in action_str.lower():
+            return PassDialogueAction, {}, self.env._controller.is_valid(PassDialogueAction, {})
         else:
-            kwargs["low_level_action"] = None
-        if kwargs["low_level_action"] is None:
-            # pick random action
-            print("Random Action")
-            kwargs["low_level_action"] = np.random.choice(valid_actions)
-        print(f"Chosen action: {kwargs['low_level_action']} from model output: {output_text}")
-        return action_c, kwargs
+            return "Unknown Action", "not recognized", False
+        
+
+
+
+    def act(self, observation):
+        allowed_categories = self.env._controller.get_possibly_valid_high_level_actions()
+        allowed_string = "The following action categories could possibly be valid now: " + ", ".join(allowed_categories) + "."
+        current_frame = observation["screen"]
+        prev_message = observation["messages"]
+        output_text = self.infer(current_frame, prev_message, allowed_string)
+        action, action_kwargs, validated = self.parse_validate_action(output_text)
+        allowed_string = allowed_string + f". You tried the action {action} with arguments {action_kwargs}. This is not valid in the current state. Assume the state is different and try again."
+        max_out = 20
+        counter = 0
+        while not validated:
+            output_text = self.infer(current_frame, prev_message, allowed_string=allowed_string)
+            action, action_kwargs, validated = self.parse_validate_action(output_text)
+            allowed_string = allowed_string + f"\nThen, you tried {action} with {action_kwargs}, which was also invalid. Try again. Think deeper."
+            counter += 1
+            if counter >= max_out:
+                return None, None
+        return action, action_kwargs
+        
+        
     
 
-environment = get_pokemon_environment(game_variant="pokemon_red", controller=LowLevelPlayController(), save_video=True,
-                                        init_state="starter", max_steps=1000, headless=True)
+environment = get_pokemon_environment(game_variant="pokemon_red", controller=PokemonStateWiseController(), 
+                                      environment_variant="high_level",
+                                      save_video=True,
+                                        init_state="starter", session_name="high_level", headless=True)
 vl = VL(environment)
 steps = 0
-max_steps = 500
+#max_steps = 10_000
+max_steps = 10
 pbar = tqdm(total=max_steps)
 observation, info = environment.reset()
 while steps < max_steps:
-    action, kwargs = vl.act(observation, info)
+    action, kwargs = vl.act(observation)
+    if action is None:
+        print("VL agent failed to produce a valid action after multiple attempts. Exiting.")
+        break
     observation, reward, terminated, truncated, info = environment.step_high_level_action(action, **kwargs)
-    info["prev_action"] = str(kwargs["low_level_action"])
     if terminated or truncated:
         break
     steps += 1

@@ -124,6 +124,25 @@ class Controller(ABC):
             log_error("Emulator reference not assigned to controller.", self._parameters)
         return not self._emulator.check_if_done()    
     
+    def is_valid(self, action: Type[HighLevelAction], **kwargs) -> bool:
+        """
+        Checks if the specified high level action can be performed in the current state.
+
+        Args:
+            action (HighLevelAction): The high level action class to check.
+            **kwargs: Additional arguments required for the specific high level action.
+        Returns:
+            bool: True if the action is valid, False otherwise.
+        """
+        if not self._emulator_running():
+            return False
+        if action not in self.ACTIONS:
+            log_error("Action not recognized by controller. Are you passing in an instance of the action class?", self._parameters)
+        # Find the action instance
+        action_index = self.ACTIONS.index(action)
+        checking_action = self.actions[action_index]
+        return checking_action.is_valid(**kwargs)
+    
     def get_valid_high_level_actions(self) -> Dict[Type[HighLevelAction], List[Dict[str, Any]]]:
         """
         Returns a list of all valid high level actions (including valid parameter inputs) that can be performed in the current state.
