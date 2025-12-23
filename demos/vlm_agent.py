@@ -7,40 +7,36 @@ from poke_worlds.emulation.emulator import LowLevelActions
 from tqdm import tqdm
 from PIL import Image
 import numpy as np
+import pandas as pd
 import click
 
 
 class VL:
     system_prompt = """
 You are playing a Pokemon game. 
-
-Your grand goal is to become a pokemon master, however your current mission is as follows: [MISSION] 
-
-Based on the current screen, output the next action to take.
-
 The set of allowed actions are:
 1. MoveSteps(direction: str, steps: int): Move the character in the specified direction ('up', 'down', 'left', 'right') for a certain number of steps (1-10). Can ONLY be used in the FREE ROAM state. Example usage: MoveSteps("up", 3)
 2. Interact(): Interact with the object or character directly in front of the player. Will fail if the player is not facing the object or is even one grid space away. Can ONLY be used in the FREE ROAM state. Example usage: Interact()   
 3. MenuAction(menu_action: str): Perform a menu action. The possible actions are: navigate menu options ("up", "down", "left", "right"), choose the highlighted option ("confirm"), and " go back to the previous menu or exit the menu ("exit"). Can ONLY be used when in a MENU or BATTLE state. Example usage: MenuAction("confirm")
 4. PassDialogue(): Advance the dialogue or text box by pressing the confirm button. Can ONLY be used when in a DIALOGUE state. Example usage: PassDialogue()
-
 You must respond with exactly one of the above actions in the right format. Any other action is invalid. 
-[ALLOWED]
+
+Your grand goal is to become a pokemon master, however your current mission is as follows: [MISSION] 
 
 Additional Context About Game:
 [PREV]
+[ALLOWED]
 
-
-First, think about what is happening in the current frame, and also consider your past actions. Make sure you are not getting stuck in a repetitive loop, and if you are, try something new to break out of it. 
-Additionally, given the result of your previous action, have you achieved your immediate goal? If not, keep pursuing it, but if so, then state your next immediate mission towards your grand goal.
-
+Your instruction is to:
+1. First, think about what is happening in the current frame, and also consider your past actions. Make sure you are not getting stuck in a repetitive loop, and if you are, try something new to break out of it. 
+2. Reason about your mission: Given the result of your previous action, have you achieved your immediate goal? If not, keep pursuing it, but if so, then state your next immediate mission towards your grand goal.
+3. Select a final action you will perform
 
 You should format your action output as follows:
-Input: frame image
 Think: (your reasoning about the current approach). 
 Mission: summarize the immediate action you are trying to take right now. From the results of your actions, does it seem like you have succeeded? Has your context changed? If you do succeed, what will you do next? What will you do after that?
 Critique of Previous Action Failures: From the results of your previous actions, have you been moving closer to your immediate goal? If not, why do you think that is? What can you do differently this time to improve your chances of success?
-Action: <action></action>
+Action: <action>SELECTED ACTION COMMAND</action>
 
 Now, based on the current frame and the context, first think and reason about your situation. Then, output your next action in the proper format, do not forget to enclose it with action tags: <action>COMMAND</action>. 
     """
@@ -145,7 +141,7 @@ Now, based on the current frame and the context, first think and reason about yo
 
     def act(self, observation, mission):
         allowed_categories = self.env._controller.get_possibly_valid_high_level_actions()
-        allowed_string = "The following action categories could possibly be valid now: "
+        allowed_string = "Given your agent STATE, only the following action categories could possibly be valid now: "
         for ac in allowed_categories:
             allowed_string = allowed_string + f"{ac},\t"
         current_frame = observation["screen"]
@@ -166,7 +162,7 @@ Now, based on the current frame and the context, first think and reason about yo
             mission = output_text.lower().split("mission")[1].split("action")[0].strip()
         elif "think:" in output_text.lower():
             mission = output_text.lower().split("think:")[1].strip()
-        return action, action_kwargs, mission
+        return action, action_kwargs, mission, output_text
         
         
 @click.command()
@@ -178,22 +174,33 @@ def do(size):
                                             init_state="starter", session_name=f"high_level_{size}", headless=True)
     vl = VL(environment, size=size)
     steps = 0
-    max_steps = 10_000 if size == 8 else 500
+    max_steps = 100 if size == 8 else 100
+    checkpoint_every = 100
     pbar = tqdm(total=max_steps)
     mission = "I am currently in professor oaks lab, he has offered me one of his three pokemon on the right and my goal is to obtain a pokemon and take it to the first gym. First, I will move towards the pokeballs on the table. Then, I will interact with the pokeball to obtain a pokemon. Then, I will leave the pokemon lab and head up to the first city and then re-assess my mission. "
     observation, info = environment.reset()
+    columns = ["step", "obs_message", "action", "action_kwargs", "mission", "output_text"]
+    texts = []
+    texts.append([0, observation["messages"], None, None, mission, ""])
     while steps < max_steps:
-        action, kwargs, mission = vl.act(observation, mission)
+        action, kwargs, mission, output_text = vl.act(observation, mission)        
         if action is None:
             print("VL agent failed to produce a valid action after multiple attempts. Exiting.")
             break
+        texts.append([steps, observation["messages"], action, kwargs, mission, output_text])
         observation, reward, terminated, truncated, info = environment.step_high_level_action(action, **kwargs)
+        if steps % checkpoint_every == 0:
+            df = pd.DataFrame(texts, columns=columns)
+            df.to_csv(f"outputs_{size}.csv", index=False)
         if terminated or truncated:
             break
         steps += 1
         pbar.update(1)
     pbar.close()    
     environment.close()
+    df = pd.DataFrame(texts, columns=columns)
+    df.to_csv(f"outputs_{size}.csv", index=False)
+
 # Plot rewards over time
 
 if __name__ == "__main__":

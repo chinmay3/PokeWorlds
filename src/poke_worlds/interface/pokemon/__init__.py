@@ -7,7 +7,7 @@ try:
     import transformers  # noqa: F401
 except ImportError:
     log_warn("Transformers library not found. Expensive Pokemon environments will not be available.")
-    import math as PokemonHighLevelEnvironment  # I don't know how else to sort this out #TODO:Fix the hack
+    from poke_worlds.interface.pokemon.environments import PokemonEnvironment as PokemonHighLevelEnvironment  # I don't know how else to sort this out 
 else:
     from poke_worlds.interface.pokemon.expensive_environments import PokemonHighLevelEnvironment
 from poke_worlds.interface.controller import Controller, LowLevelController
