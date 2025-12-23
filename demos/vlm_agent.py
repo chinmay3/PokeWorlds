@@ -12,10 +12,9 @@ class VL:
     system_prompt = """
 You are playing a Pokemon game. 
 
-Your grand goal is to clear the game, however your current mission is as follows: [MISSION] 
+Your grand goal is to become a pokemon master, however your current mission is as follows: [MISSION] 
 
-
-You will be provided with images of the game screen. Based on the current screen, output the next action to take.
+Based on the current screen, output the next action to take.
 
 The set of allowed actions are:
 1. MoveSteps(direction: str, steps: int): Move the character in the specified direction ('up', 'down', 'left', 'right') for a certain number of steps (1-10). Can ONLY be used in the FREE ROAM state. Example usage: MoveSteps("up", 3)
@@ -24,10 +23,10 @@ The set of allowed actions are:
 4. PassDialogue(): Advance the dialogue or text box by pressing the confirm button. Can ONLY be used when in a DIALOGUE state. Example usage: PassDialogue()
 
 You must respond with exactly one of the above actions in the right format. Any other action is invalid. 
+[ALLOWED]
 
 Additional Context About Game:
 [PREV]
-[ALLOWED]
 
 
 First, think about what is happening in the current frame, and also consider your past actions. Make sure you are not getting stuck in a repetitive loop, and if you are, try something new to break out of it. 
@@ -36,7 +35,7 @@ Additionally, given the result of your previous action, have you achieved your i
 
 You should format your action output as follows:
 Input: frame image
-Think: (your reasoning about the current situation). 
+Think: (your reasoning about the current approach). 
 Mission: summarize the immediate action you are trying to take right now. From the results of your actions, does it seem like you have succeeded? Has your context changed? If you do succeed, what will you do next? What will you do after that?
 Critique of Previous Action Failures: From the results of your previous actions, have you been moving closer to your immediate goal? If not, why do you think that is? What can you do differently this time to improve your chances of success?
 Action: <action></action>
@@ -151,12 +150,12 @@ Now, based on the current frame and the context, first think and reason about yo
         max_out = 20
         counter = 0
         while not validated:
-            output_text = self.infer(current_frame, prev_message, allowed_string=allowed_string)
+            output_text = self.infer(current_frame, prev_message, mission=mission, allowed_string=allowed_string)
             action, action_kwargs, validated = self.parse_validate_action(output_text)
             allowed_string = allowed_string + f"\nThen, you tried {action} with {action_kwargs}, which was also invalid. Try again. Think deeper."
             counter += 1
             if counter >= max_out:
-                return None, None
+                return None, None, None
         if "mission" in output_text.lower() and "action" in output_text.lower():
             mission = output_text.lower().split("mission")[1].split("action")[0].strip()
         elif "action" in output_text.lower():
