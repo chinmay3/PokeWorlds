@@ -41,7 +41,7 @@ class PokemonEmulator(Emulator):
         if len(all_next_frames) > 1:
             frames = np.concatenate(all_next_frames)
         # Must update the tracker too
-        self._after_actions(frames)
+        self.update_listeners_after_actions(frames)
         return frames, done
     
     def run_action_on_emulator(self, *args, **kwargs):

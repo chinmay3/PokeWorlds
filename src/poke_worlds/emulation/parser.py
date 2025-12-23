@@ -314,8 +314,8 @@ class StateParser(ABC):
         Returns:
             np.ndarray: The rendered image as a numpy array.
         """
-        screen = self._pyboy.screen.ndarray[:,:,0:1]  # (144, 160, 3)
-        return screen
+        screen = self._pyboy.screen.ndarray[:,:,0:1]  # (144, 160, 3) but force just greyscale
+        return screen.copy()
 
     def capture_box(self, current_frame: np.ndarray, start_x: int, start_y: int, width: int, height: int) -> np.ndarray:
         """

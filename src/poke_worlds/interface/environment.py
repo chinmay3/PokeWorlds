@@ -207,6 +207,7 @@ class Environment(gym.Env, ABC):
             terminated (bool): Whether the episode has ended (reached the terminal state of the MDP).
             truncated (bool): Whether the episode was truncated (exceeded the maximum allowed steps).
             info (Dict[str, Dict[str, Any]]): Full state information.
+            # TODO: Change this to have observation take the previous action, action_success and transition_states as an optional input. Same for state I guess. 
         """
         if self._emulator.check_if_done():
             log_error("Cannot step environment because emulator indicates done. Please reset the environment.", self._parameters)
@@ -314,6 +315,8 @@ class Environment(gym.Env, ABC):
         log_info(f"Doing human step play for {max_steps} max steps...")
         steps = 0
         done = False
+        terminated = False
+        truncated = False
         action_input_str = self._controller.get_action_strings()
         rewards = []
         log_info(f"Allowed Actions: \n{action_input_str}", self._parameters)
@@ -325,9 +328,9 @@ class Environment(gym.Env, ABC):
             possible_obs, possible_reward, possible_terminated, possible_truncated, possible_info = self.step_str(input_str)
             if possible_obs is not None:
                 observation, reward, terminated, truncated, info = possible_obs, possible_reward, possible_terminated, possible_truncated, possible_info
+                rewards.append(reward)
             else:
                 log_warn("That was not a valid input. did nothing", self._parameters)
-            rewards.append(reward)
             if terminated or truncated:
                 break
             steps += 1

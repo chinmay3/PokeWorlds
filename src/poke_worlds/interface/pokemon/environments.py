@@ -13,7 +13,7 @@ import numpy as np
 
 class PokemonEnvironment(DummyEnvironment):
     REQUIRED_EMULATOR = PokemonEmulator
-
+    
 
 
 class PokemonRedChooseCharmanderFastEnv(Environment):
@@ -96,3 +96,4 @@ class PokemonRedChooseCharmanderFastEnv(Environment):
             return 500.0 + step_bonus
         else:
             return 100.0 + step_bonus# Penalty for choosing the wrong starter. For now, just less reward.
+    

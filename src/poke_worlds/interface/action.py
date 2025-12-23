@@ -19,6 +19,7 @@ class HighLevelAction(ABC):
         verify_parameters(parameters)
         self._parameters = parameters
         self._rng = np.random.default_rng(seed)
+        self.unassign_emulator()
     
     def seed(self, seed: Optional[int] = None):
         """
@@ -39,7 +40,7 @@ class HighLevelAction(ABC):
         self._emulator = emulator
         self._state_tracker = emulator.state_tracker
         if not issubclass(type(self._state_tracker), self.REQUIRED_STATE_TRACKER):
-            log_error(f"HighLevelAction requires a StateTracker of type {self.REQUIRED_STATE_TRACKER.NAME}, but got {type(self._state_tracker).NAME}", self._parameters)
+            log_error(f"HighLevelAction requires a StateTracker of type {self.REQUIRED_STATE_TRACKER}, but got {type(self._state_tracker)}", self._parameters)
 
     def unassign_emulator(self):
         """
@@ -95,7 +96,7 @@ class HighLevelAction(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _execute(self, **kwargs) -> Tuple[List[Dict[str, Dict[str, Any]]], bool]:
+    def _execute(self, **kwargs) -> Tuple[List[Dict[str, Dict[str, Any]]], int]:
         """
         Executes the specified high level action on the emulator. 
         Does not check for validity
@@ -106,7 +107,7 @@ class HighLevelAction(ABC):
         
             List[Dict[str, Dict[str, Any]]]: A list of state tracker reports after each low level action executed.
  
-            bool: Whether the action was successful or not. (Is often an estimate.)
+            int: Action success status.
 
         """
         raise NotImplementedError
@@ -128,7 +129,7 @@ class HighLevelAction(ABC):
         raise ValueError("This high level action does not implement get_all_valid_parameters(). Most likely, it is not possible to enumerate an exhaustive list of all valid inputs. Use is_valid() instead. See documentation for more details. If you believe this is an error, please implement get_all_valid_parameters() in the high level action subclass.")
     
 
-    def execute(self, **kwargs) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[bool]]:
+    def execute(self, **kwargs) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[int]]:
         """
         Executes the specified high level action on the emulator after checking for validity.
 
@@ -139,13 +140,15 @@ class HighLevelAction(ABC):
         
             List[Dict[str, Dict[str, Any]]]: A list of state tracker reports after each low level action executed.
 
-            bool: Whether the action was successful or not. (Is often an estimate.)
+            int: Action success status.
         """
+        if self._emulator is None:
+            log_error(f"Tried to execute action on HighLevelAction without an emulator", self._parameters)
         if not self.is_valid(**kwargs):
             return None, None
         return self._execute(**kwargs)
     
-    def execute_space_action(self, space_action: Space) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[bool]]:
+    def execute_space_action(self, space_action: Space) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[int]]:
         """
         Executes the specified high level action on the emulator after checking for validity.
 
@@ -156,7 +159,7 @@ class HighLevelAction(ABC):
         
             List[Dict[str, Dict[str, Any]]]: A list of state tracker reports after each low level action executed.
 
-            bool: Whether the action was successful or not. (Is often an estimate.)
+            int: Action success status.
         """
         parameters = self.space_to_parameters(space_action)
         return self.execute(**parameters)

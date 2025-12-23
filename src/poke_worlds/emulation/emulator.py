@@ -327,9 +327,15 @@ class Emulator():
         """ 
         return self.state_parser.get_current_frame()
     
-    def _after_actions(self, frames: np.ndarray):
+    def update_listeners_after_actions(self, frames: np.ndarray):
         """
-        Must run after actions are run on the emulator
+        Vital method that must be run after a batch of actions are run on the emulator. 
+
+        When implementing button pressing primitives, you should always run this method *once* after the action buttons are pressed
+        It will update the video and state tracker with all the elapsed frames. 
+
+        Args:
+            frames (np.ndarray): Frames of shape [n_frames, H, W, C] that contain the frames which elapsed during the run of the actions outside step
         """
         if self.save_video and self.video_running:
             self.add_video_frames(frames)
@@ -360,7 +366,7 @@ class Emulator():
 
         frames = self.run_action_on_emulator(action)
         self.step_count += 1
-        self._after_actions(frames)
+        self.update_listeners_after_actions(frames)
         return frames, self.check_if_done()
 
     def get_state_parser(self) -> StateParser:

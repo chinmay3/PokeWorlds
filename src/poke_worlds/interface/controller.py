@@ -174,7 +174,7 @@ class Controller(ABC):
                 actions.append(action_class)
         return actions
     
-    def execute_space_action(self, action: OneOf) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[bool]]:
+    def execute_space_action(self, action: OneOf) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[int]]:
         """
         Executes the specified high level action on the emulator after checking for validity.
 
@@ -185,13 +185,13 @@ class Controller(ABC):
 
             List[Dict[str, Dict[str, Any]]]: A list of state tracker reports after each low level action executed. Length is equal to the number of low level actions executed.
 
-            bool: Whether the action was successful or not. (Is often an estimate.)
+            int: Action success status.
         """
         action_index, space_action = action
         executing_action = self.actions[action_index]
         return executing_action.execute_space_action(space_action)
     
-    def execute(self, action: Type[HighLevelAction], **kwargs) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[bool]]:
+    def execute(self, action: Type[HighLevelAction], **kwargs) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[int]]:
         """
         Executes the specified high level action on the emulator after checking for validity.
 
@@ -203,7 +203,7 @@ class Controller(ABC):
 
             List[Dict[str, Dict[str, Any]]]: A list of state tracker reports after each low level action executed. Length is equal to the number of low level actions executed.
 
-            bool: Whether the action was successful or not. (Is often an estimate.)
+            int: Action success status.
         """
         if action not in self.ACTIONS:
             log_error("Action not recognized by controller. Are you passing in an instance of the action class?", self._parameters)
@@ -219,7 +219,7 @@ class Controller(ABC):
         action, kwargs = self.string_to_high_level_action(input_str=input_str)
         return self._high_level_action_to_space_action(action, kwargs)
     
-    def execute_string(self, input_str: str) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[bool]]:
+    def execute_string(self, input_str: str) -> Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[int]]:
         """
         Executes a string command after checking for validity
         # TODO: Docstring
