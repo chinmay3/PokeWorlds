@@ -4,7 +4,7 @@ from poke_worlds.utils import load_parameters, verify_parameters, log_error, log
 from poke_worlds.interface.environment import Environment, DummyEnvironment
 from poke_worlds.interface.pokemon.controllers import PokemonStateWiseController
 from poke_worlds.interface.action import HighLevelAction
-from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction
+from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction
 from poke_worlds.emulation.pokemon.emulators import PokemonEmulator
 from poke_worlds.emulation.pokemon.parsers import PokemonStateParser, AgentState
 from poke_worlds.emulation.pokemon.trackers import CorePokemonTracker
@@ -62,7 +62,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
     REQUIRED_STATE_TRACKER = CorePokemonTracker
     REQUIRED_EMULATOR = PokemonEmulator
 
-    def __init__(self, action_buffer_max_size: int = 5, **kwargs):
+    def __init__(self, action_buffer_max_size: int = 3, **kwargs):
         """
         Initializes the DummyEnvironment with the given emulator and controller.
 
@@ -122,6 +122,11 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
                         action_success_message = "You could not move in that direction at all. There is most likely an obstacle in the way."
                     if action_success == 2:
                         action_success_message = "You moved, but before you could finish your steps, you were interupted by a battle, dialogue or cutscene."
+                elif action == InteractAction:
+                    if action_success == -1:
+                        action_success_message = "There was nothing to interact with in front of you. Make sure you are facing an object or character and are right next to it. Move into an object or NPC to face them."
+                    if action_success == 1:
+                        action_success_message = "Your interaction led to something."
             self.add_to_action_buffer(action, action_kwargs, action_success, action_success_message)
         final_message = ""
         if len(self.action_buffer) > 0:
@@ -169,7 +174,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
         for screen in screens:
             self._screen_render(screen)
         obs = self.get_observation(action=action, action_kwargs=action_kwargs, transition_states=transition_states, action_success=action_success)
-        log_info("Messages: ", obs["messages"])
+        log_info(f"Messages: {obs['messages']}", self._parameters)
 
     def render_info(self, action=None, action_kwargs=None, transition_states=None, action_success=None):
         info = self.get_info()
