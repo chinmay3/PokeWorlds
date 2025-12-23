@@ -29,7 +29,7 @@ class OCR:
         ).eval()
         self._processor = AutoProcessor.from_pretrained("PaddlePaddle/PaddleOCR-VL", trust_remote_code=True)
 
-    def make_image(arr):
+    def make_image(self, arr):
         rgb = np.stack([arr[:, :, 0], arr[:, :, 0], arr[:, :, 0]], axis=2)
         return Image.fromarray(rgb)
     
