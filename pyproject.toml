@@ -23,6 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 full = [
+    "accelerate>=1.12.0",
     "einops>=0.8.1",
     "protobuf>=6.33.2",
     "sentencepiece>=0.2.1",
