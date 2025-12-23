@@ -174,7 +174,7 @@ steps = 0
 #max_steps = 10_000
 max_steps = 50
 pbar = tqdm(total=max_steps)
-mission = "To clear the game I must obtain a pokemon. First, I will move towards the pokeballs on the table. Then, I will interact with the pokeball to obtain a pokemon. Then, I will re-assess my mission. "
+mission = "I am currently in professor oaks lab, he has offered me one of his three pokemon on the right and my goal is to obtain a pokemon and take it to the first gym. First, I will move towards the pokeballs on the table. Then, I will interact with the pokeball to obtain a pokemon. Then, I will re-assess my mission. "
 observation, info = environment.reset()
 while steps < max_steps:
     action, kwargs, mission = vl.act(observation, mission)
