@@ -120,7 +120,9 @@ Think:
 
     def act(self, observation):
         allowed_categories = self.env._controller.get_possibly_valid_high_level_actions()
-        allowed_string = "The following action categories could possibly be valid now: " + ", ".join(allowed_categories) + "."
+        allowed_string = "The following action categories could possibly be valid now: "
+        for ac in allowed_categories:
+            allowed_string = allowed_string + f"{ac}"
         current_frame = observation["screen"]
         prev_message = observation["messages"]
         output_text = self.infer(current_frame, prev_message, allowed_string)
