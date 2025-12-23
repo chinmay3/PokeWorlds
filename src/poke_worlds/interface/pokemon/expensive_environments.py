@@ -90,7 +90,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             self.action_buffer.pop(0)
 
 
-    def get_observation(self, *, action, action_kwargs, transition_states, action_success):
+    def get_observation(self, *, action=None, action_kwargs=None, transition_states=None, action_success=None):
         if transition_states is None:
             screen = self.get_info()["core"]["current_frame"]
         else:
