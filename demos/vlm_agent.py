@@ -21,19 +21,17 @@ The set of allowed actions are:
 4. PassDialogue(): Advance the dialogue or text box by pressing the confirm button. Can ONLY be used when in a DIALOGUE state. Example usage: PassDialogue()
 You must respond with exactly one of the above actions in the right format. Any other action is invalid. 
 
-Your grand goal is to become a pokemon master, however your current mission is as follows: [MISSION] 
+Your grand goal is to acquire a pokemon and then leave the lab. However, you left yourself the following mission for the PREVIOUS action: [MISSION]
 
 Additional Context About Game:
 [PREV]
 [ALLOWED]
 
 Your instruction is to:
-1. First, think about what is happening in the current frame, and also consider your past actions. Make sure you are not getting stuck in a repetitive loop, and if you are, try something new to break out of it. 
-2. Reason about your mission: Given the result of your previous action, have you achieved your immediate goal? If not, keep pursuing it, but if so, then state your next immediate mission towards your grand goal. If your goal is to move towards a particular object, count exactly how many grid cells it away from you on both axes and include that in your mission in the form (x, y). 
-3. Select a final action you will perform
+1. First, given the result of your previous action and the instructions for updating your mission, declare your new mission. For example, if you wanted to move to an item that was at a particular grid offset and you moved part of the way, update your mission to reflect the change in offset. If you are facing that object then declare your mission to interact with it, etc. Leave an instruction for your next step and also provide guidance on how to update that instruction based on the result of the action it performs. 
+2. Select a final action you will perform
 
 You should format your action output as follows:
-Think: (your reasoning about the current approach). 
 Mission: summarize the immediate action you are trying to take right now. From the results of your actions, does it seem like you have succeeded? Has your context changed? If you do succeed, what will you do next? What will you do after that?
 Critique of Previous Action Failures: From the results of your previous actions, have you been moving closer to your immediate goal? If not, why do you think that is? What can you do differently this time to improve your chances of success?
 Action: <action>SELECTED ACTION COMMAND</action>
@@ -158,10 +156,10 @@ Now, based on the current frame and the context, first think and reason about yo
             counter += 1
             if counter >= max_out:
                 return None, None, None
-        if "mission" in output_text.lower() and "action" in output_text.lower():
-            mission = output_text.lower().split("mission")[1].split("action")[0].strip()
-        elif "think:" in output_text.lower():
-            mission = output_text.lower().split("think:")[1].strip()
+        if "mission:" in output_text.lower() and "critique" in output_text.lower():
+            mission = output_text.lower().split("mission:")[1].split("critique")[0].strip()
+        elif "action:" in output_text.lower():
+            mission = output_text.lower().split("action:")[-1].strip()
         return action, action_kwargs, mission, output_text
         
         
@@ -177,7 +175,7 @@ def do(size):
     max_steps = 100 if size == 8 else 100
     checkpoint_every = 100
     pbar = tqdm(total=max_steps)
-    mission = "I am currently in professor oaks lab, he has offered me one of his three pokemon on the right and my goal is to obtain a pokemon and take it to the first gym. First, I will move towards the pokeballs on the table. Then, I will interact with the pokeball to obtain a pokemon. Then, I will leave the pokemon lab and head up to the first city and then re-assess my mission. "
+    mission = "Our target is the pokeball to our top right. We must explicitly identify the grid offset from us e.g. (x right, y up). Try to move towards it, and if you are successful, then update the grid offset. If you run into it, try to interact with it. "
     observation, info = environment.reset()
     columns = ["step", "obs_message", "action", "action_kwargs", "mission", "output_text"]
     texts = []
