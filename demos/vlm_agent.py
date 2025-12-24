@@ -189,7 +189,7 @@ def do(size):
             break
         observation, reward, terminated, truncated, info = environment.step_high_level_action(action, **kwargs)
         texts.append([steps, observation["messages"], action, kwargs, mission, output_text])
-        print(f"Step {steps}: set mission {mission}. Took action {action} with args {kwargs}, got obs message {observation['messages']}")
+        print(f"Step {steps}: \nSet mission: {mission}. \nTook action {action} with args {kwargs}. \nGot obs message {observation['messages']}\n")
         if steps % checkpoint_every == 0:
             df = pd.DataFrame(texts, columns=columns)
             df.to_csv(f"outputs_{size}.csv", index=False)
