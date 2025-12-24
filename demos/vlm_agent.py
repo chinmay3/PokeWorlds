@@ -38,6 +38,10 @@ Action: <action>SELECTED ACTION COMMAND</action>
 
 Now, based on the current frame and the context, first think and reason about your situation. Then, output your next action in the proper format, do not forget to enclose it with action tags: <action>COMMAND</action>. 
     """
+    system_prompt = """
+You are playing a Pokemon game. 
+Your target is one of the pokeballs on the bench to the top right. First, analyze the grid on the current frame, assuming the player in the centre is at (0, 0). How many pokeballs are there on the bench? What are their exact coordinates in (x, y) space, relative to the player?
+    """
     def __init__(self, env, size=32):
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
             f"Qwen/Qwen3-VL-{size}B-Instruct",
@@ -86,6 +90,7 @@ Now, based on the current frame and the context, first think and reason about yo
         full_text = self.processor.batch_decode(
             generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
+        print("Full output: ", full_text[0])
         return output_text[0]
     
     def parse_validate_action(self, output_text):
