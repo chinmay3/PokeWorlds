@@ -422,6 +422,7 @@ class TestAction(HighLevelAction):
         percieve_prompt = Prompts.percieve.replace("[CONTEXT]", context)
         frame = self._emulator.state_parser.draw_grid_overlay(self._emulator.get_current_frame())
         output = perform_vlm_inference(texts=[percieve_prompt], images=[frame], max_new_tokens=256, batch_size=1)[0]
+        self._emulator.step() # just to ensure state tracker is populated
         ret_dict = self._state_tracker.report()
         ret_dict["vlm_perception"] = output
         return [ret_dict], 0

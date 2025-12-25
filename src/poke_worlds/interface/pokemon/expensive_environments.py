@@ -58,7 +58,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             dialogue_frames = []    
             screens = transition_states[0]["core"]["passed_frames"]
             for transition_state in transition_states[1:]:
-                screens = np.concatenate([screens, transition_state["core"]["passed_frames"]], axis=0)        
+                screens = np.concatenate([screens, transition_state["core"]["passed_frames"]], axis=0)
             for screen in screens:
                 if self._emulator.state_parser.get_agent_state(screen) == AgentState.IN_DIALOGUE:
                     dialogue_frames.append(screen)
