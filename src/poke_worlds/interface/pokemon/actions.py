@@ -410,6 +410,7 @@ class Prompts:
 
     Format your response as follows:
     1. Target identifiable: [Yes/No]
+    2. If Yes, roughly where in the screen is the target located, relative to the player [Top-Left, Top-Right, Bottom-Left, Bottom-Right]
     2. If Yes, how many steps to the right is the target: [number of steps right/left, negative if left]
     3. If Yes, how many steps up is the target: [number of steps up/down, negative if down]
     [STOP]
