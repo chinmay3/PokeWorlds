@@ -16,7 +16,7 @@ class PokemonEmulator(Emulator):
     _MAXIMUM_DIALOGUE_PRESSES = 2000 # For now set a crazy high value
     """ Maximum number of times the agent will click B to get through a dialogue. """
 
-    def step(self, action) -> Tuple[np.ndarray, bool]:
+    def step(self, action=None) -> Tuple[np.ndarray, bool]:
         frames, done = super().step(action)
         self.state_parser: PokemonStateParser
         current_frame = self.get_current_frame()
