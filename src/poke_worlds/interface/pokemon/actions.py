@@ -397,7 +397,7 @@ class Prompts:
     - E2: Description: [Description of Element 2], Coordinates: [(x1, y1), (x2, y2), ...]
     .....
     [STOP]
-    Ensure that the coordinates are relative to the player's position at (0, 0). Only include elements that are clearly visible on the screen. 
+    Ensure that the coordinates are relative to the player's position at (0, 0). Only include elements that are clearly visible on the screen. Do NOT include the player itself. 
     Output: 
     """
 
@@ -417,7 +417,7 @@ class TestAction(HighLevelAction):
     def space_to_parameters(self, space_action):
         return {"context": "You playin pokemon"} # Dummy
     
-    def _execute(self, context="You are in prof oaks lab. He has offered you a choice of starter pokemon."):
+    def _execute(self, context="You are in prof oaks lab. He has offered you a choice of starter pokemon. We are looking for pokeballs in the area."):
         # Do the percieve action in the free roam state:
         percieve_prompt = Prompts.percieve.replace("[CONTEXT]", context)
         frame = self._emulator.state_parser.draw_grid_overlay(self._emulator.get_current_frame())

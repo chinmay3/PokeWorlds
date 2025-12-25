@@ -96,7 +96,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
                 if "vlm_perception" in transition_state:
                     final_message = final_message + "\nVLM Perception: " + transition_state["vlm_perception"] + "\n"
         if len(self.action_buffer) > 0:
-            final_message = "Recent actions taken in the environment: \n"
+            final_message = final_message + "\nRecent actions taken in the environment: \n"
         for i, (buffered_action, buffered_kwargs, buffered_success, buffered_message) in enumerate(self.action_buffer):
             if buffered_message == "":
                 buffered_message = "executed"
