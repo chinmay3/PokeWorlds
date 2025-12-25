@@ -400,6 +400,7 @@ class LocateAction(HighLevelAction):
     REQUIRED_STATE_PARSER = PokemonStateParser
     REQUIRED_STATE_TRACKER = CorePokemonTracker
     _MAX_NEW_TOKENS = 60
+    _CUTOFF_QUADRANT_LIMIT = 10
 
     def is_valid(self, target: str = None):
         return self._state_tracker.get_episode_metric(("pokemon_core", "agent_state")) == AgentState.FREE_ROAM
@@ -413,24 +414,44 @@ class LocateAction(HighLevelAction):
     def space_to_parameters(self, space_action: str):
         return {"target": space_action}
     
+
+    def check_for_target(self, prompt, screens):
+        texts = [prompt] * len(screens)
+        outputs = perform_vlm_inference(texts=texts, images=screens, max_new_tokens=self._MAX_NEW_TOKENS)
+        founds = []
+        for output in outputs:
+            if "[yes]" in output.lower():
+                founds.append(True)
+            else:
+                founds.append(False)
+        return founds
     
-    def get_cells_found(self, prompt, grid_cells):
+    def get_cells_found(self, prompt: str, grid_cells: Dict[Tuple[int, int], np.ndarray]) -> Tuple[bool, List[Tuple[int, int]], List[Tuple[int, int]]]:
+        """
+        Recursively divides the grid cells into quadrants and checks each quadrant for the target.
+        Args:
+            prompt: description of target
+            grid_cells: the dict of the subset of grid cells to search over
+        Returns:
+            found (bool): whether the target was found in any of the grid cells at any point. 
+            potential_cells (List[Tuple[int, int]]): list of grid cell coordinates that may contain the target. If found is true, this is almost always populated with something
+                                                    The only exception is when the item was found at too high a scan and not found at lower levels (and so too many cells would have been potentials)
+            definitive_cells (List[Tuple[int, int]]): list of grid cell coordinates that, with high confidence, contain the target.                        
+        """
         quadrant_keys = ["tl", "tr", "bl", "br"]
         if len(grid_cells) == 1:
             screen = list(grid_cells.values())[0]
-            output = perform_vlm_inference(texts=[prompt], images=[screen], max_new_tokens=self._MAX_NEW_TOKENS, batch_size=1)[0]
-            if "[yes]" in output.lower():
+            target_in_grid = self.check_for_target(prompt, [screen])[0]
+            if target_in_grid:
                 return False, list(grid_cells.keys()), list(grid_cells.keys())
             else:
                 return False, [], []
         quadrants = self._emulator.state_parser.get_quadrant_frame(grid_cells=grid_cells) # TODO: Verify how this works on the edges
-        found_cells = []
         screens = []
         for quadrant in quadrant_keys:
             screen = quadrants[quadrant]["screen"]
             screens.append(screen)
-        outputs = perform_vlm_inference(texts=[prompt]*4, images=screens, max_new_tokens=self._MAX_NEW_TOKENS, batch_size=4)
-        quadrant_founds = ["[yes]" in output.lower() for output in outputs]
+        quadrant_founds = self.check_for_target(prompt, screens)
         if not any(quadrant_founds):
             return False, [], []
         else:
@@ -440,11 +461,27 @@ class LocateAction(HighLevelAction):
                 quadrant = quadrant_keys[i]
                 if quadrant_founds[i]:
                     cells = quadrants[quadrant]["cells"]
-                    found_in_quadrant, quadrant_potentials, quadrant_definites = self.get_cells_found(prompt, cells)
-                    if not found_in_quadrant:
-                        potential_cells.extend(cells)
+                    if len(cells) < 4:
+                        potential_cells.extend(cells.keys())
+                        cell_keys = list(cells.keys())
+                        cell_screens = [cells[key] for key in cell_keys]
+                        cell_founds = self.check_for_target(prompt, cell_screens)
+                        for i, found in enumerate(cell_founds):
+                            if found:
+                                quadrant_definites.append(cell_keys[i])
+                            else:
+                                pass                        
                     else:
-                        all_cells_found.extend(quadrant_definites)
+                        found_in_quadrant, quadrant_potentials, quadrant_definites = self.get_cells_found(prompt, cells)
+                        if len(quadrant_definites) > 0:
+                            all_cells_found.extend(quadrant_definites)
+                        else:
+                            if found_in_quadrant: # then there is some potential
+                                if len(quadrant_potentials) != 0:
+                                    potential_cells.extend(quadrant_potentials)
+                                else:
+                                    if len(cells) <= self._CUTOFF_QUADRANT_LIMIT:
+                                        potential_cells.extend(cells.keys())
             return True, potential_cells, all_cells_found
 
         
