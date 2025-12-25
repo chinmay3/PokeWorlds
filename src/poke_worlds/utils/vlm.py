@@ -43,7 +43,7 @@ class HuggingFaceVLM:
     """A class that holds the HuggingFace VLM that is shared across the project"""
     _BATCH_SIZE=8
     _MODEL = None
-    _TOKENIZER = None
+    _PROCESSOR = None
 
     @staticmethod
     def start():
@@ -53,7 +53,7 @@ class HuggingFaceVLM:
             log_error(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Run `uv pip install -e \".[full]\"` to install required packages.", project_parameters)
         else:
             HuggingFaceVLM._MODEL = AutoModelForImageTextToText.from_pretrained(project_parameters["backbone_vlm_model"], torch_dtype=torch.bfloat16, device_map="auto")
-            HuggingFaceVLM._TOKENIZER = AutoProcessor.from_pretrained(project_parameters["backbone_vlm_model"])
+            HuggingFaceVLM._PROCESSOR = AutoProcessor.from_pretrained(project_parameters["backbone_vlm_model"])
 
     @staticmethod
     def infer(texts: List[str], images: List[np.ndarray], max_new_tokens: int, batch_size: int = None) -> List[str]:
@@ -72,11 +72,11 @@ class HuggingFaceVLM:
         for i in range(0, len(all_images), batch_size):
             images = all_images[i:i+batch_size]
             texts = all_texts[i:i+batch_size]
-            inputs = HuggingFaceVLM._TOKENIZER(text=texts, images=images, padding=True, truncation=True, return_tensors="pt").to(HuggingFaceVLM._MODEL.device)
+            inputs = HuggingFaceVLM._PROCESSOR(text=texts, images=images, padding=True, truncation=True, return_tensors="pt").to(HuggingFaceVLM._MODEL.device)
             input_length = inputs["input_ids"].shape[1]
-            outputs = HuggingFaceVLM._MODEL.generate(**inputs, max_new_tokens=max_new_tokens, repetition_penalty=1.2, stop_strings=["[STOP]"], tokenizer=HuggingFaceVLM._TOKENIZER)
+            outputs = HuggingFaceVLM._MODEL.generate(**inputs, max_new_tokens=max_new_tokens, repetition_penalty=1.2, stop_strings=["[STOP]"], tokenizer=HuggingFaceVLM._PROCESSOR.tokenizer)
             output_only = outputs[:, input_length:]
-            decoded_outputs = HuggingFaceVLM._TOKENIZER.batch_decode(output_only, skip_special_tokens=True)
+            decoded_outputs = HuggingFaceVLM._PROCESSOR.batch_decode(output_only, skip_special_tokens=True)
             all_outputs.extend(decoded_outputs)
         return all_outputs
 
