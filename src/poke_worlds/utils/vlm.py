@@ -25,7 +25,7 @@ project_parameters = load_parameters()
 if project_parameters["full_importable"]:
     # Import anything related to full here. 
     import torch
-    from transformers import pipeline
+    from transformers import AutoModelForImageTextToText, AutoProcessor
 else:
     pass
 
@@ -43,6 +43,7 @@ class HuggingFaceVLM:
     """A class that holds the HuggingFace VLM that is shared across the project"""
     _BATCH_SIZE=8
     _MODEL = None
+    _TOKENIZER = None
 
     @staticmethod
     def start():
@@ -51,7 +52,8 @@ class HuggingFaceVLM:
         if not project_parameters[f"full_importable"]:
             log_error(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Run `uv pip install -e \".[full]\"` to install required packages.", project_parameters)
         else:
-            HuggingFaceVLM._MODEL = pipeline("image-text-to-text", model=project_parameters["backbone_vlm_model"], device_map="auto", dtype=torch.bfloat16)
+            HuggingFaceVLM._MODEL = AutoModelForImageTextToText.from_pretrained(project_parameters["backbone_vlm_model"], torch_dtype=torch.bfloat16, device_map="auto")
+            HuggingFaceVLM._TOKENIZER = AutoProcessor.from_pretrained(project_parameters["backbone_vlm_model"])
 
     @staticmethod
     def infer(texts: List[str], images: List[np.ndarray], max_new_tokens: int, batch_size: int = None) -> List[str]:
@@ -70,12 +72,13 @@ class HuggingFaceVLM:
         for i in range(0, len(all_images), batch_size):
             images = all_images[i:i+batch_size]
             texts = all_texts[i:i+batch_size]
-            outputs = HuggingFaceVLM._MODEL(images=images, text=texts, max_new_tokens=max_new_tokens, repetition_penalty=1.2)
-            all_outputs.extend(outputs)
-        output_only = []
-        for out in all_outputs:
-            output_only.append(out["generated_text"].split("assistant")[-1].strip())
-        return output_only
+            inputs = HuggingFaceVLM._TOKENIZER(text=texts, images=images, padding=True, truncation=True, return_tensors="pt").to(HuggingFaceVLM._MODEL.device)
+            input_length = inputs["input_ids"].shape[1]
+            outputs = HuggingFaceVLM._MODEL.generate(**inputs, max_new_tokens=max_new_tokens, repetition_penalty=1.2, stop_strings=["[STOP]"], tokenizer=HuggingFaceVLM._TOKENIZER)
+            output_only = outputs[:, input_length:]
+            decoded_outputs = HuggingFaceVLM._TOKENIZER.batch_decode(output_only, skip_special_tokens=True)
+            all_outputs.extend(decoded_outputs)
+        return all_outputs
 
 class vLLMVLM:
     """ A class that holds the vLLM VLM shared across the project """

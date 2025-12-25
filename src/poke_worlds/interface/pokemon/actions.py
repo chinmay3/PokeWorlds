@@ -391,13 +391,13 @@ class Prompts:
     3. List of Notable Elements: For each notable element, provide a description and a list of grid coordinates it occupies. 
     Format your response as follows:
     1. Grid Upper Right Coordinates: (x_max, y_max)
-    2. Grid Lower Left Coordinates: (x_min, y_min)
+    2. Grid Lower Left Coordinates: (-x_min, -y_min) # This is never (0, 0) as the player is always at centre
     3. Notable Elements:
     - E1: Description: [Description of Element 1], Coordinates: [(x1, y1), (x2, y2), ...] (there may be only one coordinate, in which case just provide one)
-    - E2: Description: [Description of Element 2], Coordinates: [(x1, y1), (x2, y2), ...]
+    - E2: Description: [Description of Element 2], Coordinates: [(x1, y1), ...]
     .....
     [STOP]
-    Ensure that the coordinates are relative to the player's position at (0, 0). Only include elements that are clearly visible on the screen. Do NOT include the player itself. 
+    Ensure that the coordinates are relative to the player's position at (0, 0). Only include elements that are clearly visible on the screen. Do NOT include the player itself. Do NOT repeat yourself. 
     Output: 
     """
 
