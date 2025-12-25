@@ -563,11 +563,11 @@ class StateParser(ABC):
             y_iter = list(range(0, current_frame.shape[0], grid_skip))
         def x_ind(x):
             index = x_iter.index(x)
-            return (index - (len(x_iter))//2) + 1*(x_offset!=0)
+            return (index - (len(x_iter))//2) + 1*(x_offset==0)
 
         def y_ind(y):
             index = y_iter.index(y)
-            return -(index - len(y_iter)//2) + 1*(y_offset!=0)
+            return -(index - len(y_iter)//2) + 1*(y_offset==0)
         
         for x in x_iter:
             for y in y_iter:
