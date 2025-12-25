@@ -403,14 +403,14 @@ class Prompts:
 
     locate = """
     You are playing Pokemon and are given a screen capture of the game, with a grid overlayed on top of it. Your job is to locate the target that best fits the description `[CONTEXT]`
-    and provide the grid coordinates it occupies.
+    and identify how many steps it is away from the player.
     Assume the player at the centre is located at (0, 0) and then provide the following information:
     1. Target Identifiable: [Either Yes or No] - it should be no only if there is no visible object that could possibly match the description.
-    2. If Yes, provide: List of Grid Coordinates: A list of grid coordinates that the target occupies. 
+    2. If Yes, provide: (x_steps, y_steps) - the grid coordinates of the target relative to the player. Positive x is right, positive y is up. So if the target is 3 steps to the right and 2 steps up, it would be (3, 2). If the target is 1 step to the left and 4 steps down, it would be (-1, -4). 
     Format your response as follows:
     0. Thinking: [an extremely brief reasoning about how you identified the target, and then counted the grid steps from the player to it. Should not be more than 2 sentences.]
     1. Target Identifiable: [Yes/No]
-    2. If Yes, provide: Coordinates: [(x1, y1), (x2, y2), ...] (there may be only one coordinate, in which case just provide one). 
+    2. If Yes, provide: (x_steps, y_steps) - the steps to the target.
     [STOP]
     """
 
@@ -435,7 +435,7 @@ class TestAction(HighLevelAction):
         percieve_prompt = Prompts.locate.replace("[CONTEXT]", context)
         frame = self._emulator.state_parser.draw_grid_overlay(self._emulator.get_current_frame())
         output = perform_vlm_inference(texts=[percieve_prompt], images=[frame], max_new_tokens=256, batch_size=1)[0]
-        self._emulator.step() # just to ensure state tracker is populated
+        self._emulator.step() # just to ensure state tracker is populated. THIS FAILS IN DIALOGUE STATES. 
         ret_dict = self._state_tracker.report()
         ret_dict["vlm_perception"] = output
         return [ret_dict], 0
