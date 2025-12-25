@@ -457,6 +457,7 @@ class LocateAction(HighLevelAction):
         else:
             potential_cells = []
             all_cells_found = []
+            quadrant_definites = []
             for i in range(len(quadrant_keys)):
                 quadrant = quadrant_keys[i]
                 if quadrant_founds[i]:
