@@ -415,22 +415,18 @@ class LocateAction(HighLevelAction):
         return {"target": space_action}
     
 
-    def check_for_target(self, prompt, screens, names):
+    def check_for_target(self, prompt, screens):
         texts = [prompt] * len(screens)
         outputs = perform_vlm_inference(texts=texts, images=screens, max_new_tokens=self._MAX_NEW_TOKENS)
         founds = []
         for i, output in enumerate(outputs):
-            np.save(f"hits/{names[i]}.npy", screens[i])
-            # save the output too
-            with open(f"hits/{names[i]}.txt", "w") as f:
-                f.write(output)
             if "yes" in output.lower():
                 founds.append(True)
             else:
                 founds.append(False)
         return founds
     
-    def get_cells_found(self, prompt: str, grid_cells: Dict[Tuple[int, int], np.ndarray], name="full") -> Tuple[bool, List[Tuple[int, int]], List[Tuple[int, int]]]:
+    def get_cells_found(self, prompt: str, grid_cells: Dict[Tuple[int, int], np.ndarray]) -> Tuple[bool, List[Tuple[int, int]], List[Tuple[int, int]]]:
         """
         Recursively divides the grid cells into quadrants and checks each quadrant for the target.
         Args:
@@ -446,7 +442,7 @@ class LocateAction(HighLevelAction):
         if len(grid_cells) == 1:
             screen = list(grid_cells.values())[0]
             keys = list(grid_cells.keys())[0]
-            target_in_grid = self.check_for_target(prompt, [screen], [keys])[0]
+            target_in_grid = self.check_for_target(prompt, [screen])[0]
             if target_in_grid:
                 return False, list(grid_cells.keys()), list(grid_cells.keys())
             else:
@@ -456,8 +452,7 @@ class LocateAction(HighLevelAction):
         for quadrant in quadrant_keys:
             screen = quadrants[quadrant]["screen"]
             screens.append(screen)
-        names = [f"{name}_{q}" for q in quadrant_keys]
-        quadrant_founds = self.check_for_target(prompt, screens, names)
+        quadrant_founds = self.check_for_target(prompt, screens)
         if not any(quadrant_founds):
             return False, [], []
         else:
@@ -472,14 +467,14 @@ class LocateAction(HighLevelAction):
                         potential_cells.extend(cells.keys())
                         cell_keys = list(cells.keys())
                         cell_screens = [cells[key] for key in cell_keys]
-                        cell_founds = self.check_for_target(prompt, cell_screens, cell_keys)
+                        cell_founds = self.check_for_target(prompt, cell_screens)
                         for i, found in enumerate(cell_founds):
                             if found:
                                 quadrant_definites.append(cell_keys[i])
                             else:
                                 pass                        
                     else:
-                        found_in_quadrant, quadrant_potentials, quadrant_definites = self.get_cells_found(prompt, cells, f"{name}_{quadrant}_cells")
+                        found_in_quadrant, quadrant_potentials, quadrant_definites = self.get_cells_found(prompt, cells)
                         if len(quadrant_definites) > 0:
                             all_cells_found.extend(quadrant_definites)
                         else:
