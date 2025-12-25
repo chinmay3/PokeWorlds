@@ -1,6 +1,8 @@
 # This file contains all the fundamental utilities that do not rely on any other file. 
 import os
 import logging
+import importlib.util
+from typing import Dict
 
 def get_logger(level: int = logging.INFO, filename: str = None, add_console: bool = True):
     """
@@ -87,3 +89,44 @@ def file_makedir(file_path: str):
     if dirname != "" and not os.path.exists(dirname):
         os.makedirs(dirname)
     return
+
+
+def module_installed(name: str) -> bool:
+    """
+    Checks if a module with the given name is installed.
+    Args:
+        name (str): The name of the module to check.
+    Returns:
+        bool: True if the module is installed, False otherwise.
+    """
+    spec = importlib.util.find_spec(name)
+    return spec is not None
+
+
+def check_optional_installs(warn=False) -> Dict[str, bool]:
+    """
+    Check for installs of optional modules
+
+    Args:
+        warn: whether to log a warning if not found. 
+
+    Returns:
+        optionals (dict): a dictionary where keys are optional config modes, and values are whether the packages required for basic imports are installed. 
+        This does not check internal requirements (e.g. `einops` may be needed for some models, etc.)
+    """
+    config_imports = {
+        "full": ["transformers", "torch"],
+        "vllm": ["vllm"]
+    }
+    if warn:
+        logger = get_logger()
+    configs = {}
+    for config in config_imports:
+        not_importable = []
+        for module in config_imports[config]:
+            if not module_installed(module):
+                not_importable.append(module)
+        if len(not_importable) > 0 and warn:
+            logger.warning(f"Unable to find imports for the following modules of the {config} setting: {not_importable}. Some features will not be enabled.\nTo fix this, run `uv pip install -e \".[{config}]\"` in the PokeWorlds repo.")
+        configs[config] = len(not_importable) == 0 
+    return configs  

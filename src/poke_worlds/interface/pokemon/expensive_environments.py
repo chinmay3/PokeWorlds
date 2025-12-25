@@ -1,6 +1,6 @@
 # Putting the environments that need transformers here only, so that technically the code runs without it:
 
-from poke_worlds.utils import load_parameters, verify_parameters, log_error, log_dict, log_info
+from poke_worlds.utils import load_parameters, verify_parameters, log_error, log_dict, log_info, ocr
 from poke_worlds.interface.environment import Environment, DummyEnvironment
 from poke_worlds.interface.pokemon.controllers import PokemonStateWiseController
 from poke_worlds.interface.action import HighLevelAction
@@ -11,47 +11,7 @@ from poke_worlds.emulation.pokemon.trackers import CorePokemonTracker
 from typing import List, Tuple, Dict, Any
 import numpy as np
 
-from PIL import Image
-import torch
-from transformers import AutoModelForCausalLM, AutoProcessor, pipeline
-
 from gymnasium import spaces
-
-
-from PIL import Image
-
-import torch
-
-
-class OCR:
-    def __init__(self, parameters: dict = None):
-        verify_parameters(parameters)
-        self._parameters = load_parameters(parameters)
-        self.pipeline = pipeline("image-text-to-text", model="Qwen/Qwen3-VL-2B-Instruct", device_map="auto", dtype=torch.bfloat16)
-
-    def make_image(self, arr):
-        rgb = np.stack([arr[:, :, 0], arr[:, :, 0], arr[:, :, 0]], axis=2)
-        return Image.fromarray(rgb)
-    
-    
-    def extract_text(self, images: List[np.ndarray]) -> List[str]:
-        """
-        Extract text from a list of images.
-        """
-        all_images = [self.make_image(img) for img in images]
-        text_prompt = "<|im_start|>user\n<vision_start|><|image_pad|><|vision_end|>\nPerform OCR and state the text in this image:\n<|im_end|><|im_start|>assistant\n"
-        batch_size = self._parameters["ocr_model_batch_size"]
-        all_outputs = []
-        for i in range(0, len(all_images), batch_size):
-            images = all_images[i:i+batch_size]
-            texts = [text_prompt] * len(images)
-            outputs = self.pipeline(images=images, text=texts, max_new_tokens=self._parameters["ocr_model_max_new_tokens"],)
-            all_outputs.extend(outputs)
-        output_only = []
-        for out in all_outputs:
-            output_only.append(out["generated_text"].split("assistant")[-1].strip())
-        return list(set(output_only))
-
 
 class PokemonHighLevelEnvironment(DummyEnvironment):
     """ A dummy environment that does nothing special. """
@@ -74,7 +34,6 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             "messages": text_output
         })
         """ The observation space is the raw pixel values of the emulator's screen and messages with OCR text and error signals from HighLevelActions"""
-        self._ocr = OCR(parameters=self._parameters)
         self.action_buffer: List[Tuple[HighLevelAction, Dict[str, Any], int, str]] = []
         """ Buffer of recent actions taken in the environment. Each entry is a tuple of (action, kwargs, success_code, success_message)."""
 
@@ -104,7 +63,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
                 if self._emulator.state_parser.get_agent_state(screen) == AgentState.IN_DIALOGUE:
                     dialogue_frames.append(screen)
             if len(dialogue_frames) > 0:
-                ocr_texts = self._ocr.extract_text(dialogue_frames)
+                ocr_texts = ocr(dialogue_frames)
                 dialogue_message = "There was some dialogue as a result of your actions: "
                 for i, text in enumerate(ocr_texts):
                     dialogue_message = dialogue_message + f"[{i+1}] {text}\n"

@@ -1,6 +1,6 @@
 import os
 import yaml
-from poke_worlds.utils.fundamental import get_logger
+from poke_worlds.utils.fundamental import get_logger, check_optional_installs
 
 
 def load_yaml(yaml_path: str) -> dict:
@@ -44,6 +44,11 @@ def compute_secondary_parameters(params: dict):
             params["log_file"] = log_file
     logger = get_logger(filename=params["log_file"])
     params["logger"] = logger
+    configs = check_optional_installs()
+    for config in configs:
+        params[f"{config}_importable"] = configs[config]
+
+
 
 
 def load_parameters(parameters: dict = None) -> dict:
