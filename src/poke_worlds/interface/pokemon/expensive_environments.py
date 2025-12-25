@@ -64,8 +64,11 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
                     dialogue_frames.append(screen)
             if len(dialogue_frames) > 0:
                 # get every second dialogue frame to reduce duplicates. 
-                dialogue_frames = dialogue_frames[::2]
-                ocr_texts = ocr(dialogue_frames)
+                use_dialogue_frames = []
+                for dialogue_frame in dialogue_frames[::2]:
+                    self._emulator.state_parser.capture_named_region(dialogue_frame, "dialogue_box_full")
+                    use_dialogue_frames.append(dialogue_frame)
+                ocr_texts = ocr(use_dialogue_frames)
                 dialogue_message = "There was some dialogue as a result of your actions: "
                 for i, text in enumerate(ocr_texts):
                     dialogue_message = dialogue_message + f"[{i+1}] {text}\n"
@@ -94,7 +97,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             additional = ""
             if i == len(self.action_buffer) - 1:
                 additional = "(previous action you took)"
-            final_message = final_message + f"[{i+1}] {additional} Action: {buffered_action} with arguments {buffered_kwargs}, System Response: {buffered_message}. \n"
+            final_message = final_message + f"[{i+1}] {additional} Action: {buffered_action.__name__} with arguments {buffered_kwargs}, System Response: {buffered_message}. \n"
         if dialogue_message != "":
             final_message = final_message + dialogue_message + "\n"
         current_state = self._emulator.state_parser.get_agent_state(screen)

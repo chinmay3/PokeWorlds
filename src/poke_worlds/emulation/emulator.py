@@ -736,7 +736,7 @@ class Emulator():
                             log_warn(f"Invalid input {user_input}.", self._parameters)
                             continue
                     if region_name == "Full Screen":
-                        drawn_frame = current_frame
+                        drawn_frame = self.state_parser.draw_grid_overlay(current_frame)
                     else:
                         drawn_frame = self.state_parser.draw_named_region(current_frame, region_name)
                     plt.imshow(drawn_frame[:, :, 0], cmap="gray")

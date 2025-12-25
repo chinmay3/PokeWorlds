@@ -54,7 +54,7 @@ class HuggingFaceVLM:
             HuggingFaceVLM._MODEL = pipeline("image-text-to-text", model=project_parameters["backbone_vlm_model"], device_map="auto", dtype=torch.bfloat16)
 
     @staticmethod
-    def infer(texts: List[str], images: List[np.ndarray], max_new_tokens: int, batch_size: int = None, stop_strings="[STOP]") -> List[str]:
+    def infer(texts: List[str], images: List[np.ndarray], max_new_tokens: int, batch_size: int = None) -> List[str]:
         """
         Performs inference with the given texts and images        
         """
@@ -70,7 +70,7 @@ class HuggingFaceVLM:
         for i in range(0, len(all_images), batch_size):
             images = all_images[i:i+batch_size]
             texts = all_texts[i:i+batch_size]
-            outputs = HuggingFaceVLM._MODEL(images=images, text=texts, max_new_tokens=max_new_tokens, stop_strings=stop_strings)
+            outputs = HuggingFaceVLM._MODEL(images=images, text=texts, max_new_tokens=max_new_tokens)
             all_outputs.extend(outputs)
         output_only = []
         for out in all_outputs:
@@ -88,15 +88,15 @@ class vLLMVLM:
         pass # Start the VLM
 
 
-def perform_vlm_inference(texts: List[str], images: List[np.array], max_new_tokens: int, batch_size: int = None, stop_strings="[STOP]"):
+def perform_vlm_inference(texts: List[str], images: List[np.array], max_new_tokens: int, batch_size: int = None):
     """
     Routes to the correct VLM class and performs inference
     """
     parameters = project_parameters
     if parameters["use_vllm"]:
-        return vLLMVLM.infer(texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size, stop_strings=stop_strings)    
+        return vLLMVLM.infer(texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size)    
     else:
-        return HuggingFaceVLM.infer(texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size, stop_strings=stop_strings)
+        return HuggingFaceVLM.infer(texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size)
 
 
 def _ocr_merge(texts: List[str]) -> List[str]:
