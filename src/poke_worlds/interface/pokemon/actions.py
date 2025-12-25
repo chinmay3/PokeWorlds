@@ -382,37 +382,13 @@ class PokemonCrystalBagActions:
 
 
 class Prompts:
-    percieve = """
-    You are playing Pokemon and are given a screen capture of the game, with a grid overlayed on top of it. Here is some context: [CONTEXT]. 
-    Your task is to state the grid locations of every notable object, character, barrier or structure that you can see on the screen. 
-    Assume the player at the centre is located at (0, 0) and then provide the following information:
-    1. Grid Upper Right Coordinates: The maximum x and y grid coordinates visible on the screen.
-    2. Grid Lower Left Coordinates: The minimum x and y grid coordinates visible on the screen.
-    3. List of Notable Elements: For each notable element, provide a description and a list of grid coordinates it occupies. 
-    Format your response as follows:
-    1. Grid Upper Right Coordinates: (x_max, y_max)
-    2. Grid Lower Left Coordinates: (-x_min, -y_min) # This is never (0, 0) as the player is always at centre
-    3. Notable Elements:
-    - E1: Description: [Description of Element 1], Coordinates: [(x1, y1), (x2, y2), ...] (there may be only one coordinate, in which case just provide one)
-    - E2: Description: [Description of Element 2], Coordinates: [(x1, y1), ...]
-    .....
-    [STOP]
-    Ensure that the coordinates are relative to the player's position at (0, 0). Only include elements that are clearly visible on the screen. Do NOT include the player itself. Do NOT repeat yourself. 
-    Output: 
-    """
-
     locate = """
     You are playing Pokemon and are given a screen capture of the game, with a grid overlayed on top of it. Your job is to locate the target that best fits the description `[CONTEXT]`
-    and identify how many steps it is away from the player.
-    1. Target Identifiable: [Either Yes or No] - it should be no only if there is no visible object that could possibly match the description.
-    2. If Yes, provide: how many steps to the right is the target: [number of steps right/left, negative if left] e.g. 4 for 4 steps right, -3 for 3 steps left
-    3. If Yes, provide: how many steps up is the target: [number of steps up/down, negative if down] e.g. 5 for 5 steps up, -2 for 2 steps down
+    and identify which quadrant it is in relative to the player. 
 
     Format your response as follows:
-    1. Target identifiable: [Yes/No]
-    2. If Yes, roughly where in the screen is the target located, relative to the player [Top-Left, Top-Right, Bottom-Left, Bottom-Right]
-    2. If Yes, how many steps to the right is the target: [number of steps right/left, negative if left]
-    3. If Yes, how many steps up is the target: [number of steps up/down, negative if down]
+    1. Reasoning: Do you see the target described? Answer with a single sentence and then [YES] or [NO]
+    2. If YES, Quadrant: <one of "top-left", "top-right", "bottom-left", "bottom-right">
     [STOP]
     Output:
     """
