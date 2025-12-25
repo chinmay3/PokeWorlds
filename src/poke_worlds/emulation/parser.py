@@ -611,8 +611,12 @@ class StateParser(ABC):
             row_image = np.concatenate(row_cells, axis=1)
             rows.append(row_image)
         new_rows = []
-        for item in range(len(rows)-2, -1, -1):
-            new_rows.append(rows[item])
+        # This part is super hacky. I have no clue why we skip the last row when len(rows) > 1. It seems to work though.
+        if len(rows) == 1:
+            new_rows.append(rows[0])
+        else:
+            for item in range(len(rows)-2, -1, -1):
+                new_rows.append(rows[item])
         full_image = np.concatenate(new_rows, axis=0)
         return full_image
     
