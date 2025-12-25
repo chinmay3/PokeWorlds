@@ -400,7 +400,7 @@ class LocateAction(HighLevelAction):
     REQUIRED_STATE_PARSER = PokemonStateParser
     REQUIRED_STATE_TRACKER = CorePokemonTracker
     _MAX_NEW_TOKENS = 60
-    _CUTOFF_QUADRANT_LIMIT = 10
+    _CUTOFF_QUADRANT_LIMIT = 20
 
     def is_valid(self, target: str = None):
         return self._state_tracker.get_episode_metric(("pokemon_core", "agent_state")) == AgentState.FREE_ROAM
