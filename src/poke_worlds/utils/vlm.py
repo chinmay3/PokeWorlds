@@ -98,12 +98,36 @@ def perform_vlm_inference(texts: List[str], images: List[np.array], max_new_toke
     else:
         return HuggingFaceVLM.infer(texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size, stop_strings=stop_strings)
 
-def ocr(images: List[np.array]) -> List[str]:
+
+def _ocr_merge(texts: List[str]) -> List[str]:
+    """
+    Merges OCR texts by removing duplicates and combining them into a single string.
+    Args:
+        texts: List of OCR text strings.
+    Returns:
+        List containing merged text strings.
+    """
+    final_strings = []
+    for text in texts:
+        if len(final_strings) == 0:
+            final_strings.append(text)
+        else:
+            reference = final_strings[-1]
+            if text in reference:
+                continue
+            elif reference in text:
+                final_strings[-1] = text
+            else:
+                final_strings.append(text)
+    return final_strings
+
+def ocr(images: List[np.array], do_merge: bool=True) -> List[str]:
     """
     Performs OCR on the given images using the VLM.
 
     Args:
         images: List of images in numpy array format (H x W x C)
+        do_merge: Whether to merge similar OCR results. Use this if images are sequential frames from a game.
     Returns:
         List of extracted text strings. May contain duplicates if images have frames containing the same text.
     """
@@ -112,4 +136,7 @@ def ocr(images: List[np.array]) -> List[str]:
     texts = [text_prompt] * len(images)
     batch_size = parameters["ocr_batch_size"]
     max_new_tokens = parameters["ocr_max_new_tokens"]
-    return perform_vlm_inference(texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size)
+    ocred = perform_vlm_inference(texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size)
+    if do_merge:
+        ocred = _ocr_merge(ocred)
+    return ocred
