@@ -2,11 +2,8 @@ from poke_worlds import AVAILABLE_POKEMON_VARIANTS, get_pokemon_environment, Low
 from poke_worlds.interface.pokemon.controllers import PokemonStateWiseController
 from poke_worlds.interface.pokemon.expensive_environments import PokemonHighLevelEnvironment
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 import click
-try:
-    import matplotlib.pyplot as plt
-except ImportError:
-    print("The environment demo uses matplotlib to plot rewards over time. Please run 'pip install matplotlib' to install it.")
 
 
 @click.command()
@@ -42,12 +39,13 @@ def main(play_mode, environment_variant, render, save_video):
             pbar.update(1)
         pbar.close()    
         environment.close()
-        # Plot rewards over time
-        plt.plot(rewards)
-        plt.xlabel("Step")
-        plt.ylabel("Reward")
-        plt.title("Rewards over Time in Charmander Enthusiast Environment")
-        plt.show()
+        if render:
+            # Plot rewards over time
+            plt.plot(rewards)
+            plt.xlabel("Step")
+            plt.ylabel("Reward")
+            plt.title("Rewards over Time in Charmander Enthusiast Environment")
+            plt.show()
     else:
         environment = get_pokemon_environment(game_variant="pokemon_red", environment_variant=environment_variant,
                                               controller=PokemonStateWiseController(), save_video=save_video,
