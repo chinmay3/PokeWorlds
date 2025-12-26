@@ -447,7 +447,7 @@ class LocateAction(HighLevelAction):
                 return False, list(grid_cells.keys()), list(grid_cells.keys())
             else:
                 return False, [], []
-        quadrants = self._emulator.state_parser.get_quadrant_frame(grid_cells=grid_cells) # TODO: Verify how this works on the edges
+        quadrants = self._emulator.state_parser.get_quadrant_frame(grid_cells=grid_cells)
         screens = []
         for quadrant in quadrant_keys:
             screen = quadrants[quadrant]["screen"]
@@ -482,8 +482,7 @@ class LocateAction(HighLevelAction):
                                 if len(quadrant_potentials) != 0:
                                     potential_cells.extend(quadrant_potentials)
                                 else:
-                                    if len(cells) <= self._CUTOFF_QUADRANT_LIMIT:
-                                        potential_cells.extend(cells.keys())
+                                    potential_cells.extend(cells.keys())
             return True, potential_cells, all_cells_found
     
     def _execute(self, target: str):
