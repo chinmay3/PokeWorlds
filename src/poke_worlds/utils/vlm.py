@@ -93,12 +93,6 @@ class vLLMVLM:
         engine_args = EngineArgs(
             model=project_parameters["backbone_vlm_model"],
             max_model_len=4096,
-            max_num_seqs=5,
-            mm_processor_kwargs={
-                "min_pixels": 28 * 28,
-                "max_pixels": 1280 * 28 * 28,
-                "fps": 1,
-            }, # copied from: https://docs.vllm.ai/en/latest/examples/offline_inference/vision_language/?h=vision+language. Unsure if I need it
             limit_mm_per_prompt={"image": 1},
         )        
         vLLMVLM._MODEL = LLM(**engine_args)
