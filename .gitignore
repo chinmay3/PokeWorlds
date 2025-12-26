@@ -186,3 +186,4 @@ rom_data/*/*.gb.state
 rom_data/*/*.gbc.state
 
 download_roms.sh
+rom_data.zip
