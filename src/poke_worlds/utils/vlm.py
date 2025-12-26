@@ -30,8 +30,8 @@ else:
 
 if project_parameters["use_vllm"]:
     if project_parameters["vllm_importable"]:
+        raise NotImplementedError(f"vLLM just doesn't work. Need to sort out installation issues.")
         from vllm import LLM, SamplingParams, EngineArgs
-
         
     elif project_parameters["full_importable"]:
         log_warn("Project parameters has `use_vllm` set to True, but vllm is not installed. Run `uv pip install -e \".[full, vllm]\"` to install required packages.", project_parameters)
@@ -90,16 +90,22 @@ class vLLMVLM:
     def start():
         if "qwen3" not in project_parameters["backbone_vlm_model"]:
             log_warn(f"You are using a non Qwen3 model with the vLLM VLM class. This has not been tested.", project_parameters)
-        engine_args = {
-            "model": project_parameters["backbone_vlm_model"],
-            "max_model_len": 4096,
-            #"limit_mm_per_prompt": {"image": 1},
-        }        
+        engine_args = EngineArgs(
+            model=project_parameters["backbone_vlm_model"],
+            max_model_len=4096,
+            max_num_seqs=5,
+            mm_processor_kwargs={
+                "min_pixels": 28 * 28,
+                "max_pixels": 1280 * 28 * 28,
+                "fps": 1,
+            }, # copied from: https://docs.vllm.ai/en/latest/examples/offline_inference/vision_language/?h=vision+language. Unsure if I need it
+            limit_mm_per_prompt={"image": 1},
+        )
         vLLMVLM._MODEL = LLM(**engine_args)
 
     @staticmethod
     def infer(texts: List[str], images: List[np.ndarray], max_new_tokens: int, batch_size: int = None) -> List[str]:
-        if vLLMVLM._MODEL is None:
+        if vLLMVLM._MODEL is None: 
             vLLMVLM.start()
         images = [convert_numpy_greyscale_to_pillow(image) for image in images]
         

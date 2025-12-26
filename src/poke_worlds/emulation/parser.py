@@ -538,6 +538,26 @@ class StateParser(ABC):
     def capture_grid_cells(self, current_frame: np.ndarray, * , quadrant: str = None, grid_skip: int=16, x_offset=0, y_offset=-2) -> Dict[Tuple[int, int], np.ndarray]:
         """
         Captures all grid cells from the current frame based on the specified grid skip.
+
+        Example:
+        ```python
+        import matplotlib.pyplot as plt
+        # ... run the state_parser in an env, example in dev_play. 
+        grid_cells = self.state_parser.capture_grid_cells(current_frame)
+        keep_keys = [(0, 0), (0, 1)]
+        new_cells = {}
+        for cell in keep_keys:
+            new_cells[cell] = grid_cells[cell]
+        grid_cells = new_cells
+        drawn_frame = self.state_parser.reform_image(grid_cells)
+        quadrants = self.state_parser.get_quadrant_frame(grid_cells=grid_cells)
+        plt.imshow(drawn_frame[:, :, 0], cmap="gray")
+        plt.title(f"Full Screen with Grid Overlay")
+        plt.show()
+        merged = self.state_parser.reform_image(grid_cells)
+        plt.imshow(merged[:, :, 0], cmap="gray")
+        plt.show()
+        ```
         Args:
             current_frame (np.ndarray): The current frame from the emulator.
             quadrant (str, optional): If specified, only captures cells in the given quadrant ('TL', 'TR', 'BL', 'BR').
