@@ -90,11 +90,11 @@ class vLLMVLM:
     def start():
         if "qwen3" not in project_parameters["backbone_vlm_model"]:
             log_warn(f"You are using a non Qwen3 model with the vLLM VLM class. This has not been tested.", project_parameters)
-        engine_args = EngineArgs(
-            model=project_parameters["backbone_vlm_model"],
-            max_model_len=4096,
-            limit_mm_per_prompt={"image": 1},
-        )        
+        engine_args = {
+            "model": project_parameters["backbone_vlm_model"],
+            "max_model_len": 4096,
+            "limit_mm_per_prompt": {"image": 1},
+        }        
         vLLMVLM._MODEL = LLM(**engine_args)
 
     @staticmethod
