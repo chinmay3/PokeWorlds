@@ -205,7 +205,8 @@ class StateParser(ABC):
     """
     def __init__(self, pyboy, parameters, named_screen_regions: Optional[list[NamedScreenRegion]] = None):
         """
-        Initializes the StateParser.
+        Initializes the StateParser. Child implementations should call super().__init__() after running their code. 
+            All children must create a self.rom_data_path variable
         Args:
             pyboy: An instance of the PyBoy emulator.
             parameters: A dictionary of parameters for configuration.
@@ -213,6 +214,8 @@ class StateParser(ABC):
         """
         verify_parameters(parameters)
         self._parameters = parameters
+        if not hasattr(self, "rom_data_path"):
+            log_error(f"StateParsers must define a self.rom_data_path variable pointing to the rom data path for the game variant.", self._parameters)
         if not isinstance(pyboy, PyBoy):
             log_error("pyboy must be an instance of PyBoy", self._parameters)
         self._pyboy = pyboy

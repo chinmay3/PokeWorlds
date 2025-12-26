@@ -70,7 +70,8 @@ class Emulator():
             headless (bool, optional): Whether to run the environment in headless mode. 
             max_steps (int, optional): Maximum number of steps per episode. 
             save_video (bool, optional): Whether to save video of the episodes.          
-            session_name (str, optional): Name of the session. If None, a new session name will be allocated.   
+            session_name (str, optional): Name of the session. If None, a new session name will be allocated. This is the broad category you want to save files to
+            instance_id (str, optional): Unique identifier for this environment instance. If None, a new UUID will be generated. The instance ID is useful for distinguishing multiple environments running in parallel with the same session name. 
         """
         verify_parameters(parameters)
         self._parameters = parameters
@@ -108,23 +109,21 @@ class Emulator():
             save_video = self._parameters["gameboy_default_save_video"]
         self.save_video = save_video
         """ Whether to save video of the episodes. """
-        self.session_name = None
-        if session_name is None:
-            session_name = self._allocate_new_session_name()
-        elif not isinstance(session_name, str) or session_name == "":
-            log_error(f"session_name must be a non-empty string. Recieved {session_name}", self._parameters)
-        self.session_name = session_name
-        """ Name of the session. Decides the directory where artifacts are saved. """
-        self.session_path = os.path.join(self.get_session_path(), self.session_name)
-        """ Path to the session directory. This is where all artifacts for this session are saved. """
-        os.makedirs(self.session_path, exist_ok=True)
-        will_save_artifacts = self.save_video # may add more artifact types later. Tracker will also save metrics to disk perhaps
-        if will_save_artifacts and self._is_digit_session(self.session_name):
-            log_warn(f"Session name {self.session_name} is in the form session_X where X is an integer. This is the pattern for an automatically assigned session and it will be cleared every time you start a new emulator. Name the session to make sure its saved artifacts persist.", self._parameters)
         if instance_id is None:
             instance_id = str(uuid.uuid4())[:8]
         self.instance_id = instance_id
         """ Unique identifier for this environment instance. Useful for distinguishing multiple environments running in parallel. """
+        self.session_name = None
+        if session_name is None:
+            session_name = "tmp_sessions"
+            log_warn(f"Saving a temporary session. If you run emulator.clear_tmp_sessions(), it will be deleted. To make it permanent, pass in a session_name to the emulator.")
+        elif not isinstance(session_name, str) or session_name == "":
+            log_error(f"session_name must be a non-empty string. Recieved {session_name}", self._parameters)
+        self.session_name = session_name
+        """ Name of the session. Decides the directory where artifacts are saved. """
+        self.session_path = os.path.join(self.get_session_path(), self.session_name, self.instance_id)
+        """ Path to the session directory. This is where all artifacts for this session are saved. """
+        os.makedirs(self.session_path, exist_ok=True)
         self.act_freq = parameters["gameboy_action_freq"]
         """ Number of emulator ticks per action. Defaults to value specified in config files. """
         self.press_step = parameters["gameboy_press_step"]
@@ -198,69 +197,21 @@ class Emulator():
             pyboy.save_state(f)
         pyboy.stop()
         log_info(f"Created initial state file at {state_path}")
-    
-    def _is_digit_session(self, session_name: str) -> bool:
-        """
-        Checks if the given session name is in the form session_X where X is an integer.
 
-        Args:
-            session_name (str): The session name to check.
+    def clear_tmp_sessions(self):
         """
-        if not session_name.startswith("session_"):
-            return False
-        pattern = r"^session_(\d+)$" # This is AI generated. I hope it works. It knows regex better than I do.
-        match = re.match(pattern, session_name)
-        if match:
-            return True
-        return False
-
-
-    def _allocate_new_session_name(self) -> str:
+        Clears the tmp_sessions directory for ALL game variants. 
         """
-        Allocates a new session name based on existing sessions in the session directory.
-
-        Returns:
-            str: The newly allocated session name.
-        """
-        #self.clear_unnamed_sessions() # Commented out because it can cause race conditions in multiprocess setups.
         storage_dir = self._parameters["storage_dir"]
-        session_path = os.path.join(storage_dir, "sessions", self.get_env_variant())
-        os.makedirs(session_path, exist_ok=True)
-        existing_sessions = os.listdir(session_path)
-        # session names are always in the form session_X where X is an integer starting from 0
-        session_indices = [int(name.split("_")[-1]) for name in existing_sessions if name.startswith("session_") and name.split("_")[-1].isdigit()]
-        if len(session_indices) == 0:
-            new_index = 0
-        else:
-            new_index = max(session_indices) + 1
-        new_session_name = f"session_{new_index}"
-        return new_session_name
-
-    def clear_unnamed_sessions(self):
-        """
-        Clears all unnamed (integer based) sessions from the session directory.
-        """
-        # first check if rank is 0. Only rank 0 should clear sessions to avoid race conditions.
-        storage_dir = self._parameters["storage_dir"]
-        session_path = os.path.join(storage_dir, "sessions", self.get_env_variant())
+        session_path = os.path.join(storage_dir, "sessions")
         if not os.path.exists(session_path):
             return
-        existing_sessions = os.listdir(session_path)
-        saved_sessions = []
-        if self.session_name is not None:
-            saved_sessions.append(self.session_name)
-        for session in existing_sessions:
-            if session in saved_sessions:
+        existing_variants = os.listdir(session_path)
+        for variant in existing_variants:
+            tmp_sessions_path = os.path.join(session_path, variant, "tmp_sessions")
+            if not os.path.exists(tmp_sessions_path):
                 continue
-            if self._is_digit_session(session):
-                full_path = os.path.join(session_path, session)
-                # delete the session directory and all its contents
-                import shutil
-                shutil.rmtree(full_path)
-                log_info(f"Deleted unnamed session {full_path}", self._parameters)
-                continue
-            saved_sessions.append(session)
-        log_info(f"Deleted {len(existing_sessions) - len(saved_sessions)} sessions. Kept {len(saved_sessions)} sessions: \n{saved_sessions}", self._parameters)
+            shutil.rmtree(tmp_sessions_path)
 
     def get_session_path(self) -> str:
         """
@@ -451,7 +402,7 @@ class Emulator():
             reduce_res (bool, optional): Whether to reduce the resolution of the saved image. 
                 If None, uses the default setting from the config files.
         """
-        render_path = os.path.join(self.session_path, "renders", f"step_{self.step_count}_id{self.instance_id}.jpeg")
+        render_path = os.path.join(self.session_path, "renders", f"step_{self.step_count}.jpeg")
         file_makedir(render_path)
         if reduce_res is None:
             reduce_res = self._reduce_video_resolution
