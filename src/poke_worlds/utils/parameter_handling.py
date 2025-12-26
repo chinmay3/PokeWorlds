@@ -24,12 +24,9 @@ def compute_secondary_parameters(params: dict):
     Args:
         params (dict): Primary parameters dictionary.
     """
-    params["data_dir"] = os.path.join(params["storage_dir"], "data")
-    params["model_dir"] = os.path.join(params["storage_dir"], "models")
-    params["tmp_dir"] = os.path.join(params["storage_dir"], "tmp")
-    params["sync_dir"] = os.path.join(params["storage_dir"], "sync")
+    params["rom_data_dir"] = os.path.join(params["storage_dir"], "rom_data")
     params["log_dir"] = os.path.join(params["storage_dir"], "logs")
-    for dirname in ["data_dir", "model_dir", "log_dir", "tmp_dir", "sync_dir"]:
+    for dirname in ["rom_data_dir", "log_dir"]:
         if not os.path.exists(params[dirname]):
             os.makedirs(params[dirname])
     if "log_file" not in params:
@@ -100,6 +97,9 @@ def load_parameters(parameters: dict = None) -> dict:
         if any([f.endswith(".py") for f in os.listdir(params["storage_dir"])]):
             logger.warning(f"There are .py files in the storage_dir {params['storage_dir']}. It is recommended to set a path which has nothing else inside it to avoid issues.")
     else:
+        if params["storage_dir"] == "storage":
+            full_path = os.path.abspath(params["storage_dir"])
+        logger.warning(f"Using default storage directory '{full_path}'. This may cause issues if your project root directory has limited space. To change the storage directory, modify the 'storage_dir' parameter in your config files and run this method again.")
         os.makedirs(params['storage_dir'])
         logger.info(f"Created storage directory {params['storage_dir']}")
     # For every path, see if it looks relative, and if so, make it absolute based on project_root
