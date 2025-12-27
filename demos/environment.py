@@ -1,6 +1,6 @@
 from poke_worlds import AVAILABLE_POKEMON_VARIANTS, get_pokemon_environment, LowLevelController, RandomPlayController, LowLevelPlayController
 from poke_worlds.interface.pokemon.controllers import PokemonStateWiseController
-from poke_worlds.interface.pokemon.expensive_environments import PokemonHighLevelEnvironment
+from poke_worlds.interface.pokemon.environments import PokemonHighLevelEnvironment
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import click
