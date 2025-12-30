@@ -302,9 +302,9 @@ class OCRMetric(MetricGroup, ABC):
         """
         By default we don't use the batch functionality, but this can be overridden in child classes.
         """
-        all_frames = [current_frame]
+        all_frames = None
         if recent_frames is not None:
-            all_frames = np.concatenate([recent_frames, current_frame], axis=0) # TODO: check
+            all_frames = recent_frames # Current frame is included in recent frames
         else:
             all_frames = np.array([current_frame])
         ocr_dict = {}
