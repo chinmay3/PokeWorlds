@@ -7,7 +7,7 @@ from poke_worlds.interface.action import HighLevelAction
 from poke_worlds.interface.pokemon.actions import InteractAction, MoveStepsAction
 from poke_worlds.utils import load_parameters, log_dict, log_info, ocr
 from poke_worlds.emulation.pokemon.emulators import PokemonEmulator
-from poke_worlds.emulation.pokemon.trackers import CorePokemonTracker, PokemonRedStarterTracker
+from poke_worlds.emulation.pokemon.trackers import CorePokemonTracker, PokemonRedStarterTracker, PokemonOCRTracker
 from poke_worlds.interface.environment import DummyEnvironment, Environment
 from poke_worlds.interface.controller import Controller
 
@@ -105,7 +105,7 @@ class PokemonRedChooseCharmanderFastEnv(Environment):
 
 class PokemonHighLevelEnvironment(DummyEnvironment):
     """ A dummy environment that does nothing special. """
-    REQUIRED_STATE_TRACKER = CorePokemonTracker
+    REQUIRED_STATE_TRACKER = PokemonOCRTracker
     REQUIRED_EMULATOR = PokemonEmulator
 
     def __init__(self, action_buffer_max_size: int = 3, **kwargs):
@@ -127,6 +127,15 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
         self.action_buffer: List[Tuple[HighLevelAction, Dict[str, Any], int, str]] = []
         """ Buffer of recent actions taken in the environment. Each entry is a tuple of (action, kwargs, success_code, success_message)."""
 
+    @staticmethod
+    def override_emulator_kwargs(emulator_kwargs: dict) -> dict:
+        basic_tracker = PokemonOCRTracker
+        incoming_tracker = emulator_kwargs.get("state_tracker_class", "default")
+        if isinstance(incoming_tracker, str):
+            emulator_kwargs["state_tracker_class"] = basic_tracker
+        else:
+            emulator_kwargs["state_tracker_class"] = Environment.safe_override_state_tracker_class(incoming_tracker, basic_tracker)
+        return emulator_kwargs
 
     def add_to_action_buffer(self, action: HighLevelAction, action_kwargs, action_success: int, success_message: str):
         """ Adds an action to the action buffer, maintaining the maximum size. """
