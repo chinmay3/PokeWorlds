@@ -347,7 +347,8 @@ class OCRMetric(MetricGroup, ABC):
         """
         if self.prev_has_ocr:
             return {
-                "ocr_texts": [self.ocr_texts[-1]]
+                "ocr_texts": self.ocr_texts[-1][1],
+                "step": self.ocr_texts[-1][0]
             }
         else:
             return {}

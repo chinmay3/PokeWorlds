@@ -155,7 +155,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             buffer_str += f"Action {i}: {action.__name__} with args {action_kwargs}, message: {success_message}\n" # No need to print success code for now
         return buffer_str
 
-    def get_observation(self, *, action=None, action_kwargs=None, transition_states=None, action_success=None, add: bool=True):
+    def get_observation(self, *, action=None, action_kwargs=None, transition_states=None, action_success=None, add_action_to_buffer: bool=True):
         if transition_states is None:
             current_state = self.get_info()
             screen = current_state["core"]["current_frame"]
@@ -166,24 +166,8 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
                 ocr_combined = ""
         else:
             screen = transition_states[-1]["core"]["current_frame"]
-            if action_success == 0:
-                action_success_message = "The action you took was executed fully."
-            else:
-                if action == MoveStepsAction:
-                    if action_success == 1:
-                        action_success_message = "You moved until you hit a wall, object, NPC or obstacle. If it is an object or NPC, you can now interact with it. If it is an obstacle or wall, interacting will do nothing."
-                    if action_success == -1:
-                        action_success_message = "You could not move in that direction at all. There is most likely an obstacle in the way."
-                    if action_success == 2:
-                        action_success_message = "You moved, but before you could finish your steps, you were interupted by a battle, dialogue or cutscene."
-                elif action == InteractAction:
-                    if action_success == -1:
-                        action_success_message = "There was nothing to interact with in front of you. Make sure you are facing an object or character and are right next to it. Move into an object or NPC to face them."
-                    if action_success == 1:
-                        action_success_message = "Your interaction led to something."
-                else:
-                    action_success_message = f"UNHANDLED CASE: action={action}, args={action_kwargs}, action_success={action_success}"
-            if add:
+            if add_action_to_buffer:
+                action_success_message = self._controller.get_action_success_message(action, action_kwargs, action_success)
                 self.add_to_action_buffer(action, action_kwargs, action_success, action_success_message)
             ocr_texts_all = []
             for state in transition_states:
@@ -225,7 +209,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             screens = [info["core"]["current_frame"]]
         for screen in screens:
             self._screen_render(screen)
-        obs = self.get_observation(action=action, action_kwargs=action_kwargs, transition_states=transition_states, action_success=action_success, add=False)
+        obs = self.get_observation(action=action, action_kwargs=action_kwargs, transition_states=transition_states, action_success=action_success, add_action_to_buffer=False)
         obs.pop("screen")
         log_info(f"Obs Strings:", self._parameters)
         log_dict(obs, parameters=self._parameters)

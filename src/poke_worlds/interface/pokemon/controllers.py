@@ -1,6 +1,8 @@
 from poke_worlds.utils import log_error, log_info
 from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, LocateAction
 from poke_worlds.interface.controller import Controller
+from poke_worlds.interface.action import HighLevelAction
+from typing import Dict, Any
 
 
 class PokemonStateWiseController(Controller):
@@ -62,6 +64,32 @@ class PokemonStateWiseController(Controller):
         <direction(u,d,r,l)>: <steps(int)> or <menu(m_u, m_d, m_r, m_l, m_a, m_b, m_o)> or <interaction(a)> or <pass_dialogue(p)> or <test(t)> or <locate(l)>
         """
         return msg    
+    
+    def get_action_success_message(self, action: HighLevelAction, action_kwargs: Dict[str, Any], action_success: int) -> str:
+        action_success_message = ""
+        if action_success == 0:
+            action_success_message = "Action performed."
+        if action == MoveStepsAction:
+            if action_success == 1:
+                action_success_message = "You moved until you hit a wall, object, NPC or obstacle. If it is an object or NPC, you can now interact with it. If it is an obstacle or wall, interacting will do nothing."
+            if action_success == -1:
+                action_success_message = "You could not move in that direction at all. There is most likely an obstacle in the way."
+            if action_success == 2:
+                action_success_message = "You moved, but before you could finish your steps, you were interupted by a battle, dialogue or cutscene."
+        elif action == InteractAction:
+            if action_success == -1:
+                action_success_message = "There was nothing to interact with in front of you. Make sure you are facing an object or character and are right next to it. Move into an object or NPC to face them."
+            if action_success == 1:
+                action_success_message = "Your interaction led to something."
+        elif action == PassDialogueAction:
+            if action_success == -1:
+                action_success_message = "There was no dialogue to pass through. Check the state"
+        elif action == MenuAction:
+            if action_success == -1:
+                action_success_message = "The menu action could not be performed. Check if you are in the menu and that the action is valid."
+        else:
+            action_success_message = f"UNHANDLED CASE: action={action}, args={action_kwargs}, action_success={action_success}"
+        return action_success_message
 
 
 class Thoughts:

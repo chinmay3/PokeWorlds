@@ -5,6 +5,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import click
 
+# python demos/environment.py --play_mode human --environment_variant high_level
 
 @click.command()
 @click.option("--play_mode", type=click.Choice(["human", "random", "restricted_random", "grouped_random"]), default="random", help="Play mode: 'random' for random actions.")
