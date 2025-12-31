@@ -377,8 +377,9 @@ class Emulator():
                 frames.append(self.get_current_frame())
                 frames = np.stack(frames, axis=0)
         else:
-            log_warn("No action provided to run_action_on_emulator. Skipping action. You probably should only ever use this in debugging mode. Idk maybe wait is a command.", self._parameters)
             self._pyboy.tick(self.act_freq, True)
+            frames = [self.get_current_frame()]
+            frames =  np.array(frames)
         return frames
 
     def reduce_resolution(self, frame: np.ndarray) -> np.ndarray:

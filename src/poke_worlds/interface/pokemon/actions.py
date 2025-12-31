@@ -382,12 +382,6 @@ class PokemonCrystalBagActions:
 
 
 
-
-
-
-
-
-
 class LocateAction(HighLevelAction):
     prompt = """
     You are playing Pokemon and are given a screen capture of the game. 
@@ -491,7 +485,7 @@ class LocateAction(HighLevelAction):
         found, potential_cells, definitive_cells = self.get_cells_found(percieve_prompt, grid_cells)
         self._emulator.step() # just to ensure state tracker is populated. #TODO: THIS FAILS IN DIALOGUE STATES. 
         ret_dict = self._state_tracker.report()
-        ret_dict["vlm_perception"] = (found, potential_cells, definitive_cells)
+        ret_dict["action_success_message"] = (found, potential_cells, definitive_cells)
         return [ret_dict], 0
     
 class GridLocateAction(HighLevelAction):
@@ -534,7 +528,7 @@ class GridLocateAction(HighLevelAction):
                 hits.append(keys[i])
         self._emulator.step() # just to ensure state tracker is populated. THIS FAILS IN DIALOGUE STATES. 
         ret_dict = self._state_tracker.report()
-        ret_dict["grid_location_result"] = str(hits)
+        ret_dict["action_success_message"] = str(hits)
         return [ret_dict], 0
 
 class TestAction(HighLevelAction):
@@ -577,7 +571,7 @@ class TestAction(HighLevelAction):
                 hits.append(keys[i])
         self._emulator.step() # just to ensure state tracker is populated. THIS FAILS IN DIALOGUE STATES. 
         ret_dict = self._state_tracker.report()
-        ret_dict["vlm_perception"] = str(hits)
+        ret_dict["action_success_message"] = str(hits)
         return [ret_dict], 0
     
     # TODO: Add the action to break down the grid into pieces and check if the target is in each piece and return the grid coordinates where it is found. 

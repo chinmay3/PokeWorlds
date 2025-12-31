@@ -167,7 +167,10 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
         else:
             screen = transition_states[-1]["core"]["current_frame"]
             if add_action_to_buffer:
-                action_success_message = self._controller.get_action_success_message(action, action_kwargs, action_success)
+                if "action_success_message" not in transition_states[-1]:
+                    action_success_message = self._controller.get_action_success_message(action, action_kwargs, action_success)
+                else:
+                    action_success_message = transition_states[-1]["action_success_message"]
                 self.add_to_action_buffer(action, action_kwargs, action_success, action_success_message)
             ocr_texts_all = []
             for state in transition_states:
