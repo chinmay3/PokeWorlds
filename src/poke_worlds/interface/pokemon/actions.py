@@ -41,7 +41,7 @@ class PassDialogueAction(HighLevelAction):
     def _execute(self):
         frames, done = self._emulator.step(LowLevelActions.PRESS_BUTTON_B)
         # if we are still in dialogue, its a fail:
-        action_success = 0 if self._emulator.state_parser.get_agent_state(frames[-1]) != AgentState.IN_DIALOGUE else -1
+        action_success = 0 if self._emulator.state_parser.get_agent_state(frames[-1]) == AgentState.IN_DIALOGUE else -1
         return [self._state_tracker.report()], action_success
     
     def get_action_space(self):
