@@ -273,7 +273,8 @@ class PokemonOCRMetric(OCRMetric):
         self.state_parser: PokemonStateParser
         if kind == "dialogue":
             in_dialogue = self.state_parser.dialogue_box_open(current_screen=current_frame)
-            return in_dialogue
+            dialogue_empty = self.state_parser.dialogue_box_empty(current_screen=current_frame)
+            return in_dialogue and not dialogue_empty
         return False
 
 

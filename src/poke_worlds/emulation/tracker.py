@@ -1,5 +1,5 @@
 from poke_worlds.emulation.parser import StateParser
-from poke_worlds.utils import nested_dict_to_str, verify_parameters, log_info, log_error, log_warn, log_dict
+from poke_worlds.utils import nested_dict_to_str, verify_parameters, log_info, log_error, log_warn, log_dict, show_frames
 
 
 import numpy as np
@@ -220,7 +220,8 @@ class OCRMetric(MetricGroup, ABC):
     """
     MetricGroup for OCR results.
     """
-
+    NAME = "ocr"
+    
     def start(self):
         """
         Assumes the child has initialized a dict called self.kinds which tracks the various kinds of OCR that could be done. 
@@ -307,10 +308,26 @@ class OCRMetric(MetricGroup, ABC):
             all_frames = recent_frames # Current frame is included in recent frames
         else:
             all_frames = np.array([current_frame])
+        # remove all frames that are identical to the previous frame to reduce OCR calls
+        true_all_frames = []
+        previous_frame = None
+        for frame in all_frames:
+            if previous_frame is None:
+                true_all_frames.append(frame)
+                previous_frame = frame
+            else:
+                if np.abs(frame - previous_frame).mean() > EPSILON:
+                    true_all_frames.append(frame)
+                    previous_frame = frame
         ocr_dict = {}
         # Aggregate results for all frames and separate per kind. 
         for kind in self.kinds.keys():
-            if self.can_read_kind(current_frame, kind):
+            all_frames = []
+            for frame in true_all_frames:
+                if self.can_read_kind(frame, kind):
+                    all_frames.append(frame)
+            if len(all_frames) > 0:
+                all_frames = np.array(all_frames)
                 ocr_result = self.batch_read_kind(all_frames, kind, merge=True)
                 if ocr_result is not None:
                     ocr_dict[kind] = ocr_result

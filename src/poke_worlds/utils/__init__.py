@@ -7,7 +7,7 @@ from pandas import isna
 from typing import Type, List
 import numpy as np
 from PIL import Image
-
+import matplotlib.pyplot as plt
 
 def is_none_str(s):
     """
@@ -83,3 +83,24 @@ def get_lowest_level_subclass(class_list: List[Type]) -> Type:
         elif issubclass(cls, lowest_level_tracker):
             lowest_level_tracker = cls
     return lowest_level_tracker
+
+
+def show_frames(frames: np.ndarray, titles: List[str]=None, save=False, parameters: dict=None):
+    """
+    Plots each frame as an image in matplotlib. If save is true, will save each frame as title.png in the current directory.
+    titles length must be equal to frame length if specified.
+    """
+    parameters = load_parameters(parameters)
+    if save and titles is None:
+        log_error(f"Cannot save frames without titles specified.", parameters)    
+    if titles is not None and len(titles) != len(frames):
+        log_error(f"Length of titles {len(titles)} does not match number of frames {len(frames)}", parameters)
+    for i in range(len(frames)):
+        plt.imshow(frames[i])
+        if titles is not None:
+            plt.title(titles[i])
+        if save:
+            filename = titles[i].replace(" ", "_").replace("/", "_") + ".png"
+            plt.imsave(filename, frames[i])
+        else:
+            plt.show()

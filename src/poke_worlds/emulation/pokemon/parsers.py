@@ -244,6 +244,9 @@ class PokemonStateParser(StateParser, ABC):
             bool: True if a dialogue box is open, False otherwise.
         """
         return self.named_region_matches_target(current_screen, "dialogue_bottom_right")
+    
+    def dialogue_box_empty(self, current_screen: np.ndarray) -> bool:
+        return self.capture_named_region(current_frame=current_screen, name="dialogue_box_full") > 254
 
     def is_in_dialogue(self, current_screen: np.ndarray, trust_previous: bool = False) -> bool:
         """

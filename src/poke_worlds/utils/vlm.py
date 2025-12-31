@@ -51,7 +51,7 @@ class HuggingFaceVLM:
         if HuggingFaceVLM._MODEL is not None:
             return
         if not project_parameters[f"full_importable"] or project_parameters["debug_skip_lm"]:
-            if not project_parameters["do_debug"]:
+            if not project_parameters["debug_mode"]:
                 log_error(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Run `uv pip install -e \".[full]\"` to install required packages.", project_parameters)
             else:
                 log_warn(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", project_parameters)
