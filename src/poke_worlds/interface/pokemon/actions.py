@@ -5,6 +5,7 @@ from poke_worlds.emulation.pokemon.trackers import CorePokemonTracker
 from poke_worlds.emulation import LowLevelActions
 from abc import ABC
 from typing import List, Tuple, Dict
+from poke_worlds.utils import show_frames
 import numpy as np
 
 from gymnasium.spaces import Box, Discrete, Text
@@ -483,7 +484,7 @@ class LocateAction(HighLevelAction):
         percieve_prompt = self.prompt.replace("[TARGET]", target)
         grid_cells = self._emulator.state_parser.capture_grid_cells(self._emulator.get_current_frame())
         found, potential_cells, definitive_cells = self.get_cells_found(percieve_prompt, grid_cells)
-        self._emulator.step() # just to ensure state tracker is populated. #TODO: THIS FAILS IN DIALOGUE STATES. 
+        self._emulator.step() # just to ensure state tracker is populated.
         ret_dict = self._state_tracker.report()
         ret_dict["action_success_message"] = (found, potential_cells, definitive_cells)
         return [ret_dict], 0
@@ -531,6 +532,7 @@ class GridLocateAction(HighLevelAction):
         ret_dict["action_success_message"] = str(hits)
         return [ret_dict], 0
 
+
 class TestAction(HighLevelAction):
     REQUIRED_STATE_PARSER = PokemonStateParser
     REQUIRED_STATE_TRACKER = CorePokemonTracker
@@ -559,8 +561,7 @@ class TestAction(HighLevelAction):
     def _execute(self, context="A single Pokeball"):
         # Do the percieve action in the free roam state:
         percieve_prompt = self.prompt.replace("[TARGET]", context)
-        quadrant = "tr"
-        cells = self._emulator.state_parser.capture_grid_cells(self._emulator.get_current_frame(), quadrant=quadrant)
+        cells = self._emulator.state_parser.capture_grid_cells(self._emulator.get_current_frame())
         keys = list(cells.keys())
         images = [cells[key] for key in keys]
         texts = [percieve_prompt] * len(images)
