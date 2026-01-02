@@ -408,7 +408,7 @@ class LocateAction(HighLevelAction):
     REQUIRED_STATE_TRACKER = CorePokemonTracker
     _MAX_NEW_TOKENS = 60
 
-    def is_valid(self, **kwargs):
+    def is_valid(self, target: str=None, image_reference: str = None):
         return self._state_tracker.get_episode_metric(("pokemon_core", "agent_state")) == AgentState.FREE_ROAM
     
     def get_action_space(self):
