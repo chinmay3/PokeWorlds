@@ -526,10 +526,6 @@ class LocateSpecificAction(LocateAction, ABC):
     def space_to_parameters(self, space_action: int):
         return {}
     
-    @abstractmethod
-    def _execute(self):
-        raise NotImplementedError()
-    
 class LocateItemAction(LocateSpecificAction):
     def _execute(self):
         return super()._execute(target="a greyscale pokeball sprite")
