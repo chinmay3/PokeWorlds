@@ -512,7 +512,7 @@ class LocateAction(HighLevelAction):
         """
         percieve_prompt = self.prompt.replace("[TARGET]", target)
         grid_cells = self._emulator.state_parser.capture_grid_cells(self._emulator.get_current_frame())
-        found, potential_cells, definitive_cells = self.get_cells_found(percieve_prompt, grid_cells, image_reference=image_reference)
+        found, potential_cells, definitive_cells = self.get_cells_found(grid_cells, percieve_prompt, image_reference=image_reference)
         self._emulator.step() # just to ensure state tracker is populated.
         ret_dict = self._state_tracker.report()
         message = ""
@@ -537,26 +537,26 @@ class LocateSpecificAction(LocateAction, ABC):
         "grass": "a patch of grass"
     }
     
-    def is_valid(self, target_option: str = None):
-        if target_option is not None and target_option not in self.options.keys():
+    def is_valid(self, target: str = None):
+        if target is not None and target not in self.options.keys():
             return False
-        return super().is_valid(target_option=target_option)
+        return super().is_valid(target=target)
 
     def get_action_space(self):
         return Discrete(len(self.options))
     
-    def parameters_to_space(self, target_option: str):
-        if target_option not in self.options.keys():
-            log_error(f"Invalid target option {target_option}", self._parameters)
-        option_index = list(self.options.keys()).index(target_option)
+    def parameters_to_space(self, target: str):
+        if target not in self.options.keys():
+            log_error(f"Invalid target option {target}", self._parameters)
+        option_index = list(self.options.keys()).index(target)
         return option_index
     
     def space_to_parameters(self, space_action: int):
-        target_option = list(self.options.keys())[space_action]
-        return {"target_option": target_option}
+        target = list(self.options.keys())[space_action]
+        return {"target": target}
     
-    def _execute(self, target_option: str):
-        target = self.options[target_option]
+    def _execute(self, target: str):
+        target = self.options[target]
         return super()._execute(target=target)
     
 class LocateReferenceAction(LocateAction, ABC):
@@ -573,7 +573,10 @@ class LocateReferenceAction(LocateAction, ABC):
     def is_valid(self, image_reference: str = None):
         if image_reference is not None:
             # check if image reference exists
-            if image_reference not in self._emulator.state_parser.image_references.keys() or image_reference not in self.descriptions.keys():
+            if image_reference not in self.image_references.keys() or image_reference not in self.descriptions.keys():
+                return False
+            reference = self.image_references[image_reference]
+            if reference not in self._emulator.state_parser.image_references.keys():
                 return False
         return super().is_valid(image_reference=image_reference)
 
