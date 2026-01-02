@@ -3,7 +3,7 @@ Provides query access to a single VLM that is shared across the project
 """
 from poke_worlds.utils.parameter_handling import load_parameters
 from poke_worlds.utils.log_handling import log_warn, log_error, log_info
-from typing import List
+from typing import List, Union
 import numpy as np
 from PIL import Image
 
@@ -59,6 +59,54 @@ class HuggingFaceVLM:
             HuggingFaceVLM._MODEL = AutoModelForImageTextToText.from_pretrained(project_parameters["backbone_vlm_model"], dtype=torch.bfloat16, device_map="auto")
             HuggingFaceVLM._PROCESSOR = AutoProcessor.from_pretrained(project_parameters["backbone_vlm_model"], padding_side="left")
 
+    @staticmethod
+    def multi_infer(texts: List[str], images: List[List[Union[np.ndarray, Image.Image]]], max_new_tokens: int, batch_size: int = None) -> List[str]:
+        """
+        Performs inference with the a single text and multiple images
+        """
+        if len(texts) != len(images):
+            log_error(f"Texts and images must have the same length. Got {len(texts)} texts and {len(images)} image lists.", project_parameters)
+        if HuggingFaceVLM._MODEL is None:
+            HuggingFaceVLM.start()
+        if HuggingFaceVLM._MODEL is None: # it is only still None in debug mode
+            return ["LM Output" for _ in images]
+        if max_new_tokens is None:
+            log_error(f"Can't set max_new_tokens to None", project_parameters)
+        if batch_size is None:
+            batch_size = HuggingFaceVLM._BATCH_SIZE
+        all_outputs = []
+        for i in range(0, len(all_images), batch_size):
+            batch_images = images[i:i+batch_size]
+            batch_texts = texts[i:i+batch_size]
+            messages = []
+            for i, text in enumerate(batch_texts):
+                all_images = [convert_numpy_greyscale_to_pillow(img) if isinstance(img, np.ndarray) else img for img in batch_images[i]]
+                content = []
+                for image in all_images:
+                    content.append({"type": "image", "image": image})
+                content.append({"type": "text", "text": text})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": content
+                    }
+                )
+            inputs = HuggingFaceVLM._PROCESSOR.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_dict=True,
+                add_vision_id=True,
+                return_tensors="pt"
+            ).to(HuggingFaceVLM._MODEL.device)
+            input_length = inputs["input_ids"].shape[1]
+            outputs = HuggingFaceVLM._MODEL.generate(**inputs, max_new_tokens=max_new_tokens, repetition_penalty=1.2, stop_strings=["[STOP]"], tokenizer=HuggingFaceVLM._PROCESSOR.tokenizer)
+            output_only = outputs[:, input_length:]
+            decoded_outputs = HuggingFaceVLM._PROCESSOR.batch_decode(output_only, skip_special_tokens=True)
+            all_outputs.extend(decoded_outputs)
+        return all_outputs
+
+    
     @staticmethod
     def infer(texts: List[str], images: List[np.ndarray], max_new_tokens: int, batch_size: int = None) -> List[str]:
         """

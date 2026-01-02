@@ -525,6 +525,7 @@ class LocateSpecificAction(LocateAction, ABC):
     
     def space_to_parameters(self, space_action: int):
         return {}
+        
     
 class LocateItemAction(LocateSpecificAction):
     def _execute(self):
