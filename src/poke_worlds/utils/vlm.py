@@ -206,6 +206,7 @@ def perform_vlm_inference(texts: List[str], images: List[np.array], max_new_toke
         return HuggingFaceVLM.infer(texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size)
 
 
+
 def _ocr_merge(texts: List[str]) -> List[str]:
     """
     Merges OCR texts by removing duplicates and combining them into a single string.
@@ -228,7 +229,7 @@ def _ocr_merge(texts: List[str]) -> List[str]:
                 final_strings.append(text)
     return final_strings
 
-def ocr(images: List[np.array], do_merge: bool=True) -> List[str]:
+def ocr(images: List[np.ndarray], do_merge: bool=True) -> List[str]:
     """
     Performs OCR on the given images using the VLM.
 
@@ -247,3 +248,20 @@ def ocr(images: List[np.array], do_merge: bool=True) -> List[str]:
     if do_merge:
         ocred = _ocr_merge(ocred)
     return ocred
+
+def identify_matches(description: str, screens: List[np.ndarray], reference: Image.Image) -> List[bool]:
+    """
+    Identifies which screens match the given reference image based on the description.
+    """
+    texts = [f"Image 1 is an image of {description}. Does Image 2 contain the same object inside it? Answer with a single sentence and then [YES] or [NO] then [STOP] \nAnswer: " for _ in screens]
+    images = []
+    for screen in screens:
+        images.append([reference, screen])
+    outputs = HuggingFaceVLM.multi_infer(texts=texts, images=images, max_new_tokens=20)
+    results = []
+    for output in outputs:
+        if "yes" in output.lower():
+            results.append(True)
+        else:
+            results.append(False)
+    return results

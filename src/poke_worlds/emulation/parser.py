@@ -8,10 +8,10 @@ from poke_worlds.utils import log_error, log_warn, verify_parameters, show_frame
 
 import numpy as np
 
-
 import os
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 import cv2
+from PIL import Image
 
 
 class NamedScreenRegion:
@@ -203,7 +203,7 @@ class StateParser(ABC):
     """
     Abstract base class for parsing game state variables from the GameBoy emulator.
     """
-    def __init__(self, pyboy, parameters, named_screen_regions: Optional[list[NamedScreenRegion]] = None):
+    def __init__(self, pyboy, parameters, named_screen_regions: Optional[List[NamedScreenRegion]] = None):
         """
         Initializes the StateParser. Child implementations should call super().__init__() after running their code. 
             All children must create a self.rom_data_path variable
@@ -216,6 +216,8 @@ class StateParser(ABC):
         self._parameters = parameters
         if not hasattr(self, "rom_data_path"):
             log_error(f"StateParsers must define a self.rom_data_path variable pointing to the rom data path for the game variant.", self._parameters)
+        self.rom_data_path: str = self.rom_data_path
+        """ Path to the rom data directory for the game variant. """
         if not isinstance(pyboy, PyBoy):
             log_error("pyboy must be an instance of PyBoy", self._parameters)
         self._pyboy = pyboy
@@ -228,6 +230,18 @@ class StateParser(ABC):
                 if region.name in self.named_screen_regions:
                     log_error(f"Duplicate named screen region: {region.name}", self._parameters)
                 self.named_screen_regions[region.name] = region
+        self.image_references = {}
+        """ Dictionary of image references loaded. """
+        location = os.path.join(self.rom_data_path, "image_references")
+        for file in os.listdir(location):
+            image_path = os.path.join(location, file)
+            if image_path.endswith((".png", ".jpg", ".jpeg")):
+                reference_name = file.rsplit(".", 1)[0]
+                image = Image.open(image_path)
+                self.image_references[reference_name] = image
+            else:
+                log_warn(f"Found unsupported image extension {file} in {location}. Only place image files in this folder.", self._parameters)
+                
 
     def bit_count(self, bits: int) -> int:
         """
@@ -689,6 +703,19 @@ class StateParser(ABC):
         quadrants["br"]["screen"] = self.reform_image(quadrants["br"]["cells"])
         return quadrants
 
+    def get_image_reference(self, reference_name: str) -> Image.Image:
+        """
+        Gets an image reference from the loaded image references.
+        Args:
+            reference_name (str): The name of the image reference to load
+        Returns:
+            Image.Image: The loaded image reference.
+        """
+        if reference_name not in self.image_references:
+            log_error(f"Image reference {reference_name} not found. Available options: {self.image_references.keys()}. If you want to add an image reference, add a file to the image_references folder.", self._parameters)
+        return self.image_references[reference_name]
+
+    
     @abstractmethod
     def __repr__(self) -> str:
         """

@@ -6,10 +6,12 @@ from poke_worlds.emulation import LowLevelActions
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Dict
 from poke_worlds.utils import show_frames
+from poke_worlds.utils import identify_matches
 import numpy as np
 
 from gymnasium.spaces import Box, Discrete, Text
 import matplotlib.pyplot as plt
+from PIL import Image
 
 HARD_MAX_STEPS = 20
 """ The hard maximum number of steps we'll let agents take in a sequence """
@@ -406,7 +408,7 @@ class LocateAction(HighLevelAction):
     REQUIRED_STATE_TRACKER = CorePokemonTracker
     _MAX_NEW_TOKENS = 60
 
-    def is_valid(self, target: str = None):
+    def is_valid(self, **kwargs):
         return self._state_tracker.get_episode_metric(("pokemon_core", "agent_state")) == AgentState.FREE_ROAM
     
     def get_action_space(self):
@@ -417,18 +419,23 @@ class LocateAction(HighLevelAction):
     
     def space_to_parameters(self, space_action: str):
         return {"target": space_action}
-    
+        
 
-    def check_for_target(self, prompt, screens):
-        texts = [prompt] * len(screens)
-        outputs = perform_vlm_inference(texts=texts, images=screens, max_new_tokens=self._MAX_NEW_TOKENS)
-        founds = []
-        for i, output in enumerate(outputs):
-            if "yes" in output.lower():
-                founds.append(True)
-            else:
-                founds.append(False)
-        return founds
+    def check_for_target(self, prompt, screens, image_reference: str = None):
+        if image_reference is None:
+            texts = [prompt] * len(screens)
+            outputs = perform_vlm_inference(texts=texts, images=screens, max_new_tokens=self._MAX_NEW_TOKENS)
+            founds = []
+            for i, output in enumerate(outputs):
+                if "yes" in output.lower():
+                    founds.append(True)
+                else:
+                    founds.append(False)
+            return founds
+        else:
+            description = prompt.split("``")[0]
+            reference_image = self._emulator.state_parser.get_image_reference(image_reference)
+            founds = identify_matches(description=description, screens=screens, reference=reference_image)
     
     def get_centroid(self, cells: Dict[Tuple[int, int], np.ndarray]) -> Tuple[float, float]:
         min_x = min([coord[0] for coord in cells.keys()])
@@ -439,25 +446,27 @@ class LocateAction(HighLevelAction):
         centroid_y = (min_y + max_y) // 2
         return (centroid_x, centroid_y)
     
-    def get_cells_found(self, prompt: str, grid_cells: Dict[Tuple[int, int], np.ndarray]) -> Tuple[bool, List[Tuple[int, int]], List[Tuple[int, int]]]:
+    def get_cells_found(self, grid_cells: Dict[Tuple[int, int], np.ndarray], prompt: str, image_reference: str=None) -> Tuple[bool, List[Tuple[int, int]], List[Tuple[int, int]]]:
         """
         Recursively divides the grid cells into quadrants and checks each quadrant for the target.
         Args:
-            prompt: description of target
             grid_cells: the dict of the subset of grid cells to search over
+            prompt: description of target
+            image_reference: reference image for the target
+
         Returns:
-            found (bool): whether the target was found in any of the grid cells at any point. 
+            found (bool): whether the target was found in any of the grid cells at any point.
             potential_cells (List[Tuple[int, int]]): list of grid cell coordinates that may contain the target. If found is true, this is almost always populated with something
                                                     The only exception is when the item was found at too high a scan and not found at lower levels (and so too many cells would have been potentials)
-            definitive_cells (List[Tuple[int, int]]): list of grid cell coordinates that, with high confidence, contain the target.                        
+            definitive_cells (List[Tuple[int, int]]): list of grid cell coordinates that, with high confidence, contain the target.
         """
         quadrant_keys = ["tl", "tr", "bl", "br"]
         if len(grid_cells) == 1:
             screen = list(grid_cells.values())[0]
             keys = list(grid_cells.keys())[0]
-            target_in_grid = self.check_for_target(prompt, [screen])[0]
+            target_in_grid = self.check_for_target(prompt, [screen], image_reference=image_reference)[0]
             if target_in_grid:
-                return False, list(grid_cells.keys()), list(grid_cells.keys())
+                return True, list(grid_cells.keys()), list(grid_cells.keys())
             else:
                 return False, [], []
         quadrants = self._emulator.state_parser.get_quadrant_frame(grid_cells=grid_cells)
@@ -465,7 +474,7 @@ class LocateAction(HighLevelAction):
         for quadrant in quadrant_keys:
             screen = quadrants[quadrant]["screen"]
             screens.append(screen)
-        quadrant_founds = self.check_for_target(prompt, screens)
+        quadrant_founds = self.check_for_target(prompt, screens, image_reference=image_reference)
         if not any(quadrant_founds):
             return False, [], []
         else:
@@ -479,14 +488,14 @@ class LocateAction(HighLevelAction):
                         potential_cells.append(self.get_centroid(cells))
                         cell_keys = list(cells.keys())
                         cell_screens = [cells[key] for key in cell_keys]
-                        cell_founds = self.check_for_target(prompt, cell_screens)
+                        cell_founds = self.check_for_target(prompt, cell_screens, image_reference=image_reference)
                         for i, found in enumerate(cell_founds):
                             if found:
                                 quadrant_definites.append(cell_keys[i])
                             else:
                                 pass                        
                     else:
-                        found_in_quadrant, quadrant_potentials, recursive_quadrant_definites = self.get_cells_found(prompt, cells)
+                        found_in_quadrant, quadrant_potentials, recursive_quadrant_definites = self.get_cells_found(prompt, cells, image_reference=image_reference)
                         if len(recursive_quadrant_definites) > 0:
                             quadrant_definites.extend(recursive_quadrant_definites)
                         if found_in_quadrant: # then there is some potential, so add the quadrants potentials. 
@@ -496,48 +505,91 @@ class LocateAction(HighLevelAction):
                                 potential_cells.append(self.get_centroid(cells))
             return True, potential_cells, quadrant_definites
     
-    def _execute(self, target: str):
+    
+    def do_location(self, target: str, image_reference: str = None):
+        """
+        Execute location on a free-form target string.
+        """
         percieve_prompt = self.prompt.replace("[TARGET]", target)
         grid_cells = self._emulator.state_parser.capture_grid_cells(self._emulator.get_current_frame())
-        found, potential_cells, definitive_cells = self.get_cells_found(percieve_prompt, grid_cells)
+        found, potential_cells, definitive_cells = self.get_cells_found(percieve_prompt, grid_cells, image_reference=image_reference)
         self._emulator.step() # just to ensure state tracker is populated.
         ret_dict = self._state_tracker.report()
+        message = ""
         if not found:
-            ret_dict["action_success_message"] = "Not Found"
+            message = "Not Found"
         else:
             message = f"FOUND {target}!\n"
             if set(potential_cells) == set(definitive_cells):
                 message += f"Definitive Cells: {definitive_cells}"
             else:
                 message += f"Potential Cells: {potential_cells}\nDefinitive Cells: {definitive_cells}"
-            ret_dict["action_success_message"] = message
+        ret_dict["action_success_message"] = message
         return [ret_dict], 0
     
+    def _execute(self, target: str):
+        return self.do_location(target=target)
+    
 class LocateSpecificAction(LocateAction, ABC):
-    def is_valid(self):
-        return self._state_tracker.get_episode_metric(("pokemon_core", "agent_state")) == AgentState.FREE_ROAM
+    options = {
+        "pokeball": "a greyscale pokeball sprite",
+        "npc": "a human character sprite",
+        "grass": "a patch of grass"
+    }
     
+    def is_valid(self, target_option: str = None):
+        if target_option is not None and target_option not in self.options.keys():
+            return False
+        return super().is_valid(target_option=target_option)
+
     def get_action_space(self):
-        return Discrete(1)
+        return Discrete(len(self.options))
     
-    def parameters_to_space(self):
-        return 0
+    def parameters_to_space(self, target_option: str):
+        if target_option not in self.options.keys():
+            log_error(f"Invalid target option {target_option}", self._parameters)
+        option_index = list(self.options.keys()).index(target_option)
+        return option_index
     
     def space_to_parameters(self, space_action: int):
-        return {}
-        
+        target_option = list(self.options.keys())[space_action]
+        return {"target_option": target_option}
     
-class LocateItemAction(LocateSpecificAction):
-    def _execute(self):
-        return super()._execute(target="a greyscale pokeball sprite")
+    def _execute(self, target_option: str):
+        target = self.options[target_option]
+        return super()._execute(target=target)
     
-class LocateNPCAction(LocateSpecificAction):
-    def _execute(self):
-        return super()._execute(target="a human character sprite")
+class LocateReferenceAction(LocateAction, ABC):
+    descriptions = {
+        "item": "a greyscale pokeball sprite",
+        "grass": "a patch of grass",
+        "sign": "a white signpost with dots on its face"
+    }
+    image_references = {
+        "item": "pokeball",
+        "grass": "grass",
+        "sign": "sign"
+    }
+    def is_valid(self, image_reference: str = None):
+        if image_reference is not None:
+            # check if image reference exists
+            if image_reference not in self._emulator.state_parser.image_references.keys() or image_reference not in self.descriptions.keys():
+                return False
+        return super().is_valid(image_reference=image_reference)
+
+    def get_action_space(self):
+        return Text(max_length=50)
     
-class LocateGrassAction(LocateSpecificAction):
-    def _execute(self):
-        return super()._execute(target="a patch of grass")
+    def parameters_to_space(self, image_reference: str):
+        return image_reference
+    
+    def space_to_parameters(self, space_action: str):
+        return {"image_reference": space_action}
+
+    def _execute(self, image_reference: str):
+        description = self.descriptions[image_reference]
+        return self.do_location(target=description, image_reference=self.image_references[image_reference])    
+
 
 class TestAction(HighLevelAction):
     REQUIRED_STATE_PARSER = PokemonStateParser
