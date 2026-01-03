@@ -433,9 +433,10 @@ class LocateAction(HighLevelAction):
                     founds.append(False)
             return founds
         else:
-            description = prompt.split("``")[0]
+            description = prompt
             reference_image = self._emulator.state_parser.get_image_reference(image_reference)
             founds = identify_matches(description=description, screens=screens, reference=reference_image)
+            return founds
     
     def get_centroid(self, cells: Dict[Tuple[int, int], np.ndarray]) -> Tuple[float, float]:
         min_x = min([coord[0] for coord in cells.keys()])
@@ -495,7 +496,7 @@ class LocateAction(HighLevelAction):
                             else:
                                 pass                        
                     else:
-                        found_in_quadrant, quadrant_potentials, recursive_quadrant_definites = self.get_cells_found(prompt, cells, image_reference=image_reference)
+                        found_in_quadrant, quadrant_potentials, recursive_quadrant_definites = self.get_cells_found(cells, prompt, image_reference=image_reference)
                         if len(recursive_quadrant_definites) > 0:
                             quadrant_definites.extend(recursive_quadrant_definites)
                         if found_in_quadrant: # then there is some potential, so add the quadrants potentials. 
@@ -510,7 +511,10 @@ class LocateAction(HighLevelAction):
         """
         Execute location on a free-form target string.
         """
-        percieve_prompt = self.prompt.replace("[TARGET]", target)
+        if image_reference is None:
+            percieve_prompt = self.prompt.replace("[TARGET]", target)
+        else:
+            percieve_prompt = f"a {target} from Pokemon"
         grid_cells = self._emulator.state_parser.capture_grid_cells(self._emulator.get_current_frame())
         found, potential_cells, definitive_cells = self.get_cells_found(grid_cells, percieve_prompt, image_reference=image_reference)
         self._emulator.step() # just to ensure state tracker is populated.
@@ -532,9 +536,10 @@ class LocateAction(HighLevelAction):
     
 class LocateSpecificAction(LocateAction, ABC):
     options = {
-        "pokeball": "a greyscale pokeball sprite",
-        "npc": "a human character sprite",
-        "grass": "a patch of grass"
+        "pokeball": "a pixelated, greyscale Poke Ball sprite, recognizable by its circular shape, white center, black band around the top, and grey body",
+        "npc": "a pixelated human-like character sprite",
+        "grass": "a pixelated, greyscale patch of grass that resembles wavy dark lines.",
+        "sign": "a pixelated, greyscale white signpost with dots on its face"
     }
     
     def is_valid(self, target: str = None):
@@ -561,9 +566,9 @@ class LocateSpecificAction(LocateAction, ABC):
     
 class LocateReferenceAction(LocateAction, ABC):
     descriptions = {
-        "item": "a greyscale pokeball sprite",
-        "grass": "a patch of grass",
-        "sign": "a white signpost with dots on its face"
+        "item": " a pixelated, greyscale Poke Ball sprite, recognizable by its circular shape, white center, black band around the top, and grey body",
+        "grass": "a pixelated, greyscale patch of grass that resembles wavy dark lines",
+        "sign": "a pixelated, greyscale white signpost with dots on its face"
     }
     image_references = {
         "item": "pokeball",

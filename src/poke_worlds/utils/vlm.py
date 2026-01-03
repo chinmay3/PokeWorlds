@@ -75,30 +75,24 @@ class HuggingFaceVLM:
         if batch_size is None:
             batch_size = HuggingFaceVLM._BATCH_SIZE
         all_outputs = []
-        for i in range(0, len(all_images), batch_size):
+        all_texts = []
+        for i, text in enumerate(texts):
+            full_text = f"<|im_start|>user\n"
+            for j in range(len(images[i])):
+                full_text += f"Picture: {i+1}<|vision_start|><|image_pad|><|vision_end|>"
+            full_text += f"\n{text}\n<|im_end|><|im_start|>assistant\n"
+            all_texts.append(full_text)
+        for i in range(0, len(all_texts), batch_size):
             batch_images = images[i:i+batch_size]
-            batch_texts = texts[i:i+batch_size]
-            messages = []
-            for i, text in enumerate(batch_texts):
-                all_images = [convert_numpy_greyscale_to_pillow(img) if isinstance(img, np.ndarray) else img for img in batch_images[i]]
-                content = []
-                for image in all_images:
-                    content.append({"type": "image", "image": image})
-                content.append({"type": "text", "text": text})
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": content
-                    }
-                )
-            inputs = HuggingFaceVLM._PROCESSOR.apply_chat_template(
-                messages,
-                tokenize=True,
-                add_generation_prompt=True,
-                return_dict=True,
-                add_vision_id=True,
-                return_tensors="pt"
-            ).to(HuggingFaceVLM._MODEL.device)
+            flat_images = []
+            for img_list in batch_images:
+                for img in img_list:
+                    if isinstance(img, np.ndarray):
+                        flat_images.append(convert_numpy_greyscale_to_pillow(img))
+                    else:
+                        flat_images.append(img)                    
+            batch_texts = all_texts[i:i+batch_size]
+            inputs = HuggingFaceVLM._PROCESSOR(text=batch_texts, images=flat_images, padding=True, truncation=True, return_tensors="pt").to(HuggingFaceVLM._MODEL.device)
             input_length = inputs["input_ids"].shape[1]
             outputs = HuggingFaceVLM._MODEL.generate(**inputs, max_new_tokens=max_new_tokens, repetition_penalty=1.2, stop_strings=["[STOP]"], tokenizer=HuggingFaceVLM._PROCESSOR.tokenizer)
             output_only = outputs[:, input_length:]
@@ -253,13 +247,14 @@ def identify_matches(description: str, screens: List[np.ndarray], reference: Ima
     """
     Identifies which screens match the given reference image based on the description.
     """
-    texts = [f"Image 1 is an image of {description}. Does Image 2 contain the same object inside it? Answer with a single sentence and then [YES] or [NO] then [STOP] \nAnswer: " for _ in screens]
+    texts = [f"The target, described as {description} is shown as reference in Picture 1. What does Picture 2 contain? Does it contain the object from Picture 1 in it? Answer with a [YES] if the object is in Picture 2 or [NO] if it is not, then [STOP] \nAnswer: " for _ in screens]
     images = []
     for screen in screens:
         images.append([reference, screen])
-    outputs = HuggingFaceVLM.multi_infer(texts=texts, images=images, max_new_tokens=20)
+    outputs = HuggingFaceVLM.multi_infer(texts=texts, images=images, max_new_tokens=120)
     results = []
     for output in outputs:
+        print(output)
         if "yes" in output.lower():
             results.append(True)
         else:
