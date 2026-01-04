@@ -14,13 +14,6 @@ class CorePokemonMetrics(MetricGroup):
     """
     NAME = "pokemon_core"
     REQUIRED_PARSER = PokemonStateParser
-    BATTLE_EXIT_STABLE_COOLDOWN = 3 
-    """ Number of frames to wait after exiting battle to confirm exit. 
-        Overall this mechanism absolutely does not work, but somehow sort of does?
-        It does not actually catch when you exit battle, but it triggers in the very start of a battle most of the time.
-        This means on aggregate, it still counts battles reasonably. 
-        But battles_completed or n_battles_total should not be used for anything requiring precise per-episode battle counts.    
-    """
 
     def start(self):
         self.n_battles_total = []
@@ -28,13 +21,10 @@ class CorePokemonMetrics(MetricGroup):
 
     def reset(self, first = False):
         if not first:
-            self.n_battles_total.append(self.n_battles_completed)
+            pass
         self.current_state: AgentState = AgentState.IN_DIALOGUE # Start by default in dialogue because it has the least permissable actions. 
         """ The current state of the agent in the game. """
         self._previous_state = self.current_state
-        self.n_battles_completed = 0
-        """ Number of battles completed in the current episode. Does not count the number of battles started. """
-        self.surely_exited_battle_counter = self.BATTLE_EXIT_STABLE_COOLDOWN
 
     def close(self):
         self.reset()
@@ -44,58 +34,23 @@ class CorePokemonMetrics(MetricGroup):
         self._previous_state = self.current_state
         current_state = self.state_parser.get_agent_state(current_frame)
         self.current_state = current_state
-        if self.surely_exited_battle_counter < self.BATTLE_EXIT_STABLE_COOLDOWN:
-            if self.current_state == AgentState.IN_BATTLE:
-                # false alarm, still in battle
-                self.surely_exited_battle_counter = self.BATTLE_EXIT_STABLE_COOLDOWN
-            else:
-                self.surely_exited_battle_counter -= 1
-                if self.surely_exited_battle_counter <= 0:
-                    # confirmed exited battle
-                    self.n_battles_completed += 1
-                    self.surely_exited_battle_counter = self.BATTLE_EXIT_STABLE_COOLDOWN            
-        if self.current_state != self._previous_state:
-            if self._previous_state == AgentState.IN_BATTLE:
-                self.surely_exited_battle_counter -= 1
-            #self.log_report()
         
     def report(self) -> dict:
         """
         Reports the current Pokémon core metrics:
         - Agent state
-        - Number of battles completed in the current episode
         Returns:
             dict: A dictionary containing the current agent state.
         """
         return {
             "agent_state": self.current_state,
-            "n_battles_completed": self.n_battles_completed
         }
     
     def report_final(self) -> dict:
         """
-        Reports:
-        - Total number of battles completed across all episodes
-        - Mean battles per episode
-        - Min/max battles per episode
-        - Standard deviation of battles per episode
+        Reports nothing:
         """
-        n_battles_total = np.array(self.n_battles_total)
-        if len(n_battles_total) == 0:
-            return {
-                "total_battles_completed": 0,
-                "mean_battles_per_episode": 0.0,
-                "min_battles_per_episode": 0,
-                "max_battles_per_episode": 0,
-                "std_battles_per_episode": 0.0
-            }
-        return {
-            "total_battles_completed": int(np.sum(n_battles_total)),
-            "mean_battles_per_episode": float(np.mean(n_battles_total)),
-            "min_battles_per_episode": int(np.min(n_battles_total)),
-            "max_battles_per_episode": int(np.max(n_battles_total)),
-            "std_battles_per_episode": float(np.std(n_battles_total))
-        }
+        return {}
 
 class PokemonRedStarter(MetricGroup):
     """
@@ -262,11 +217,14 @@ class PokemonRedLocation(MetricGroup):
 
 class PokemonOCRMetric(OCRMetric):
     REQUIRED_PARSER = PokemonStateParser
+    def reset(self, first = False):
+        super().reset(first)
+        self.prev_was_in_fight_options = False
 
     def start(self):
-        # So far, just dialogue
         self.kinds = {
             "dialogue": "dialogue_box_full",
+            "battle_attack_options": "screen_bottom_half"
         }  
 
     def can_read_kind(self, current_frame: np.ndarray, kind: str) -> bool:
@@ -274,8 +232,63 @@ class PokemonOCRMetric(OCRMetric):
         if kind == "dialogue":
             in_dialogue = self.state_parser.dialogue_box_open(current_screen=current_frame)
             dialogue_empty = self.state_parser.dialogue_box_empty(current_screen=current_frame)
-            return in_dialogue and not dialogue_empty
+            in_battle_menu = self.state_parser.is_in_base_battle_menu(current_screen=current_frame)
+            in_fight_options = self.state_parser.is_in_fight_options_menu(current_screen=current_frame)
+            in_bag = self.state_parser.is_in_fight_bag(current_screen=current_frame)
+            return in_dialogue and not dialogue_empty and not in_battle_menu and not in_fight_options and not in_bag
+        if kind == "battle_attack_options":
+            in_fight_options = self.state_parser.is_in_fight_options_menu(current_screen=current_frame)
+            if in_fight_options:
+                if self.prev_was_in_fight_options:
+                    self.prev_was_in_fight_options = True
+                    return False
+                else:
+                    self.prev_was_in_fight_options = True
+                    return True
+            else:
+                self.prev_was_in_fight_options = False
+                return False
         return False
+
+
+class PokemonTestMetric(MetricGroup):
+    NAME = "pokemon_test"
+    REQUIRED_PARSER = PokemonStateParser
+    def start(self):
+        super().start()
+
+    def reset(self, first = False):
+        if not first:
+            pass
+        self.prev_was_fight = False
+        self.is_in_fight = False
+        self.is_got_away_safely = False
+
+    def close(self):
+        self.reset()
+        return
+
+    def step(self, current_frame: np.ndarray, recent_frames: Optional[np.ndarray]):
+        self.state_parser: PokemonStateParser
+        is_fight = False
+        self.is_got_away_safely = self.state_parser.named_region_matches_multi_target(current_frame, "dialogue_box_middle", "got_away_safely")
+        #is_fight = self.state_parser.is_in_fight_options_menu(current_screen=current_frame)
+        self.prev_was_fight = self.is_in_fight
+        self.is_in_fight = is_fight
+
+        
+    def report(self) -> dict:
+        return {
+            "is_in_fight": self.is_in_fight,
+            "is_got_away_safely": self.is_got_away_safely,
+            "was_in_fight_last_step": self.prev_was_fight
+        }
+    
+    def report_final(self) -> dict:
+        return {
+        }
+
+
 
 
 class CorePokemonTracker(StateTracker):
@@ -284,7 +297,7 @@ class CorePokemonTracker(StateTracker):
     """
     def start(self):
         super().start()
-        self.metric_classes.extend([CorePokemonMetrics])
+        self.metric_classes.extend([CorePokemonMetrics, PokemonTestMetric])
 
     def step(self, *args, **kwargs):
         """
@@ -306,8 +319,6 @@ class PokemonOCRTracker(CorePokemonTracker):
     def start(self):
         super().start()
         self.metric_classes.extend([PokemonOCRMetric]) 
-
-
 
 class PokemonRedStarterTracker(CorePokemonTracker):
     """

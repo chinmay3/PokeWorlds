@@ -1,12 +1,12 @@
 from poke_worlds.utils import log_error, log_info
-from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, LocateAction,LocateSpecificAction, LocateReferenceAction, CheckInteractionAction
+from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, LocateAction,LocateSpecificAction, LocateReferenceAction, CheckInteractionAction, BattleMenuAction, PickAttackAction
 from poke_worlds.interface.controller import Controller
 from poke_worlds.interface.action import HighLevelAction
 from typing import Dict, Any
 
 
 class PokemonStateWiseController(Controller):
-    ACTIONS = [MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, LocateAction, LocateSpecificAction, LocateReferenceAction, CheckInteractionAction]
+    ACTIONS = [MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, LocateAction, LocateSpecificAction, LocateReferenceAction, CheckInteractionAction, BattleMenuAction, PickAttackAction]
 
     def _parse_distance(self, distance_str):
         if distance_str.count(":") != 1:
@@ -39,6 +39,26 @@ class PokemonStateWiseController(Controller):
             return TestAction, {}
         elif input_str == "c":
             return CheckInteractionAction, {}
+        elif input_str.startswith("b "):
+            rest = input_str[2:].strip()
+            if rest == "f":
+                return BattleMenuAction, {"option": "fight"}
+            elif rest == "p":
+                return BattleMenuAction, {"option": "pokemon"}
+            elif rest == "b":
+                return BattleMenuAction, {"option": "bag"}
+            elif rest == "r":
+                return BattleMenuAction, {"option": "run"}
+            elif rest == "c":
+                return BattleMenuAction, {"option": "progress"}
+            else:
+                return None, None
+        elif input_str.startswith("f "):
+            rest = input_str[2:].strip()
+            if rest.isnumeric():
+                return PickAttackAction, {"option": int(rest)}
+            else:
+                return None, None
         elif input_str.startswith("ls"):
             rest = input_str[2:].strip()
             if rest == "grass":
@@ -102,6 +122,18 @@ class PokemonStateWiseController(Controller):
         elif action == MenuAction:
             if action_success == -1:
                 action_success_message = "The menu action could not be performed. Check if you are in the menu and that the action is valid."
+        elif action == BattleMenuAction:
+            if action_success == -1:
+                action_success_message = "The battle menu action could not be performed. Check if you are in a battle and that the action is valid."
+            elif action_success == 1:
+                action_success = "Tried to run, but the wild pokemon was too fast and you could not escape."
+            elif action_success == 2:
+                action_success = "Tried to run, but you cannot run from trainer battles."
+        elif action == PickAttackAction:
+            if action_success == -1:
+                action_success_message = "Could not pick that attack. Check if you are in the attack menu and that the attack index is valid."
+            if action_success == 1:
+                action_success_message = "Insufficient pp for that move. Pick another move."
         else:
             action_success_message = f"UNHANDLED CASE: action={action}, args={action_kwargs}, action_success={action_success}"
         return action_success_message

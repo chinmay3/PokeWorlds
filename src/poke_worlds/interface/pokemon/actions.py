@@ -626,8 +626,141 @@ class CheckInteractionAction(SingleHighLevelAction):
         return [ret_dict], action_success
 
         
+class BattleMenuAction(HighLevelAction):
+    _OPTIONS = ["fight", "bag", "pokemon", "run", "progress"]
+    def is_valid(self, option: str = None):
+        if option is not None and option not in self._OPTIONS:
+            return False
+        state = self._state_tracker.get_episode_metric(("pokemon_core", "agent_state"))
+        return state == AgentState.IN_BATTLE
+
+    def get_action_space(self):
+        return Discrete(len(self._OPTIONS))
+    
+    def get_all_valid_parameters(self):
+        state = self._state_tracker.get_episode_metric(("pokemon_core", "agent_state"))
+        if state != AgentState.IN_BATTLE:
+            return []
+        return [{"option": option} for option in self._OPTIONS]
+    
+    def parameters_to_space(self, option: str):
+        return self._OPTIONS.index(option)
+
+    
+    def space_to_parameters(self, space_action):
+        if space_action < 0 or space_action >= len(self._OPTIONS):
+            return None
+        return {"option": self._OPTIONS[space_action]}
+    
+    
+    def go_to_battle_menu(self):
+        # assumes we are in battle menu or will get there with some B's
+        # Must check we aren't in a 'learn new move' phase
+        for i in range(3):
+            self._emulator.step(LowLevelActions.PRESS_BUTTON_B)
+        return
+
+    def button_sequence(self, low_level_actions: List[LowLevelActions]):
+        self.go_to_battle_menu()
+        for action in low_level_actions:
+            self._emulator.step(action)
+        self._emulator.step(LowLevelActions.PRESS_BUTTON_A) # confirm option
 
 
+    def go_to_fight_menu(self):
+        self.button_sequence([LowLevelActions.PRESS_ARROW_UP, LowLevelActions.PRESS_ARROW_LEFT])
+
+    def go_to_bag_menu(self):
+        self.button_sequence([LowLevelActions.PRESS_ARROW_DOWN, LowLevelActions.PRESS_ARROW_LEFT])
+
+    def go_to_pokemon_menu(self):
+        self.button_sequence([LowLevelActions.PRESS_ARROW_UP, LowLevelActions.PRESS_ARROW_RIGHT])
+
+    def go_to_run(self):
+        self.button_sequence([LowLevelActions.PRESS_ARROW_DOWN, LowLevelActions.PRESS_ARROW_RIGHT])
+    
+    def _execute(self, option):
+        success = -1
+        if option == "fight":
+            self.go_to_fight_menu()
+            success = 0 if self._emulator.state_parser.is_in_fight_options_menu(self._emulator.get_current_frame()) else -1
+        elif option == "bag":
+            self.go_to_bag_menu()
+            success = 0 if self._emulator.state_parser.is_in_fight_bag(self._emulator.get_current_frame()) else -1
+        elif option == "pokemon":
+            self.go_to_pokemon_menu()
+            success = 0 if self._emulator.state_parser.is_in_pokemon_menu(self._emulator.get_current_frame()) else -1
+        elif option == "run":
+            self.go_to_run()
+            current_frame = self._emulator.get_current_frame()
+            got_away_safely = self._emulator.state_parser.named_region_matches_multi_target(current_frame, "dialogue_box_middle", "got_away_safely")
+            cannot_escape = self._emulator.state_parser.named_region_matches_multi_target(current_frame, "dialogue_box_middle", "cannot_escape")
+            cannot_run_from_trainer = self._emulator.state_parser.named_region_matches_multi_target(current_frame, "dialogue_box_middle", "cannot_run_from_trainer")
+            if got_away_safely:
+                success = 0
+                self._emulator.step(LowLevelActions.PRESS_BUTTON_B) # to clear the dialogue
+            elif cannot_escape:
+                success = 1
+                self._emulator.step(LowLevelActions.PRESS_BUTTON_B) # to clear the dialogue
+            elif cannot_run_from_trainer:
+                success = 2
+                self._emulator.step(LowLevelActions.PRESS_BUTTON_B)
+                self._emulator.step(LowLevelActions.PRESS_BUTTON_B) # Twice, to clear the dialogue
+            else:
+                pass # Should never happen, but might. 
+        elif option == "progress":
+            current_frame = self._emulator.get_current_frame()
+            self.go_to_battle_menu()
+            new_frame = self._emulator.get_current_frame()
+            if frame_changed(current_frame, new_frame):
+                success = 0 # valid frame change, screen changed
+            else:
+                success = -1 # uneccesary progress press
+        else:
+            pass # Will never happen.
+        return [self._state_tracker.report()], success
+    
+
+    
+
+class PickAttackAction(HighLevelAction):
+    def get_action_space(self):
+        return Discrete(4)
+    
+    def is_valid(self, option: int = None):
+        option = option - 1
+        if option is not None:
+            if option < 0 or option >=4:
+                return False        
+        return self._emulator.state_parser.is_in_fight_options_menu(self._emulator.get_current_frame())
+    
+    def parameters_to_space(self, option: int):
+        option = option - 1
+        return option
+    
+    def space_to_parameters(self, space_action):
+        return {"option": space_action + 1}
+    
+    def _execute(self, option: int):
+        # assume we are in the attack menu already
+        # first go to the top:
+        option = option - 1
+        flag = False
+        for _ in range(4):
+            self._emulator.step(LowLevelActions.PRESS_ARROW_UP)
+            if self._emulator.state_parser.is_on_top_attack_option(self._emulator.get_current_frame()):
+                flag = True
+                break
+        if not flag: # could not get to top. Some error
+            return [self._state_tracker.report()], -1
+        # then go down option times
+        for time in range(option):
+            self._emulator.step(LowLevelActions.PRESS_ARROW_DOWN)
+        self._emulator.step(LowLevelActions.PRESS_BUTTON_A) # confirm option
+        if self._emulator.state_parser.tried_no_pp_move(self._emulator.get_current_frame()):
+            self._emulator.step(LowLevelActions.PRESS_BUTTON_B) # to clear the no PP dialogue
+            return [self._state_tracker.report()], 1 # tried to use a move with no PP
+        return [self._state_tracker.report()], 0
 
 
 class TestAction(HighLevelAction):

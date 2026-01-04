@@ -75,6 +75,9 @@ class PokemonStateParser(StateParser, ABC):
                 ("pc_top_left", 0, 0, 6, 6),
                 ("battle_enemy_hp_text", 15, 17, 10, 5), 
                 ("battle_player_hp_text", 80, 73, 10, 5), 
+                ("battle_base_menu_top_left", 65, 96, 5, 5),
+                ("battle_fight_options_top_right", 80, 64, 5, 5),
+                ("battle_fight_options_cursor_on_top", 40, 103, 3, 3),
                 ("dialogue_choice_bottom_right", 153, 87, 6, 6),
                 ("name_entity_top_left", 0, 32, 6, 6),
                 ("player_card_middle", 56, 70, 6, 6),
@@ -102,14 +105,23 @@ class PokemonStateParser(StateParser, ABC):
 
     COMMON_MULTI_TARGET_REGIONS = [
         ("screen", 0, 0, 150, 140), # Most of the screen except for the very edges
-        ("dialogue_box_middle", 10, 105, 120, 30), # Middle of the dialogue box, but not on that spot where the blinking arrow cursor appears        
+        ("dialogue_box_middle", 10, 105, 120, 30), # Middle of the dialogue box, but not on that spot where the blinking arrow cursor appears. Useful for catching particular dialogues.         
         ("dialogue_box_full", 5, 100, 150, 40), # Full dialogue box area, is useful to capture for OCR purposes
+        ("screen_bottom_half", 5, 70, 150, 70), # Bottom half of the screen, useful for OCR of dialogue and other text
     ]
+    """ List of common multi-target named screen regions for Pokemon games."""
+
+    COMMON_MULTI_TARGETS = {
+        "dialogue_box_middle": ["got_away_safely", "cannot_escape", "cannot_run_from_trainer", 
+                                "no_pp_for_move"],
+    }
+    """ Common multi-targets for the common multi-target named screen regions. """
+
 
     def __init__(self, variant: str, pyboy: PyBoy, parameters: dict, 
                  additional_named_screen_region_details: List[Tuple[str, int, int, int, int]] = [],
                  additional_multi_target_named_screen_region_details: List[Tuple[str, int, int, int, int]] = [],
-                 multi_targets: Dict[str, List[str]] = {},
+                 override_multi_targets: Dict[str, List[str]] = {},
                  ):
         """
         Initializes the PokemonStateParser.
@@ -119,7 +131,7 @@ class PokemonStateParser(StateParser, ABC):
             parameters (dict): Configuration parameters for the emulator.
             additional_named_screen_region_details (List[Tuple[str, int, int, int, int]]): Parameters associated with additional named screen regions to include.
             additional_multi_target_named_screen_region_details (List[Tuple[str, int, int, int, int]]): Parameters associated with additional multi-target named screen regions to include.
-            multi_targets (Dict[str, List[str]]): Dictionary mapping region names to lists of target names for multi-target regions.
+            override_multi_targets (Dict[str, List[str]]): Dictionary mapping region names to lists of target names for multi-target regions.
                 By default, will add "menu_box_middle" with target "cursor_on_options". This is important because we don't want agents messing with the frame of the emulator (it will wreck our state parsing).
         """
         verify_parameters(parameters)
@@ -136,6 +148,12 @@ class PokemonStateParser(StateParser, ABC):
             named_screen_regions.append(region)
         multi_target_regions = _get_proper_regions(override_regions=additional_multi_target_named_screen_region_details, base_regions=self.COMMON_MULTI_TARGET_REGIONS)
         multi_target_region_names = [region[0] for region in multi_target_regions]
+        multi_targets = self.COMMON_MULTI_TARGETS.copy()
+        for key in override_multi_targets:
+            if key in multi_targets:
+                multi_targets[key].extend(override_multi_targets[key])
+            else:
+                multi_targets[key] = override_multi_targets[key]
         multi_target_provided_region_names = list(multi_targets.keys())
         if not set(multi_target_provided_region_names).issubset(set(multi_target_region_names)):
             log_error(f"Multi-target regions provided in multi_targets do not match the defined multi-target regions. Provided: {multi_target_provided_region_names}, Defined: {multi_target_region_names}", parameters)
@@ -204,10 +222,74 @@ class PokemonStateParser(StateParser, ABC):
         Returns:
             bool: True if in battle, False otherwise.
         """
+        if self.is_in_fight_bag(current_screen):
+            return False # Then, is in menu
         enemy_hp_match = self.named_region_matches_target(current_screen, "battle_enemy_hp_text")
         player_hp_match = self.named_region_matches_target(current_screen, "battle_player_hp_text")
         return enemy_hp_match or player_hp_match
+    
+    def is_in_base_battle_menu(self, current_screen: np.ndarray) -> bool:
+        """
+        Determines if the player is currently in the base battle menu by checking for the battle base menu top left region.
 
+        Args:
+            current_screen (np.ndarray): The current screen frame from the emulator.
+        Returns:
+            bool: True if in the base battle menu, False otherwise.
+        """
+        return self.named_region_matches_target(current_screen, "battle_base_menu_top_left")
+    
+    def is_in_run_screen(self, current_screen: np.ndarray) -> bool:
+        """
+        Determines if the player is currently in the run screen by checking for the battle base menu top left region.
+        Args:
+            current_screen (np.ndarray): The current screen frame from the emulator.
+        Returns:
+            bool: True if in the run screen, False otherwise.
+        """
+        got_away_safely = self.named_region_matches_multi_target(current_screen, "dialogue_box_middle", "got_away_safely")
+        cannot_escape = self.named_region_matches_multi_target(current_screen, "dialogue_box_middle", "cannot_escape")
+        cannot_run_from_trainer = self.named_region_matches_multi_target(current_screen, "dialogue_box_middle", "cannot_run_from_trainer")
+        return got_away_safely or cannot_escape or cannot_run_from_trainer
+    
+    def is_in_fight_options_menu(self, current_screen: np.ndarray) -> bool:
+        """
+        Determines if the player is currently in the fight options menu by checking for the battle fight options top right region.
+
+        Args:
+            current_screen (np.ndarray): The current screen frame from the emulator.
+        Returns:
+            bool: True if in the fight options menu, False otherwise.
+        """
+        return self.named_region_matches_target(current_screen, "battle_fight_options_top_right")
+    
+    def is_on_top_attack_option(self, current_screen: np.ndarray) -> bool:
+        """
+        Determines if the cursor is currently on the top attack option in the fight options menu.
+
+        Args:
+            current_screen (np.ndarray): The current screen frame from the emulator.
+        Returns:
+            bool: True if the cursor is on the top attack option, False otherwise.
+        """
+        return self.named_region_matches_target(current_screen, "battle_fight_options_cursor_on_top")
+
+    
+    def tried_no_pp_move(self, current_screen: np.ndarray) -> bool:
+        """
+        Determines if the player tried to use a move with no PP by checking for the no_pp_for_move target in the dialogue box middle region.
+
+        Args:
+            current_screen (np.ndarray): The current screen frame from the emulator.
+        Returns:
+            bool: True if the player tried to use a move with no PP, False otherwise.
+        """
+        return self.named_region_matches_multi_target(current_screen, "dialogue_box_middle", "no_pp_for_move")
+
+    @abstractmethod
+    def is_in_fight_bag(self, current_screen: np.ndarray) -> bool:
+        raise NotImplementedError
+    
     def is_in_menu(self, current_screen: np.ndarray, trust_previous: bool = False) -> bool:
         """
         Determines if any form of menu (or choice dialogue) is currently open by checking a variety of screen regions.
@@ -226,6 +308,8 @@ class PokemonStateParser(StateParser, ABC):
         if not trust_previous:
             if self.is_in_battle(current_screen):
                 return False
+        if self.is_in_fight_bag(current_screen):
+            return True
         if self.is_in_pokedex(current_screen):
             return True
         if self.is_in_pokemon_menu(current_screen):
@@ -298,7 +382,8 @@ class BasePokemonRedStateParser(PokemonStateParser, ABC):
                 ("pokedex_top_left", 7, 6, 12, 6),
                 ("pokedex_info_mid_left", 6, 71, 6, 6),
                 ("pokemon_list_hp_text", 32, 9, 10, 5),
-                ("pokemon_stats_line", 66, 55, 5, 5)
+                ("pokemon_stats_line", 66, 55, 5, 5),
+                ("battle_bag_options_bottom_left", 32, 96, 5, 5),
             ]
     """ Additional named screen regions specific to Pokemon Red games.
     pokedex_top_left: Top left of the screen when the Pokedex is open. Open the Pokedex to capture this.
@@ -314,10 +399,10 @@ class BasePokemonRedStateParser(PokemonStateParser, ABC):
     menu_box_middle: Middle of the menu box when the start menu is open. Open the start menu to capture this. 
     """
 
-    def __init__(self, pyboy: PyBoy, variant: str, parameters: dict, override_regions: List[Tuple[str, int, int, int, int]] = [], override_multi_target_regions: List[Tuple[str, int, int, int, int]] = [], multi_targets: Dict[str, List[str]] = {}):
+    def __init__(self, pyboy: PyBoy, variant: str, parameters: dict, override_regions: List[Tuple[str, int, int, int, int]] = [], override_multi_target_regions: List[Tuple[str, int, int, int, int]] = [], override_multi_targets: Dict[str, List[str]] = {}):
         self.REGIONS = _get_proper_regions(override_regions=override_regions, base_regions=self.REGIONS)
         self.MULTI_TARGET_REGIONS = _get_proper_regions(override_regions=override_multi_target_regions, base_regions=self.MULTI_TARGET_REGIONS)
-        super().__init__(variant=variant, pyboy=pyboy, parameters=parameters, additional_named_screen_region_details=self.REGIONS, additional_multi_target_named_screen_region_details=self.MULTI_TARGET_REGIONS, multi_targets=multi_targets)
+        super().__init__(variant=variant, pyboy=pyboy, parameters=parameters, additional_named_screen_region_details=self.REGIONS, additional_multi_target_named_screen_region_details=self.MULTI_TARGET_REGIONS, override_multi_targets=override_multi_targets)
 
     def is_in_pokedex(self, current_screen: np.ndarray) -> bool:
         return self.named_region_matches_target(current_screen, "pokedex_top_left") or self.named_region_matches_target(current_screen, "pokedex_info_mid_left")
@@ -325,6 +410,9 @@ class BasePokemonRedStateParser(PokemonStateParser, ABC):
     def is_in_pokemon_menu(self, current_screen: np.ndarray) -> bool:
         return self.named_region_matches_target(current_screen, "pokemon_list_hp_text") or self.named_region_matches_target(current_screen, "pokemon_stats_line")
     
+    def is_in_fight_bag(self, current_screen: np.ndarray) -> bool:
+        return self.named_region_matches_target(current_screen, "battle_bag_options_bottom_left")
+
     def __repr__(self):
         return f"<PokemonRedParser(variant={self.variant})>"
 
@@ -360,10 +448,10 @@ class BasePokemonCrystalStateParser(PokemonStateParser, ABC):
     menu_box_middle: Middle of the menu box when the start menu is open. Open the start menu to capture this. 
     """
 
-    def __init__(self, pyboy: PyBoy, variant: str, parameters: dict, override_regions: List[Tuple[str, int, int, int, int]] = [], override_multi_target_regions: List[Tuple[str, int, int, int, int]] = [], multi_targets: Dict[str, List[str]] = {}):
+    def __init__(self, pyboy: PyBoy, variant: str, parameters: dict, override_regions: List[Tuple[str, int, int, int, int]] = [], override_multi_target_regions: List[Tuple[str, int, int, int, int]] = [], override_multi_targets: Dict[str, List[str]] = {}):
         self.REGIONS = _get_proper_regions(override_regions=override_regions, base_regions=self.REGIONS)
         self.MULTI_TARGET_REGIONS = _get_proper_regions(override_regions=override_multi_target_regions, base_regions=self.MULTI_TARGET_REGIONS)
-        super().__init__(variant=variant, pyboy=pyboy, parameters=parameters, additional_named_screen_region_details=self.REGIONS, additional_multi_target_named_screen_region_details=self.MULTI_TARGET_REGIONS, multi_targets=multi_targets)
+        super().__init__(variant=variant, pyboy=pyboy, parameters=parameters, additional_named_screen_region_details=self.REGIONS, additional_multi_target_named_screen_region_details=self.MULTI_TARGET_REGIONS, override_multi_targets=override_multi_targets)
 
 
     def is_in_bag(self, current_screen: np.ndarray) -> bool:
@@ -371,6 +459,9 @@ class BasePokemonCrystalStateParser(PokemonStateParser, ABC):
         Determines if the Bag is currently open.
         """
         return self.named_region_matches_target(current_screen, "bag_text")
+    
+    def is_in_fight_bag(self, current_screen: np.ndarray) -> bool:
+        return self.is_in_bag(current_screen)
     
     def is_in_pokegear(self, current_screen: np.ndarray) -> bool:
         """
@@ -410,10 +501,10 @@ class BasePokemonCrystalStateParser(PokemonStateParser, ABC):
 
 class PokemonRedStateParser(BasePokemonRedStateParser):
     def __init__(self, pyboy, parameters):
-        multi_targets = {
+        override_multi_targets = {
             "dialogue_box_middle": ["picked_charmander", "picked_bulbasaur", "picked_squirtle"]
         }
-        super().__init__(pyboy, variant="pokemon_red", parameters=parameters, multi_targets=multi_targets)
+        super().__init__(pyboy, variant="pokemon_red", parameters=parameters, override_multi_targets=override_multi_targets)
 
 class PokemonBrownStateParser(BasePokemonRedStateParser):
     def __init__(self, pyboy, parameters):
