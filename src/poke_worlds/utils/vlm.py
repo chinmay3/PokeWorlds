@@ -247,14 +247,13 @@ def identify_matches(description: str, screens: List[np.ndarray], reference: Ima
     """
     Identifies which screens match the given reference image based on the description.
     """
-    texts = [f"The target, described as {description} is shown as reference in Picture 1. What does Picture 2 contain? Does it contain the object from Picture 1 in it? Answer with a [YES] if the object is in Picture 2 or [NO] if it is not, then [STOP] \nAnswer: " for _ in screens]
+    texts = [f"The target, described as {description} is shown as reference in Picture 1. Does Picture 2 contain the object from Picture 1 in it? Answer in the following format: \nExplanation: <briefly describe what is in Picture 2, with reference to the image in Picture 1>\nAnswer: <Yes or No>[STOP]" for _ in screens]
     images = []
     for screen in screens:
         images.append([reference, screen])
     outputs = HuggingFaceVLM.multi_infer(texts=texts, images=images, max_new_tokens=120)
     results = []
     for output in outputs:
-        print(output)
         if "yes" in output.lower():
             results.append(True)
         else:

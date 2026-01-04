@@ -233,14 +233,15 @@ class StateParser(ABC):
         self.image_references = {}
         """ Dictionary of image references loaded. """
         location = os.path.join(self.rom_data_path, "image_references")
-        for file in os.listdir(location):
-            image_path = os.path.join(location, file)
-            if image_path.endswith((".png", ".jpg", ".jpeg")):
-                reference_name = file.rsplit(".", 1)[0]
-                image = Image.open(image_path)
-                self.image_references[reference_name] = image
-            else:
-                log_warn(f"Found unsupported image extension {file} in {location}. Only place image files in this folder.", self._parameters)
+        if os.path.exists(location):
+            for file in os.listdir(location):
+                image_path = os.path.join(location, file)
+                if image_path.endswith((".png", ".jpg", ".jpeg")):
+                    reference_name = file.rsplit(".", 1)[0]
+                    image = Image.open(image_path)
+                    self.image_references[reference_name] = image
+                else:
+                    log_warn(f"Found unsupported image extension {file} in {location}. Only place image files in this folder.", self._parameters)
                 
 
     def bit_count(self, bits: int) -> int:
