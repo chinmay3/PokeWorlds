@@ -8,7 +8,7 @@ from typing import Optional, Type, Dict, Any, Tuple, List
 from abc import ABC, abstractmethod
 from poke_worlds.utils.vlm import ocr
 
-EPSILON = 0.01
+EPSILON = 0.0001
 """ Default epsilon for frame change detection. """
 
 class MetricGroup(ABC):
@@ -471,7 +471,6 @@ specific_final_metric = state_tracker.get_final_metric(("core", "average_steps_p
             current_frame = self.state_parser.get_current_frame()
         else:
             current_frame = recent_frames[-1]
-
         self.episode_metrics = {}
         for metric_group in self.metrics.values():
             metric_group.step(current_frame, recent_frames)

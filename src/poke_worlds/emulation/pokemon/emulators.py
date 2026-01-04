@@ -44,8 +44,8 @@ class PokemonEmulator(Emulator):
                 n_clicks += 1
         if len(all_next_frames) > 1:
             frames = np.concatenate(all_next_frames)
-            # Must update the tracker too
-            self._update_listeners_after_actions(frames)
+            # Must update the tracker too in general, but ngl, it isn't needed really for the nickname skip
+            # self._update_listeners_after_actions(frames)
         return frames, done
     
     def run_action_on_emulator(self, *args, **kwargs):
