@@ -656,15 +656,18 @@ class BattleMenuAction(HighLevelAction):
     def go_to_battle_menu(self):
         # assumes we are in battle menu or will get there with some B's
         # Must check we aren't in a 'learn new move' phase
+        state_reports = []
         for i in range(3):
             self._emulator.step(LowLevelActions.PRESS_BUTTON_B)
-        return
+            state_reports.append(self._state_tracker.report())
+        return state_reports
 
     def button_sequence(self, low_level_actions: List[LowLevelActions]):
-        self.go_to_battle_menu()
+        state_reports = self.go_to_battle_menu()
         for action in low_level_actions:
             self._emulator.step(action)
         self._emulator.step(LowLevelActions.PRESS_BUTTON_A) # confirm option
+        return state_reports + [self._state_tracker.report()]
 
 
     def go_to_fight_menu(self):
@@ -682,18 +685,16 @@ class BattleMenuAction(HighLevelAction):
     def _execute(self, option):
         success = -1
         if option == "fight":
-            self.go_to_fight_menu()
+            state_reports = self.go_to_fight_menu()
             success = 0 if self._emulator.state_parser.is_in_fight_options_menu(self._emulator.get_current_frame()) else -1
         elif option == "bag":
-            self.go_to_bag_menu()
+            state_reports = self.go_to_bag_menu()
             success = 0 if self._emulator.state_parser.is_in_fight_bag(self._emulator.get_current_frame()) else -1
         elif option == "pokemon":
-            self.go_to_pokemon_menu()
+            state_reports = self.go_to_pokemon_menu()
             success = 0 if self._emulator.state_parser.is_in_pokemon_menu(self._emulator.get_current_frame()) else -1
         elif option == "run":
-            state_reports = []
-            self.go_to_run()
-            state_reports.append(self._state_tracker.report())
+            state_reports = self.go_to_run()
             current_frame = self._emulator.get_current_frame()
             got_away_safely = self._emulator.state_parser.named_region_matches_multi_target(current_frame, "dialogue_box_middle", "got_away_safely")
             cannot_escape = self._emulator.state_parser.named_region_matches_multi_target(current_frame, "dialogue_box_middle", "cannot_escape")
@@ -707,6 +708,7 @@ class BattleMenuAction(HighLevelAction):
             elif cannot_run_from_trainer:
                 success = 2
                 self._emulator.step(LowLevelActions.PRESS_BUTTON_B)
+                state_reports.append(self._state_tracker.report())
                 self._emulator.step(LowLevelActions.PRESS_BUTTON_B) # Twice, to clear the dialogue
             else:
                 pass # Should never happen, but might. 
@@ -714,7 +716,7 @@ class BattleMenuAction(HighLevelAction):
             return state_reports, success
         elif option == "progress":
             current_frame = self._emulator.get_current_frame()
-            self.go_to_battle_menu()
+            state_reports = self.go_to_battle_menu()
             new_frame = self._emulator.get_current_frame()
             if frame_changed(current_frame, new_frame):
                 success = 0 # valid frame change, screen changed
@@ -722,7 +724,7 @@ class BattleMenuAction(HighLevelAction):
                 success = -1 # uneccesary progress press
         else:
             pass # Will never happen.
-        return [self._state_tracker.report()], success
+        return state_reports, success
     
 
     
