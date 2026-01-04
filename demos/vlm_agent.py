@@ -14,33 +14,22 @@ import click
 class VL:
     system_prompt = """
 You are playing a Pokemon game. 
-The set of allowed actions are:
-1. MoveSteps(direction: str, steps: int): Move the character in the specified direction ('up', 'down', 'left', 'right') for a certain number of steps (1-10). Can ONLY be used in the FREE ROAM state. Example usage: MoveSteps("up", 3)
-2. Interact(): Interact with the object or character directly in front of the player. Will fail if the player is not facing the object or is even one grid space away. Can ONLY be used in the FREE ROAM state. Example usage: Interact()   
-3. MenuAction(menu_action: str): Perform a menu action. The possible actions are: navigate menu options ("up", "down", "left", "right"), choose the highlighted option ("confirm"), and " go back to the previous menu or exit the menu ("exit"). Can ONLY be used when in a MENU or BATTLE state. Example usage: MenuAction("confirm")
-4. PassDialogue(): Advance the dialogue or text box by pressing the confirm button. Can ONLY be used when in a DIALOGUE state. Example usage: PassDialogue()
-You must respond with exactly one of the above actions in the right format. Any other action is invalid. 
-
-Your grand goal is to acquire a pokemon and then leave the lab. However, you left yourself the following mission for the PREVIOUS action: [MISSION]
+Your grand goal is to acquire a pokemon. You left yourself the following note for this mission: [MISSION]
 
 Additional Context About Game:
 [PREV]
-[ALLOWED]
 
 Your instruction is to:
-1. First, given the result of your previous action and the instructions for updating your mission, declare your new mission. For example, if you wanted to move to an item that was at a particular grid offset and you moved part of the way, update your mission to reflect the change in offset. If you are facing that object then declare your mission to interact with it, etc. Leave an instruction for your next step and also provide guidance on how to update that instruction based on the result of the action it performs. 
+1. First, given the result of your previous action, update the note for the mission.
 2. Select a final action you will perform
 
 You should format your action output as follows:
-Mission: summarize the immediate action you are trying to take right now. From the results of your actions, does it seem like you have succeeded? Has your context changed? If you do succeed, what will you do next? What will you do after that?
+Note: summarize the immediate action you are trying to take right now. From the results of your actions, does it seem like you have succeeded? Has your context changed? If you do succeed, what will you do next? What will you do after that?
 Critique of Previous Action Failures: From the results of your previous actions, have you been moving closer to your immediate goal? If not, why do you think that is? What can you do differently this time to improve your chances of success?
 Action: <action>SELECTED ACTION COMMAND</action>
 
 Now, based on the current frame and the context, first think and reason about your situation. Then, output your next action in the proper format, do not forget to enclose it with action tags: <action>COMMAND</action>. 
-    """
-    system_prompt = """
-You are playing a Pokemon game. 
-Your target is one of the pokeballs on the bench to the top right. First, analyze the grid on the current frame, assuming the player in the centre is at (0, 0). How many pokeballs are there on the bench? What are their exact coordinates in (x, y) space, relative to the player?
+[ALLOWED]
     """
     def __init__(self, env, size=32):
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
@@ -52,9 +41,10 @@ Your target is one of the pokeballs on the bench to the top right. First, analyz
         self.env = env
         self.actions = self.env.actions
 
-    def infer(self, current_frame, prev_message, mission, allowed_string=""):
+    def infer(self, current_frame, prev_message, mission):
         use_prompt = self.system_prompt
         use_prompt = use_prompt.replace("[MISSION]", mission)
+        allowed_string = self.env._controller.get_action_strings()
         use_prompt = use_prompt.replace("[ALLOWED]", allowed_string)
         use_prompt = use_prompt.replace("[PREV]", prev_message)
         current_frame = current_frame.reshape(current_frame.shape[0], current_frame.shape[1])
