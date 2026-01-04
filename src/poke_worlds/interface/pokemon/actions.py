@@ -29,8 +29,14 @@ def _plot(past: np.ndarray, current: np.ndarray):
 
 class PassDialogueAction(SingleHighLevelAction):
     """
-    This only triggers in the gaps 
-    Is just a skip through dialogue action.
+    Skips dialogue by pressing the B button.
+
+    Is Valid When: In Dialogue State
+
+    Action Success Interpretation:
+        - -1: Frame did not change
+        - 0: Frame changed and no longer in dialogue state
+        - 1: Frame changed but still in dialogue state
     """
     REQUIRED_STATE_PARSER = PokemonStateParser
     REQUIRED_STATE_TRACKER = CorePokemonTracker
@@ -43,15 +49,23 @@ class PassDialogueAction(SingleHighLevelAction):
     
     def _execute(self):
         frames, done = self._emulator.step(LowLevelActions.PRESS_BUTTON_B)
-        # if we are still in dialogue, its a fail:
-        action_success = 0 if self._emulator.state_parser.get_agent_state(frames[-1]) == AgentState.IN_DIALOGUE else -1
-        return [self._state_tracker.report()], action_success
+        report = self._state_tracker.report()
+        if not report["core"]["frame_changed"]:
+            action_success = -1
+        else:
+            action_success = 0 if self._emulator.state_parser.get_agent_state(frames[-1]) != AgentState.IN_DIALOGUE else 1
+        return [report], action_success
 
 
 class InteractAction(SingleHighLevelAction):
     """
-    Handles interaction actions in the Pokemon environment.
-    Currently only supports the "interact" action, which presses the A button.
+    Presses the A button to interact with an object in front of the agent.
+
+    Is Valid When: In Free Roam State
+
+    Action Success Interpretation:
+        - -1: Frame did not change or agent still in free roam state
+        - 1: Agent not in free roam state
     """
 
     REQUIRED_STATE_PARSER = PokemonStateParser    
@@ -85,12 +99,18 @@ class InteractAction(SingleHighLevelAction):
         return [self._state_tracker.report()], action_success # 0 means something maybe happened. 1 means def happened.
     
 
-
-
 class BaseMovementAction(HighLevelAction, ABC):
     """
     Base class for movement actions in the Pokemon environment.
     Has utility methods for moving in directions.
+
+    Is Valid When: In Free Roam State
+
+    Action Success Interpretation:
+        - -1: Frame did not change, even on the first step
+        - 0: Finished all steps
+        - 1: Took some steps, but not all, and then frame stopped changing OR the frame starts oscillating (trying to check for jitter). This usually means we ran into an obstacle.
+        - 2: Took some steps, but agent state changed from free roam. This often means we entered a cutscene or battle. 
     """
     REQUIRED_STATE_TRACKER = CorePokemonTracker
     REQUIRED_STATE_PARSER = PokemonStateParser
@@ -98,17 +118,17 @@ class BaseMovementAction(HighLevelAction, ABC):
     def move(self, direction: str, steps: int) -> Tuple[np.ndarray, int]:
         """
         Move in a given direction for a number of steps.
-        Args:
-            direction (str): One of "up", "down", "left", "right"
-            steps (int): Number of steps to move in that direction
-        Returns:
-            Tuple[List[Dict], int]: A tuple containing:
+        
+        :param direction: One of "up", "down", "left", "right"
+        :type direction: str
+        :param steps: Number of steps to move in that direction
+        :type steps: int
+        :return:  A tuple containing:
+                
                 - A list of state tracker reports after each low level action executed. Length is equal to the number of low level actions executed.
-                - An integer action success status:
-                    0 -> finished all steps
-                    1 -> took some steps, but not all, and then frame stopped changing OR the frame starts oscillating (trying to check for jitter)
-                    2 -> took some steps, but agent state changed from free roam
-                   -1 -> frame didn't change, even on the first step
+                
+                - An integer action success status
+        :rtype: Tuple[ndarray[_AnyShape, dtype[Any]], int]
         """
         action_dict = {"right": LowLevelActions.PRESS_ARROW_RIGHT, 
                        "down": LowLevelActions.PRESS_ARROW_DOWN, 
@@ -161,13 +181,7 @@ class BaseMovementAction(HighLevelAction, ABC):
         Args:
             direction_steps (List[Tuple[str, int]]): A list of tuples, each containing a direction and number of steps to move in that direction.
         Returns:
-            Tuple[List[Dict], int]: A tuple containing:
-                - A list of state tracker reports after each low level action executed. Length is equal to the number of low level actions executed.
-                - An integer action success status:
-                    0 -> finished all steps
-                    1 -> took some steps, but not all, and then frame stopped changing OR the frame starts oscillating (trying to check for jitter)
-                    2 -> took some steps, but agent state changed from free roam
-                   -1 -> frame didn't change, even on the first step
+            Tuple[List[Dict], int]: A tuple containing the chained move information. See self.move() for details. 
         """
         all_transition_states = []
         for direction, steps in direction_steps:
@@ -184,13 +198,7 @@ class BaseMovementAction(HighLevelAction, ABC):
             direction (str): One of "up", "down", "left", "right"
             ind_step (int): Number of steps to move in each individual move call.
         Returns:
-            Tuple[List[Dict], int]: A tuple containing:
-                - A list of state tracker reports after each low level action executed. Length is equal to the number of low level actions executed.
-                - An integer action success status:
-                    0 -> finished all steps
-                    1 -> took some steps, but not all, and then frame stopped changing OR the frame starts oscillating (trying to check for jitter)
-                    2 -> took some steps, but agent state changed from free roam
-                   -1 -> frame didn't change, even on the first step
+            Tuple[List[Dict], int]: A tuple containing the move until stop information. See self.move() for details. 
         """
         all_transition_states = []
         n_total_steps = 0
@@ -210,6 +218,16 @@ class BaseMovementAction(HighLevelAction, ABC):
 
 
 class MoveStepsAction(BaseMovementAction):
+    """
+    Moves the agent in a specified cardinal direction for a specified number of steps.
+
+    Is Valid When: In Free Roam State
+    Action Success Interpretation:
+        - -1: Frame did not change, even on the first step
+        - 0: Finished all steps
+        - 1: Took some steps, but not all, and then frame stopped changing OR the frame starts oscillating (trying to check for jitter). This usually means we ran into an obstacle.
+        - 2: Took some steps, but agent state changed from free roam. This often means we entered a cutscene or battle.
+    """
 
     def get_action_space(self):
         """
@@ -282,8 +300,15 @@ class MoveStepsAction(BaseMovementAction):
 
 class MenuAction(HighLevelAction):
     """
-    Handles opening and navigating the in-game start menu. Will also handle PC screens and dialogue choices. 
-    Unfortunately, since PokemonCrystal based games has a bag with submenus, I need to add left right actions as well.
+    Allows simple navigation and option selection of menus. 
+
+    Is Valid When: In Menu State
+
+    Action Success Interpretation:
+        - -1: Frame did not change.
+        - 0: Frame changed. 
+
+    TODO: Unfortunately, since PokemonCrystal based games has a bag with submenus, I need to add left right actions as well.
     Perhaps I can add a bag actions class later and separate these out. 
     """
 
@@ -355,27 +380,25 @@ class MenuAction(HighLevelAction):
         action = self._MENU_ACTION_MAP[menu_action]
         current_frame = self._emulator.get_current_frame()
         frames, done = self._emulator.step(action)
-        action_success = frame_changed(current_frame, frames[-1])
+        action_success = 0 if frame_changed(current_frame, frames[-1]) else -1
         return [self._state_tracker.report()], action_success
         
-
-class BattleActions:
-    pass
-
-class PokemonCrystalBagActions:
-    pass
-
-
-
 class LocateAction(HighLevelAction):
     """
-    Locates a target in the current screen using VLM inference.
+    Locates a target in the current screen.
     1. Divides the screen into grid cells.
     2. Recursively divides the grid cells into quadrants and checks each quadrant for the target.
     3. If a quadrant contains the target, further divides it into smaller quadrants until the smallest grid cells are reached.
     4. Returns the grid cell coordinates that may contain the target.
     
     Uses VLM inference to check each grid cell for the target.
+
+    Is Valid When: In Free Roam State
+    
+    Action Success Interpretation:
+            - 0: Object found definitively
+            - 1: Object found but only potentially
+            - 2: Object not found
     """
 
     prompt = """
@@ -511,14 +534,25 @@ class LocateAction(HighLevelAction):
             else:
                 message += f"Potential Cells: {potential_cells}\nDefinitive Cells: {definitive_cells}"
         ret_dict["action_success_message"] = message
-        return [ret_dict], 0
+        action_success = None
+        if len(definitive_cells) > 0:
+            action_success = 0
+        elif found:
+            action_success = 1
+        else:
+            action_success = 2
+        return [ret_dict], action_success
     
     def _execute(self, target: str):
         return self.do_location(target=target)
     
 class LocateSpecificAction(LocateAction, ABC):
+    """
+    Calls on LocateAction class functionality, but for predefined descriptions of specific visual entities of interest. 
+    Has the same validity and action success interpretation. 
+    """
     options = {
-        "pokeball": "a pixelated, greyscale Poke Ball sprite, recognizable by its circular shape, white center, black band around the top, and grey body",
+        "item": "a pixelated, greyscale Poke Ball sprite, recognizable by its circular shape, white center, black band around the top, and grey body",
         "npc": "a pixelated human-like character sprite",
         "grass": "a pixelated, greyscale patch of grass that resembles wavy dark lines.",
         "sign": "a pixelated, greyscale white signpost with dots on its face"
@@ -547,6 +581,10 @@ class LocateSpecificAction(LocateAction, ABC):
         return super()._execute(target=target)
     
 class LocateReferenceAction(LocateAction, ABC):
+    """
+    Calls on LocateAction class functionality, but for compares the current screen with presaved image references and descriptions of specific visual entities of interest. 
+    Has the same validity and action success interpretation. 
+    """    
     descriptions = {
         "item": " a pixelated, greyscale Poke Ball sprite, recognizable by its circular shape, white center, black band around the top, and grey body",
         "grass": "a pixelated, greyscale patch of grass that resembles wavy dark lines",
@@ -585,6 +623,16 @@ class CheckInteractionAction(SingleHighLevelAction):
     """
     Checks whether a target object is in the interaction sphere of the agent.
     Uses VLM inference to check each grid cell for the target.
+    1. Checks the orientation of the agent using VLM inference.
+    2. Captures the grid cell in front of the agent and uses VLM inference to describe what is in the cell.
+
+    Is Valid When: In Free Roam State
+
+    Action Success Interpretation:
+        - -1: VLM failure: Could not parse yes or no from response
+        - 0: There is something to interact with in front of the agent.
+        - 1: There is nothing to interact with in front of the agent.
+
     """
     orientation_prompt = """
     You are playing Pokemon and are given a screen capture of the player. Which direction is the player facing?
@@ -596,8 +644,11 @@ class CheckInteractionAction(SingleHighLevelAction):
     percieve_prompt = """
     You are playing Pokemon and are given a screen capture of the grid cell in front of the player. 
     Briefly describe what you see in the image, is it an item, or NPC that can be interacted with? Or is it a door or cave that can be entered? If the cell seems empty (or a background texture), say so.
-    Give only a single sentence response, and then [STOP]
-    Output:
+    Give your answer in the following format:
+    Description: <a single sentence description of the cell>
+    Answer: <YES (if there is something to interact with) or NO (if there is nothing to interact with)>
+    and then [STOP]
+    Description:
     """
     def is_valid(self, **kwargs):
         return self._state_tracker.get_episode_metric(("pokemon_core", "agent_state")) == AgentState.FREE_ROAM
@@ -621,17 +672,35 @@ class CheckInteractionAction(SingleHighLevelAction):
         cardinal_screen = grid_cells[cardinal]
         percieve_output = perform_vlm_inference(texts=[self.percieve_prompt], images=[cardinal_screen], max_new_tokens=50)[0]
         action_success = 0
+        if "answer: yes".lower() in percieve_output.lower():
+            pass
+        elif "answer: no".lower() in percieve_output.lower():
+            action_success = 1
+        else:
+            action_success = -1
         ret_dict = self._state_tracker.report()
         ret_dict["action_success_message"] = percieve_output
         return [ret_dict], action_success
 
         
 class BattleMenuAction(HighLevelAction):
+    """
+    Allows navigation of the battle menu.
+
+    Is Valid When: In Battle State
+
+    Action Success Interpretation:
+        - -1: Navigation Failure. Screen did not end up in expected end state. 
+        - 0: Navigation Success. Screen ended up in expected end state. For run, got away safely.
+        - 1: Run Attempt Failed (cannot escape wild pokemon)
+        - 2: Run Attempt Failed (cannot escape trainer battle)
+    """
     _OPTIONS = ["fight", "bag", "pokemon", "run", "progress"]
     def is_valid(self, option: str = None):
         if option is not None and option not in self._OPTIONS:
             return False
         state = self._state_tracker.get_episode_metric(("pokemon_core", "agent_state"))
+        # TODO: Must check we aren't in a 'learn new move' screen
         return state == AgentState.IN_BATTLE
 
     def get_action_space(self):
@@ -655,7 +724,6 @@ class BattleMenuAction(HighLevelAction):
     
     def go_to_battle_menu(self):
         # assumes we are in battle menu or will get there with some B's
-        # Must check we aren't in a 'learn new move' phase
         state_reports = []
         for i in range(3):
             self._emulator.step(LowLevelActions.PRESS_BUTTON_B)
@@ -727,9 +795,17 @@ class BattleMenuAction(HighLevelAction):
         return state_reports, success
     
 
-    
-
 class PickAttackAction(HighLevelAction):
+    """
+    Selects an attack option in the battle fight menu.
+
+    Is Valid When: In Battle State, In Fight Menu
+
+    Action Success Interpretation:
+        - -1: Navigation Failure. Either could not get to the top of the attack menu (this should not happen) or the option index was too high (more likely the cause of failure).
+        - 0: Used attack successfully.
+        - 1: Tried to use a move with no PP remaining.
+    """
     def get_action_space(self):
         return Discrete(4)
     
@@ -762,6 +838,9 @@ class PickAttackAction(HighLevelAction):
         # then go down option times
         for time in range(option):
             self._emulator.step(LowLevelActions.PRESS_ARROW_DOWN)
+            if self._emulator.state_parser.is_on_top_attack_option(self._emulator.get_current_frame()):
+                # went back to top, means that option was invalid
+                return [self._state_tracker.report()], -1
         state_reports = []
         self._emulator.step(LowLevelActions.PRESS_BUTTON_A) # confirm option
         state_reports.append(self._state_tracker.report())
@@ -773,6 +852,10 @@ class PickAttackAction(HighLevelAction):
             self._emulator.step(LowLevelActions.PRESS_BUTTON_B) # to get through any attack animation dialogue
             state_reports.append(self._state_tracker.report())
         return state_reports, 0
+
+
+class PokemonCrystalBagActions:
+    pass
 
 
 class TestAction(HighLevelAction):

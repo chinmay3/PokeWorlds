@@ -58,19 +58,23 @@ class HighLevelAction(ABC):
     def get_action_space(self) -> Space:
         """
         Returns the Gym defined Space that characterizes the high level action's parameter space.
+
+        You can use this API to get a Space for sampling high level actions of this type.
+
+        Returns:
+            Space: The Gym space that characterizes the high level action's parameter space.
         """
         raise NotImplementedError
     
     @abstractmethod
     def space_to_parameters(self, space_action: Space) -> Dict[str, Any]:
         """
-        Interprets a Gym space action into the high level action's parameters.
-
-        Args:
-            space_action (Space): The action in the high level action's parameter space.
-
-        Returns: 
-            - Dict[str, Any]: The high level action's parameters that correspond to the space action.
+        Converts a Gym space action into high level action parameters.
+        
+        :param space_action: The action in the high level action's parameter space.
+        :type space_action: Space
+        :return: The high level action's parameters corresponding to the space action.
+        :rtype: Dict[str, Any]
         """
         raise NotImplementedError
     
@@ -78,12 +82,11 @@ class HighLevelAction(ABC):
     def parameters_to_space(self, **kwargs) -> Space:
         """
         Converts high level action parameters into a Gym space action.
-
-        Args:
-            **kwargs: The high level action's parameters.
-
-        Returns: 
-            Space: The action in the high level action's parameter space that corresponds to the parameters.
+        
+        :param kwargs: The high level action's parameters.
+        :type kwargs: Dict[str, Any]
+        :return: The action in the high level action's parameter space.
+        :rtype: Space
         """
         raise NotImplementedError
     

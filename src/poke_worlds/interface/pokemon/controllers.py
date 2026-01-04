@@ -2,103 +2,107 @@ from poke_worlds.utils import log_error, log_info
 from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, LocateAction,LocateSpecificAction, LocateReferenceAction, CheckInteractionAction, BattleMenuAction, PickAttackAction
 from poke_worlds.interface.controller import Controller
 from poke_worlds.interface.action import HighLevelAction
+from poke_worlds.emulation.pokemon.parsers import AgentState
 from typing import Dict, Any
 
 
 class PokemonStateWiseController(Controller):
     ACTIONS = [MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, LocateAction, LocateSpecificAction, LocateReferenceAction, CheckInteractionAction, BattleMenuAction, PickAttackAction]
 
-    def _parse_distance(self, distance_str):
-        if distance_str.count(":") != 1:
-            return None, None
-        direction_str, steps = distance_str.split(":")
-        direction = None
-        if direction_str == "u":
-            direction = "up"
-        elif direction_str == "d":
-            direction = "down"
-        elif direction_str == "l":
-            direction = "left"
-        elif direction_str == "r":
-            direction = "right"
-        else:
-            return None, None
-        if not steps.strip().isnumeric():
-            return None, None
-        else:
-            return MoveStepsAction, {"direction": direction, "steps": int(steps.strip())}        
-            
-
     def string_to_high_level_action(self, input_str):
         input_str = input_str.lower().strip()
-        if input_str == "a":
-            return InteractAction, {}
-        elif input_str == "p":
-            return PassDialogueAction, {}
-        elif input_str == "t":
-            return TestAction, {}
-        elif input_str == "c":
+        if "(" not in input_str or ")" not in input_str:
+            return None, None # Invalid format
+        action_name = input_str.split("(")[0].strip()
+        action_args_str = input_str.split("(")[1].split(")")[0].strip()
+        # First handle the no arg actions
+        if action_name == "checkinteraction":
             return CheckInteractionAction, {}
-        elif input_str.startswith("b "):
-            rest = input_str[2:].strip()
-            if rest == "f":
-                return BattleMenuAction, {"option": "fight"}
-            elif rest == "p":
-                return BattleMenuAction, {"option": "pokemon"}
-            elif rest == "b":
-                return BattleMenuAction, {"option": "bag"}
-            elif rest == "r":
-                return BattleMenuAction, {"option": "run"}
-            elif rest == "c":
-                return BattleMenuAction, {"option": "progress"}
+        if action_name == "interact":
+            return InteractAction, {}
+        if action_name == "passdialogue":
+            return PassDialogueAction, {}
+        # Now handle the actions with fixed options
+        if action_name == "locate":
+            item = action_args_str.strip()
+            image_references = LocateReferenceAction.image_references.keys()
+            specific_options = LocateSpecificAction.options.keys()
+            # prefer the image_references if both match
+            if item in image_references:
+                return LocateReferenceAction, {"option": item}
+            elif item in specific_options:
+                return LocateSpecificAction, {"option": item}
+            else:
+                return None, None # Could go to the generic LocateAction, but for now I don't trust the VLM lol. 
+        if action_name == "battlemenu":
+            option = action_args_str.strip()
+            if option in ["fight", "pokemon", "bag", "run", "progress"]:
+                return BattleMenuAction, {"option": option}
             else:
                 return None, None
-        elif input_str.startswith("f "):
-            rest = input_str[2:].strip()
-            if rest.isnumeric():
-                return PickAttackAction, {"option": int(rest)}
+        if action_name == "pickattack":
+            if not action_args_str.strip().isnumeric():
+                return None, None
+            option = int(action_args_str.strip())
+            if option < 1 or option > 4:
+                return None, None
+            return PickAttackAction, {"option": option}
+        if action_name == "menu":
+            option = action_args_str.strip()
+            if option in ["up", "down", "confirm", "back"]:
+                return MenuAction, {"menu_action": option}
             else:
                 return None, None
-        elif input_str.startswith("ls"):
-            rest = input_str[2:].strip()
-            if rest == "grass":
-                return LocateSpecificAction, {"target": "grass"}
-            elif rest == "item":
-                return LocateSpecificAction, {"target": "item"}
-            elif rest == "npc":
-                return LocateSpecificAction, {"target": "npc"}
-            else:
+        if action_name == "move":
+            direction, steps = action_args_str.split(",")
+            direction = direction.strip()
+            steps = steps.strip()
+            if direction not in ["up", "down", "left", "right"]:
                 return None, None
-        elif input_str.startswith("lr"):
-            rest = input_str[2:].strip()
-            return LocateReferenceAction, {"image_reference": rest}
-        elif input_str.startswith("l "):
-            return LocateAction, {"target": input_str[2:].strip()}
-        if ":" in input_str:
-            return self._parse_distance(input_str)
-        else:
-            if input_str == "m_u":
-                return MenuAction, {"menu_action": "up"}
-            elif input_str == "m_d":
-                return MenuAction, {"menu_action": "down"}
-            elif input_str == "m_a":
-                return MenuAction, {"menu_action": "confirm"}
-            elif input_str == "m_b":
-                return MenuAction, {"menu_action": "exit"}
-            elif input_str == "m_o":
-                return MenuAction, {"menu_action": "open"}
-            elif input_str == "m_l":
-                return MenuAction, {"menu_action": "left"}
-            elif input_str == "m_r":
-                return MenuAction, {"menu_action": "right"}
+            if not steps.isnumeric():
+                return None, None
+            return MoveStepsAction, {"direction": direction, "steps": int(steps)}
         return None, None
-
         
     def get_action_strings(self):
-        msg = f"""
-        <direction(u,d,r,l)>: <steps(int)> or <menu(m_u, m_d, m_r, m_l, m_a, m_b, m_o)> or <interaction(a)> or <pass_dialogue(p)> or <test(t)> or <locate(l <string>)> or <locate_specific(ls <grass/item/npc/etc>)> or <locate_reference(lr <item/grass/sign/etc>)> or <check_interaction(c)>
-        """
-        return msg    
+        available_actions = "Available Actions:\n"
+        current_state = self._emulator.state_parser.get_agent_state(self._emulator.get_current_frame())
+        all_options = set(LocateReferenceAction.image_references.keys()).union(LocateSpecificAction.options.keys())
+        locate_option_strings = ", ".join(all_options)
+        free_roam_action_strings = {
+            LocateReferenceAction: f"Locate(<{locate_option_strings}>): Locate all instances of the specified visual entity in the current screen, and return their coordinates relative to your current position.",
+            MoveStepsAction: "Move(<up, down, left or right>, <steps: int>): Move a specified number of steps in a direction.",
+            CheckInteractionAction: "CheckInteraction(): Check if there is something to interact with in front of you.",
+            InteractAction: "Interact(): Interact with cell directly in front of you. Only works if there is something to interact with.",
+        }
+        dialogue_action_strings = {
+            PassDialogueAction: "PassDialogue(): Advance the dialogue by one step.",
+        }
+        battle_action_strings = {
+            BattleMenuAction: "BattleMenu(<fight, pokemon, bag, run or progress>): Navigate the battle menu to select an option. Fight to choose an attack, Pokemon to switch Pokemon, Bag to use an item, Run to attempt to flee the battle, and Progress to continue dialogue or other battle events.",
+        }
+        pick_attack_action_strings = {
+            PickAttackAction: "PickAttack(<1-4>): Select an attack option in the battle fight menu.",
+        }
+        menu_action_strings = {
+            MenuAction: "Menu(<up, down, confirm or back>): Navigate the game menu.",
+        }
+        if current_state == AgentState.FREE_ROAM:
+            actions = free_roam_action_strings
+        elif current_state == AgentState.IN_DIALOGUE:
+            actions = dialogue_action_strings
+        elif current_state == AgentState.IN_BATTLE:
+            if self._emulator.state_parser.is_in_fight_options_menu(self._emulator.get_current_frame()):
+                actions = {**battle_action_strings, **pick_attack_action_strings}
+            else:
+                actions = battle_action_strings
+        elif current_state == AgentState.IN_MENU:
+            actions = menu_action_strings
+        else:
+            log_error(f"Unknown agent state {current_state} when getting action strings.")
+        for action_class, action_desc in actions.items():
+            available_actions += f"- {action_desc}\n"
+        return available_actions
     
     def get_action_success_message(self, action: HighLevelAction, action_kwargs: Dict[str, Any], action_success: int) -> str:
         action_success_message = ""
