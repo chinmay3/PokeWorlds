@@ -223,9 +223,10 @@ class PokemonOCRMetric(OCRMetric):
 
     def start(self):
         self.kinds = {
-            "dialogue": "dialogue_box_full",
-            "battle_attack_options": "screen_bottom_half"
+            "dialogue": ("dialogue_box_full", None),
+            "battle_attack_options": ("screen_bottom_half", "The following are the attack options available in a Pokémon battle. There are a maximum of four attacks. List the attack names only, in the following format: 1. <attack_name>, 2. <attack_name>, etc. If there are less than four attacks, only list the available ones.")
         }  
+        super().start()
 
     def can_read_kind(self, current_frame: np.ndarray, kind: str) -> bool:
         self.state_parser: PokemonStateParser
