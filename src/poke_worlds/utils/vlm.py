@@ -237,15 +237,15 @@ def ocr(images: List[np.ndarray], *, text_prompt=None, do_merge: bool=True) -> L
     if text_prompt is None:
         text_prompt = "If there is no text in the image, just say NONE. Otherwise, perform OCR and state the text in this image:"
     parameters = project_parameters
-    texts = [text_prompt] * len(images)
     batch_size = parameters["ocr_batch_size"]
     max_new_tokens = parameters["ocr_max_new_tokens"]
     use_images = []
     for image in images:
-        if image.mean() > 234:
+        if image.mean() < 234:
             use_images.append(image)
     if len(use_images) == 0:
         return []
+    texts = [text_prompt] * len(use_images)    
     ocred = perform_vlm_inference(texts=texts, images=use_images, max_new_tokens=max_new_tokens, batch_size=batch_size)
     for i, res in enumerate(ocred):
         if res.strip().lower() == "none":
