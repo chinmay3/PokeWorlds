@@ -30,7 +30,7 @@ Message From Most Recent Observation:
 [OCR]
     """
 
-    action_instruction_prompt = """
+    action_instruction_prompt = f"""
 Your instruction is to:
 1. Given the results of your previous actions and the state of the current screen, decide whether your mission is complete or not.
 2. If complete, give a concise summary of the important dialogues you saw on the way, and any important lessons learned.
@@ -43,10 +43,14 @@ Mission Completed: <Yes/No>.
 If Yes: 
     Learnings: <CONCISE SUMMARY OF LESSONS LEARNED AND IMPORTANT DIALOGUES>.
 If No: 
-    Critique of Previous Action Failures: From the results of your previous actions, have you been moving closer to your immediate goal? If not, why do you think that is? What can you do differently this time to improve your chances of success?
     Note: Update your note with important information that will help guide you to your mission. Has your context changed from the previous note? What should your overall next step be? Have you learned anything from the dialogues or screens that you should track. 
-    Action: <action>SELECTED ACTION COMMAND</action>. Current state is [STATE]. The allowed actions for this state are:\n[ALLOWED_ACTIONS]. 
+    Critique of Previous Action Failures: From the results of your previous actions, have you been moving closer to your immediate goal? If not, why do you think that is? What can you do differently this time to improve your chances of success? If you are stuck in a loop, what is the likely reason and how can you break out of it? Importantly, if you are moving towards a coordinate, remember that the coordinate will change as you move, so state the new target coordinate for the next step if you are using a move action. 
+    Action: SELECTED ACTION COMMAND. 
+    \nCurrent state is [STATE]. The allowed actions for this state are:\n[ALLOWED_ACTIONS]. 
 
+
+Information from prior steps:
+{prev_information_prompt}    
 Now, based on the current frame and the context, respond in the proper format:
     """
 
@@ -59,9 +63,6 @@ Provide a concise summary of what went wrong and any suggestions for future atte
 
     full_action_prompt = f"""
 {system_prompt}
-
-Information from prior steps:
-{prev_information_prompt}
 
 {action_instruction_prompt}
 """
@@ -82,7 +83,9 @@ Then, craft a single, concise note for your player agent to follow to achieve th
 Format your response as:
 High Level Plan: 
 1. STEP ONE (Simple description of step and Criteria for completion)
+[SEP]
 2. STEP TWO (Simple description of step and Criteria for completion)
+[SEP]
 ...
 Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE STEP ONE>
     """
@@ -98,7 +101,9 @@ Format your response as:
 Reasoning: <YOUR REASONING ABOUT WHAT WENT WRONG AND HOW TO FIX IT>
 Revised High Level Plan:
 1. STEP ONE (Simple description of step and Criteria for completion) DO NOT REPEAT STEPS THAT HAVE ALREADY BEEN COMPLETED. Start at what needs to be done next.
+[SEP]
 2. STEP TWO (Simple description of step and Criteria for completion)
+[SEP]
 ...
 Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE STEP ONE>
     """
@@ -113,8 +118,7 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE NEXT STEP>
     """
 
 
-    def __init__(self, env, mission, size=32, max_steps_per_goal=15, max_action_attempts=3, max_total_steps=100):
-        model_name = f"Qwen/Qwen3-VL-{size}B-Instruct"
+    def __init__(self, env, mission, model_name = f"Qwen/Qwen3-VL-32B-Instruct", max_steps_per_goal=15, max_action_attempts=3, max_total_steps=100):
         backbone_model_name = load_parameters()['backbone_vlm_model']
         HuggingFaceVLM.start()
         if backbone_model_name == model_name: # then load just one model
@@ -140,6 +144,9 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE NEXT STEP>
         self.observation = None
         self.max_action_attempts = max_action_attempts
         self.max_total_steps = max_total_steps
+        self.prev_action = None
+        self.all_inputs = []
+        self.all_outputs = []
         
     def infer(self, prompt, current_frame):
         current_frame = current_frame.reshape(current_frame.shape[0], current_frame.shape[1])
@@ -175,17 +182,23 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE NEXT STEP>
         full_text = self.processor.batch_decode(
             generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )[0]
+        self.all_inputs.append(prompt)
+        self.all_outputs.append(output_text)
         print(full_text)
         return output_text
     
+    def parse_plan_steps(self, plan_text):
+        steps = []
+        for line in plan_text.lower().split("[sep]"):
+            line = line.strip()
+            if line != "":
+                steps.append(line)
+        return steps
+
     def parse_supervisor_start(self, output_text):
         if "note:" in output_text.lower():
-            high_level_plan, note = output_text.lower().split("note:").strip()
-            # split high level plan into steps
-            steps = []
-            for line in high_level_plan.split("\n"):
-                if line.strip().startswith(("1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.")):
-                    steps.append(line.strip())
+            high_level_plan, note = output_text.lower().split("note:")
+            steps = self.parse_plan_steps(high_level_plan)
             return steps, note.strip()
         else:
             print("Failed to parse supervisor start output: ", output_text)
@@ -196,11 +209,7 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE NEXT STEP>
             if "revised high level plan:" in output_text.lower():
                 reasoning, rest = output_text.lower().split("revised high level plan:")
                 high_level_plan, note = rest.split("note:")
-                # split high level plan into steps
-                steps = []
-                for line in high_level_plan.split("\n"):
-                    if line.strip().startswith(("1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.")):
-                        steps.append(line.strip())
+                steps = self.parse_plan_steps(high_level_plan)
                 return steps, note.strip()
             else:
                 note = output_text.lower().split("note:")[-1].strip()
@@ -222,28 +231,33 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE NEXT STEP>
     
     def parse_action_instruction(self, output_text):
         output_text = output_text.strip().lower()
-        if "mission complete: yes" in output_text:
+        if "mission complete: yes" in output_text or "learnings" in output_text:
             mission_complete = True
             learnings = output_text.lower().split("learnings:")[-1].strip()
+            learnings = learnings.split("Action:")[0].strip()
             return mission_complete, learnings
         else: # assume no
             mission_complete = False
-            if "critique" in output_text:
-                remaining = output_text.split("critique")[-1]
+            if "note" in output_text:
+                remaining = output_text.split("note:")[-1]
             else:
-                print(f"Warning: 'critique' not found in action instruction output. Output was: {output_text}")
-                return mission_complete, None
-            if "note:" in remaining:
-                critique, rest = remaining.split("note:")
+                print(f"Warning: 'note' not found in action instruction output. Output was: {output_text}")
+                return mission_complete, ("unable to parse critique, come up with a new one", "unable to parse note, come up with a new one", "passdialogue()")
+            if "critique" in remaining:
+                note, rest = remaining.split("critique", 1)
                 if "action:" in rest:
-                    note, action_part = rest.split("action:")
-                    action = action_part.strip().split()[0]
-                    return mission_complete, (critique.strip(), note.strip(), action.strip())
+                    critique, action_part = rest.split("action:")
+                    action_part = action_part.strip()
+                    action_part = action_part.replace("<action>", "")
+                    action_part = action_part.replace("</action>", "")
+                    action_part = action_part.strip("<")
+                    action_part = action_part.strip(">")
+                    return mission_complete, ("critique " + critique.strip(), note.strip(), action_part.strip())
                 else:
-                    return mission_complete, None
+                    return mission_complete, ("unable to parse critique, come up with a new one", note.strip(), "passdialogue()")
             else:
-                print(f"Warning: 'note:' not found in action instruction output. Output was: {output_text}")
-                return mission_complete, None
+                print(f"Warning: 'critique:' not found in action instruction output. Output was: {output_text}")
+                return mission_complete, ("unable to parse critique, come up with a new one", note, "passdialogue()")
             
     def do_supervisor_start(self):
         allowed_actions = self.env._controller.get_action_strings(return_all=True)
@@ -319,13 +333,12 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE NEXT STEP>
             ocr_buffer_str = "No previous OCR messages."
         if self.steps_taken_for_current_goal > self.max_steps_per_goal:
             # Need to fail and ask supervisor for new note
-            failure_summary_prompt = self.failure_summary_prompt
             prompt = self.full_failure_summary_prompt.replace("[STEP]", self.high_level_plan[self.current_step_index]).replace("[NOTE]", self.note).replace("[ACTION_BUFFER]", action_buffer_str).replace("[NOTE_BUFFER]", "\n".join(self.agent_note_buffer)).replace("[OCR_BUFFER]", ocr_buffer_str).replace("[OCR]", recent_ocr)
             failure_summary = self.infer(prompt, screen)
             return "fail", failure_summary
         else:
             self.steps_taken_for_current_goal += 1
-            prompt = self.full_action_prompt.replace("[STEP]", self.high_level_plan[self.current_step_index]).replace("[NOTE]", self.note).replace("[ACTION_BUFFER]", action_buffer_str).replace("[NOTE_BUFFER]", "\n".join(self.agent_note_buffer)).replace("[OCR_BUFFER]", ocr_buffer_str).replace("[OCR]", recent_ocr).replace("[STATE]", state).replace("[ALLOWED_ACTIONS]", allowed_actions)
+            prompt = self.full_action_prompt.replace("[STEP]", self.high_level_plan[self.current_step_index]).replace("[NOTE]", self.note).replace("[ACTION_BUFFER]", action_buffer_str).replace("[NOTE_BUFFER]", "\n".join(self.agent_note_buffer[-2:])).replace("[OCR_BUFFER]", ocr_buffer_str).replace("[OCR]", recent_ocr).replace("[STATE]", state.name).replace("[ALLOWED_ACTIONS]", allowed_actions)
             action_valid = False
             previous_action_strings = ""
             n_attempts = 0
@@ -339,8 +352,37 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE NEXT STEP>
                     return "success", learnings
                 else:
                     critique, updated_note, action_str = result
+                    if self.prev_action is None:
+                        self.prev_action = action_str
+                    else:
+                        if "locate" in action_str.lower() and self.prev_action == action_str:
+                            # prevent repeated locate actions
+                            previous_action_strings += f"\n[VITAL SYSTEM MESSAGE] Don't you dare use '{action_str}' again. You just did that and got a result too. Stop overthinking it, trust the previous result and move towards it."
+                            continue
+                        if "interact" in action_str.lower() and self.prev_action == action_str:
+                            previous_action_strings += f"\n[VITAL SYSTEM MESSAGE] Don't you dare use '{action_str}' again. You just did that. If it didn't work the first time, or gave you a message that theres nothing to interact with, it means you need to move towards and face something to do it. "
+                        if "move" in action_str.lower() and "move" in self.prev_action.lower():
+                            move_parse = action_str.lower().split(",")[:-1] # should just get the int
+                            prev_move_parse = self.prev_action.lower().split(",")[:-1]
+                            match_step = move_parse == prev_move_parse
+                            msg = f"\nYou moved up previously and now you are trying to move down with the same number of steps. This is likely to return you to the same position. Stop overthinking your movement and take a second to re-understand your surroundings. Perhaps check for interaction or locate something, but stop moving back and forth."
+                            if match_step:
+                                if "up" in action_str.lower() and "down" in self.prev_action.lower():
+                                    previous_action_strings += msg
+                                    continue
+                                if "right" in action_str.lower() and "left" in self.prev_action.lower():
+                                    previous_action_strings += msg
+                                    continue
+                                if "left" in action_str.lower() and "right" in self.prev_action.lower():
+                                    previous_action_strings += msg
+                                    continue
+                                if "down" in action_str.lower() and "up" in self.prev_action.lower():
+                                    previous_action_strings += msg
+                                    continue
+                    
                     self.agent_note_buffer.append(f"Critique: {critique}\nUpdated Note: {updated_note}")
-                    # take action on environment and 
+                    # take action on environment and log
+                    self.prev_action = action_str
                     possible_obs, possible_reward, possible_terminated, possible_truncated, possible_info = self.env.step_str(action_str)
                     if possible_obs is not None:
                         observation, reward, terminated, truncated, info = possible_obs, possible_reward, possible_terminated, possible_truncated, possible_info
@@ -350,7 +392,13 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE NEXT STEP>
                         return "continue", done
                     else:
                         # invalid action, try again
-                        previous_action_strings += f"\nThe action '{action_str}' was invalid in the current state. Please choose a valid action next time."
+                        previous_action_strings += f"\nThe action '{action_str}' was invalid. Please choose a valid action next time."
+                        if "locate" in action_str.lower():
+                            previous_action_strings += " Remember to only use 'locate' actions with the allowed input options, and not arbitrary text."
+                        if n_attempts == self.max_action_attempts - 1:
+                            print("Max action attempts reached. Last invalid action was: ", action_str)
+                            breakpoint()
+
             # If we reach here, all attempts failed
             return "invalid_action", None
                 
@@ -394,14 +442,15 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE NEXT STEP>
         
         
 @click.command()
-@click.option("--size", default=8, type=int)
-def do(size):
+@click.option("--model_name", default="Qwen/Qwen3-VL-32B-Instruct", type=str)
+def do(model_name):
+    short_model = model_name.split("/")[-1]
     environment = get_pokemon_environment(game_variant="pokemon_red", controller=PokemonStateWiseController(), 
                                         environment_variant="high_level",
                                         save_video=True,
-                                            init_state="starter", session_name=f"high_level_{size}", headless=True)
-    mission = "Select a starter from the bench to your right, and then leave the building from the entrance below."
-    vl = VL(environment, mission, size=size)
+                                            init_state="starter", session_name=f"high_level_{short_model}", headless=True)
+    mission = "Select any one pokeball (can be located as an item on screen) with a starter from the bench to your right, and then leave the building from the entrance below."
+    vl = VL(environment, mission, model_name=model_name)
     vl.play()
 
 # Plot rewards over time
