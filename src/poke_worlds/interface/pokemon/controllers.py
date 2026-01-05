@@ -64,7 +64,7 @@ class PokemonStateWiseController(Controller):
             return MoveStepsAction, {"direction": direction, "steps": int(steps)}
         return None, None
         
-    def get_action_strings(self):
+    def get_action_strings(self, return_all: bool=False) -> str:
         available_actions = "Available Actions:\n"
         current_state = self._emulator.state_parser.get_agent_state(self._emulator.get_current_frame())
         all_options = set(LocateReferenceAction.image_references.keys()).union(LocateSpecificAction.options.keys())
@@ -87,19 +87,22 @@ class PokemonStateWiseController(Controller):
         menu_action_strings = {
             MenuAction: "Menu(<up, down, confirm or back>): Navigate the game menu.",
         }
-        if current_state == AgentState.FREE_ROAM:
-            actions = free_roam_action_strings
-        elif current_state == AgentState.IN_DIALOGUE:
-            actions = dialogue_action_strings
-        elif current_state == AgentState.IN_BATTLE:
-            if self._emulator.state_parser.is_in_fight_options_menu(self._emulator.get_current_frame()):
-                actions = {**battle_action_strings, **pick_attack_action_strings}
-            else:
-                actions = battle_action_strings
-        elif current_state == AgentState.IN_MENU:
-            actions = menu_action_strings
+        if return_all:
+            actions = {**free_roam_action_strings, **dialogue_action_strings, **battle_action_strings, **pick_attack_action_strings, **menu_action_strings}
         else:
-            log_error(f"Unknown agent state {current_state} when getting action strings.")
+            if current_state == AgentState.FREE_ROAM:
+                actions = free_roam_action_strings
+            elif current_state == AgentState.IN_DIALOGUE:
+                actions = dialogue_action_strings
+            elif current_state == AgentState.IN_BATTLE:
+                if self._emulator.state_parser.is_in_fight_options_menu(self._emulator.get_current_frame()):
+                    actions = {**battle_action_strings, **pick_attack_action_strings}
+                else:
+                    actions = battle_action_strings
+            elif current_state == AgentState.IN_MENU:
+                actions = menu_action_strings
+            else:
+                log_error(f"Unknown agent state {current_state} when getting action strings.")
         for action_class, action_desc in actions.items():
             available_actions += f"- {action_desc}\n"
         return available_actions

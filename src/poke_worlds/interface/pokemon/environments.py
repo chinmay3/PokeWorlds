@@ -108,7 +108,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
     REQUIRED_STATE_TRACKER = PokemonOCRTracker
     REQUIRED_EMULATOR = PokemonEmulator
 
-    def __init__(self, action_buffer_max_size: int = 3, **kwargs):
+    def __init__(self, action_buffer_max_size: int = 5, ocr_buffer_max_size: int = 10, **kwargs):
         """
         Initializes the DummyEnvironment with the given emulator and controller.
 
@@ -131,6 +131,8 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
         """ The observation space is the raw pixel values of the emulator's screen and messages with OCR text and error signals from HighLevelActions"""
         self.action_buffer: List[Tuple[HighLevelAction, Dict[str, Any], int, str]] = []
         """ Buffer of recent actions taken in the environment. Each entry is a tuple of (action, kwargs, success_code, success_message)."""
+        self.ocr_buffer: List[Tuple[int, Dict[str, str]]] = []
+        """ Buffer of recent OCR results. Each entry is a tuple of (emulator_step_index (not the same as environment step), ocr_texts). Where ocr_texts is a dictionary of form {key: text} """        
 
     @staticmethod
     def override_emulator_kwargs(emulator_kwargs: dict) -> dict:
@@ -155,10 +157,11 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             buffer_str += f"Action {i}: {action.__name__} with args {action_kwargs}, message: {success_message}\n" # No need to print success code for now
         return buffer_str
 
-    def get_observation(self, *, action=None, action_kwargs=None, transition_states=None, action_success=None, add_action_to_buffer: bool=True):
+    def get_observation(self, *, action=None, action_kwargs=None, transition_states=None, action_success=None, add_to_buffers: bool=True):
         if transition_states is None:
             current_state = self.get_info()
             screen = current_state["core"]["current_frame"]
+            # Will not try to add to OCR buffers, because no transition states should only be called on init. 
             if "ocr" in current_state and "ocr_texts" in current_state["ocr"]:
                 ocr_texts = current_state["ocr"]["ocr_texts"] # is a dict with kind -> text
                 ocr_combined = " | ".join([f"{kind}: {text}" for kind, text in ocr_texts.items()])
@@ -166,22 +169,29 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
                 ocr_combined = ""
         else:
             screen = transition_states[-1]["core"]["current_frame"]
-            if add_action_to_buffer:
+            if add_to_buffers:
                 if "action_success_message" not in transition_states[-1]:
                     action_success_message = self._controller.get_action_success_message(action, action_kwargs, action_success)
                 else:
                     action_success_message = transition_states[-1]["action_success_message"]
                 self.add_to_action_buffer(action, action_kwargs, action_success, action_success_message)
             ocr_texts_all = []
+            ocr_buffer_addition = []
             for state in transition_states:
                 if "ocr" in state and "ocr_texts" in state["ocr"]:
                     ocr_texts = state["ocr"]["ocr_texts"] # is a dict with kind -> text
+                    ocr_step = state["ocr"]["step"]
                     ocr_texts_all.append(ocr_texts)
+                    ocr_buffer_addition.append((ocr_step, ocr_texts))
             # combine all ocr texts
             ocr_combined = ""
             for ocr_texts in ocr_texts_all:
                 for kind, text in ocr_texts.items():
                     ocr_combined += f"{kind}: {text} | "
+            if add_to_buffers:
+                self.ocr_buffer.extend(ocr_buffer_addition)
+                if len(self.ocr_buffer) > self.ocr_buffer_max_size:
+                    self.ocr_buffer = self.ocr_buffer[-self.ocr_buffer_max_size:]
         current_state = self._emulator.state_parser.get_agent_state(screen)
         observation = {
             "screen": screen,
@@ -190,6 +200,12 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             "state": current_state
         }
         return observation
+    
+    def get_action_buffer(self):
+        return self.action_buffer
+    
+    def get_ocr_buffer(self):
+        return self.ocr_buffer
 
     def render_obs(self, action=None, action_kwargs=None, transition_states=None, action_success=None): # Might cause issues if you try to render() as well
         """
@@ -212,7 +228,7 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             screens = [info["core"]["current_frame"]]
         for screen in screens:
             self._screen_render(screen)
-        obs = self.get_observation(action=action, action_kwargs=action_kwargs, transition_states=transition_states, action_success=action_success, add_action_to_buffer=False)
+        obs = self.get_observation(action=action, action_kwargs=action_kwargs, transition_states=transition_states, action_success=action_success, add_to_buffers=False)
         obs.pop("screen")
         log_info(f"Obs Strings:", self._parameters)
         log_dict(obs, parameters=self._parameters)
