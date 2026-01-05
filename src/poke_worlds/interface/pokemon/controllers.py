@@ -1,5 +1,5 @@
 from poke_worlds.utils import log_error, log_info
-from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, LocateAction,LocateSpecificAction, LocateReferenceAction, CheckInteractionAction, BattleMenuAction, PickAttackAction
+from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, LocateAction,LocateSpecificAction, LocateReferenceAction, CheckInteractionAction, BattleMenuAction, PickAttackAction, MoveGridAction
 from poke_worlds.interface.controller import Controller
 from poke_worlds.interface.action import HighLevelAction
 from poke_worlds.emulation.pokemon.parsers import AgentState
@@ -7,7 +7,7 @@ from typing import Dict, Any
 
 
 class PokemonStateWiseController(Controller):
-    ACTIONS = [MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, LocateAction, LocateSpecificAction, LocateReferenceAction, CheckInteractionAction, BattleMenuAction, PickAttackAction]
+    ACTIONS = [MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, LocateAction, LocateSpecificAction, LocateReferenceAction, CheckInteractionAction, BattleMenuAction, PickAttackAction, MoveGridAction]
 
     def string_to_high_level_action(self, input_str):
         input_str = input_str.lower().strip()
@@ -70,22 +70,22 @@ class PokemonStateWiseController(Controller):
         all_options = set(LocateReferenceAction.image_references.keys()).union(LocateSpecificAction.options.keys())
         locate_option_strings = ", ".join(all_options)
         free_roam_action_strings = {
-            LocateReferenceAction: f"Locate(<{locate_option_strings}>): Locate all instances of the specified visual entity in the current screen, and return their coordinates relative to your current position.",
-            MoveStepsAction: "Move(<up, down, left or right>, <steps: int>): Move a specified number of steps in a direction.",
-            CheckInteractionAction: "CheckInteraction(): Check if there is something to interact with in front of you.",
-            InteractAction: "Interact(): Interact with cell directly in front of you. Only works if there is something to interact with.",
+            LocateReferenceAction: f"locate(<{locate_option_strings}>): Locate all instances of the specified visual entity in the current screen, and return their coordinates relative to your current position. Only the entities specified in <> are valid options, anything else will return an error. DO NOT use this action with an input that is not listed in <> (e.g. locate(pokemon) or locate(pokeball) will fail).",
+            MoveStepsAction: "move(<right or left> <steps: int>,<up or down> <steps: int>): Move in grid space by the specified right/left and up/down steps.",
+            CheckInteractionAction: "checkinteraction(): Check if there is something to interact with in front of you.",
+            InteractAction: "interact(): Interact with cell directly in front of you. Only works if there is something to interact with.",
         }
         dialogue_action_strings = {
-            PassDialogueAction: "PassDialogue(): Advance the dialogue by one step.",
+            PassDialogueAction: "passdialogue(): Advance the dialogue by one step.",
         }
         battle_action_strings = {
-            BattleMenuAction: "BattleMenu(<fight, pokemon, bag, run or progress>): Navigate the battle menu to select an option. Fight to choose an attack, Pokemon to switch Pokemon, Bag to use an item, Run to attempt to flee the battle, and Progress to continue dialogue or other battle events.",
+            BattleMenuAction: "battlemenu(<fight, pokemon, bag, run or progress>): Navigate the battle menu to select an option. Fight to choose an attack, Pokemon to switch Pokemon, Bag to use an item, Run to attempt to flee the battle, and Progress to continue dialogue or other battle events.",
         }
         pick_attack_action_strings = {
-            PickAttackAction: "PickAttack(<1-4>): Select an attack option in the battle fight menu.",
+            PickAttackAction: "pickattack(<1-4>): Select an attack option in the battle fight menu.",
         }
         menu_action_strings = {
-            MenuAction: "Menu(<up, down, confirm or back>): Navigate the game menu.",
+            MenuAction: "menu(<up, down, confirm or back>): Navigate the game menu.",
         }
         if return_all:
             actions = {**free_roam_action_strings, **dialogue_action_strings, **battle_action_strings, **pick_attack_action_strings, **menu_action_strings}
@@ -113,9 +113,9 @@ class PokemonStateWiseController(Controller):
             action_success_message = "Action performed."
         if action == MoveStepsAction:
             if action_success == 1:
-                action_success_message = "You moved until you hit a wall, object, NPC or obstacle. If it is an object or NPC, you can now interact with it. If it is an obstacle or wall, interacting will do nothing."
+                action_success_message = "You moved until you hit a wall, object, NPC or obstacle. If it is an object or NPC, you can now interact with it or run checkinteraction() to see if its interactable. If it is an obstacle or wall, interacting will do nothing."
             if action_success == -1:
-                action_success_message = "You could not move in that direction at all. There is most likely an obstacle in the way."
+                action_success_message = "You could not move in that direction at all. There is most likely an obstacle in the way. If you are walking into an object or NPC you can now interact with them or run checkinteraction() to see if its interactable. If it is an obstacle or wall, interacting will do nothing."
             if action_success == 2:
                 action_success_message = "You moved, but before you could finish your steps, you were interupted by a battle, dialogue or cutscene."
         elif action == InteractAction:

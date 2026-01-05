@@ -295,8 +295,66 @@ class MoveStepsAction(BaseMovementAction):
         if step is not None:
             if not isinstance(step, str):
                 return False
+            if step <= 0:
+                return False
         return super().is_valid(**kwargs)
         
+
+class MoveGridAction(BaseMovementAction):
+    """
+    Moves the agent on both axes. Will always try to move right first and then up. 
+
+    Is Valid When: In Free Roam State
+    Action Success Interpretation:
+        - -1: Frame did not change, even on the first step
+        - 0: Finished all steps
+        - 1: Took some steps, but not all, and then frame stopped changing OR the frame starts oscillating (trying to check for jitter). This usually means we ran into an obstacle.
+        - 2: Took some steps, but agent state changed from free roam. This often means we entered a cutscene or battle.
+    """
+
+    def get_action_space(self):
+        """
+        Returns a Box space representing movement in 2D.
+        The first dimension represents vertical movement (positive is up, negative is down).
+        The second dimension represents horizontal movement (positive is right, negative is left).
+
+        Returns:
+            Box: A Box space with shape (2,) and values ranging from -HARD_MAX_STEPS//2 to HARD_MAX_STEPS//2.
+
+        """
+        return Box(low=-HARD_MAX_STEPS//2, high=HARD_MAX_STEPS//2, shape=(2,), dtype=np.int8)
+
+    def space_to_parameters(self, space_action):
+        direction = None
+        right_action = space_action[0]
+        up_action = space_action[1]
+        return {"x_steps": right_action, "y_steps": up_action}
+        
+
+    def parameters_to_space(self, x_steps, y_steps):
+        move_vec = np.zeros(2) # x, y
+        move_vec[0] = x_steps
+        move_vec[1] = y_steps
+        return move_vec
+
+
+    def _execute(self, x_steps, y_steps):
+        x_direction = "right" if x_steps >=0 else "left"
+        y_direction = "up" if y_steps >= 0 else "down"
+        transition_states, status = self.move(direction=x_direction, steps=abs(x_steps))
+        if status != 0:
+            return transition_states, status
+        more_transition_states, status = self.move(direction=y_direction, steps=abs(y_steps))
+        transition_states.extend(more_transition_states)
+        return transition_states, status
+    
+    def is_valid(self, x_steps: int=None, y_steps: int=None):
+        if x_steps is not None and y_steps is not None:
+            if not isinstance(x_steps, int) or not isinstance(y_steps, int):
+                return False
+            if x_steps == 0 and y_steps == 0:
+                return False
+        return super().is_valid()
 
 class MenuAction(HighLevelAction):
     """
@@ -412,6 +470,24 @@ class LocateAction(HighLevelAction):
     REQUIRED_STATE_PARSER = PokemonStateParser
     REQUIRED_STATE_TRACKER = CorePokemonTracker
     _MAX_NEW_TOKENS = 60
+
+    def coord_to_string(self, coord: Tuple[int, int]) -> str:
+        start = "("
+        c1 = coord[0]
+        if c1 > 0:
+            start += f"{c1} steps to right from you, "
+        elif c1 < 0:
+            start += f"{-c1} steps to left from you, "
+        c2 = coord[1]
+        if c2 > 0:
+            start += f"{c2} steps up from you)"
+        elif c2 < 0:
+            start += f"{-c2} steps down from you)"
+        return start
+    
+    def coords_to_string(self, coords: List[Tuple[int, int]]) -> str:
+        coord_strings = [self.coord_to_string(coord) for coord in coords]
+        return "[" + ", ".join(coord_strings) + "]"
 
     def is_valid(self, target: str=None, image_reference: str = None):
         return self._state_tracker.get_episode_metric(("pokemon_core", "agent_state")) == AgentState.FREE_ROAM
@@ -530,9 +606,10 @@ class LocateAction(HighLevelAction):
         else:
             message = f"FOUND {target}!\n"
             if set(potential_cells) == set(definitive_cells):
-                message += f"Definitive Cells: {definitive_cells}"
+                message += f"Definitive Cells: {self.coords_to_string(definitive_cells)}"
             else:
-                message += f"Potential Cells: {potential_cells}\nDefinitive Cells: {definitive_cells}"
+                message += f"Potential Cells: {self.coords_to_string(potential_cells)}\nDefinitive Cells: {self.coords_to_string(definitive_cells)}"
+            message += "\nTrust this response and assume this is the best information you can get for finding all the targets. If you move, remember that the coordinates are relative to your position at the time of the locate command, and hence may need to be updated. DO NOT RUN this action again without moving, as it will just waste your time and resources."
         ret_dict["action_success_message"] = message
         action_success = None
         if len(definitive_cells) > 0:
