@@ -6,6 +6,12 @@ from poke_worlds.utils.log_handling import log_warn, log_error, log_info
 from typing import List, Union
 import numpy as np
 from PIL import Image
+import requests
+from PIL import Image
+import torch
+
+from transformers import Owlv2Processor, Owlv2ForObjectDetection
+
 
 def convert_numpy_greyscale_to_pillow(arr: np.ndarray) -> Image:
     """
@@ -187,6 +193,59 @@ class vLLMVLM:
         for output in outputs:
             final_texts.append(output.outputs[0].text)
         return final_texts
+
+
+class ObjectDetector:
+    _MODEL = None
+    _PROCESSOR = None
+
+    @staticmethod
+    def start():
+        ObjectDetector._PROCESSOR = Owlv2Processor.from_pretrained("google/owlv2-large-patch14")
+        ObjectDetector._MODEL = Owlv2ForObjectDetection.from_pretrained("google/owlv2-large-patch14").eval()
+
+    @staticmethod
+    def detect(images: List[np.ndarray], texts: List[List[str]]):
+        if ObjectDetector._MODEL is None:
+            ObjectDetector.start()
+        images = [convert_numpy_greyscale_to_pillow(image) for image in images]
+        inputs = ObjectDetector._PROCESSOR(text=texts, images=images, return_tensors="pt")
+        with torch.no_grad():
+            outputs = ObjectDetector._MODEL(**inputs)
+        all_results = []
+        for i in range(len(images)):
+            target_sizes = torch.Tensor([images[i].size[::-1]])
+            results = ObjectDetector._PROCESSOR.post_process_object_detection(outputs=outputs, target_sizes=target_sizes, threshold=0.1)
+            all_results.append(results[i])
+        return all_results
+    
+def perform_object_detection(images: List[np.ndarray], texts: List[List[str]]) -> List[bool]:
+    if True:
+        outputs = perform_vlm_inference(texts=texts, images=images)
+        founds = []
+        for i, output in enumerate(outputs):
+            if "yes" in output.lower():
+                founds.append(True)
+            else:
+                founds.append(False)
+        return founds
+    else:
+        results = ObjectDetector.detect(images=images, texts=texts)
+        founds = []
+        for i, result in enumerate(results):
+            scores = result["scores"].numpy()
+            labels = result["labels"].numpy()
+            if len(scores) == 0:
+                founds.append(False)
+                continue
+            max_index = scores.argmax()
+            if scores[max_index] > 0.3:
+                founds.append(True)
+            else:
+                founds.append(False)
+        return founds
+
+
 
 
 def perform_vlm_inference(texts: List[str], images: List[np.array], max_new_tokens: int, batch_size: int = None):

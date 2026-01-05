@@ -1,4 +1,4 @@
-from poke_worlds.utils import log_error, perform_vlm_inference
+from poke_worlds.utils import log_error, perform_vlm_inference, perform_object_detection
 from poke_worlds.interface.action import HighLevelAction, SingleHighLevelAction
 from poke_worlds.emulation.pokemon.parsers import AgentState, PokemonStateParser
 from poke_worlds.emulation.pokemon.trackers import CorePokemonTracker
@@ -505,14 +505,7 @@ class LocateAction(HighLevelAction):
     def check_for_target(self, prompt, screens, image_reference: str = None):
         if image_reference is None:
             texts = [prompt] * len(screens)
-            outputs = perform_vlm_inference(texts=texts, images=screens, max_new_tokens=self._MAX_NEW_TOKENS)
-            founds = []
-            for i, output in enumerate(outputs):
-                if "yes" in output.lower():
-                    founds.append(True)
-                else:
-                    founds.append(False)
-            return founds
+            return perform_object_detection(images=screens, texts=texts)
         else:
             description = prompt
             reference_image = self._emulator.state_parser.get_image_reference(image_reference)
