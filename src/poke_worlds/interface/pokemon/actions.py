@@ -467,6 +467,9 @@ class LocateAction(HighLevelAction):
     [STOP]
     Output:
     """
+    prompt = """
+    [TARGET]
+    """
     REQUIRED_STATE_PARSER = PokemonStateParser
     REQUIRED_STATE_TRACKER = CorePokemonTracker
     _MAX_NEW_TOKENS = 60
@@ -504,6 +507,7 @@ class LocateAction(HighLevelAction):
 
     def check_for_target(self, prompt, screens, image_reference: str = None):
         if image_reference is None:
+            description = prompt
             texts = [prompt] * len(screens)
             return perform_object_detection(images=screens, texts=texts)
         else:
