@@ -11,7 +11,15 @@ from gymnasium.spaces import Space, Discrete
 
 
 class HighLevelAction(ABC):
-    """ Abstract base class for high level actions. """
+    """ 
+    Abstract base class for high level actions. 
+
+    The execute() method performs the high level action and returns a list of state tracker reports after each low level action executed, along with an action success status.
+
+    The docstring of each subclass should specify the interpretation of the action success status.
+
+    The execute() method may also return some additional information in the final state tracker report under the "action_return" key.    
+    """
     REQUIRED_STATE_TRACKER = StateTracker
     """ The state tracker that tracks the minimal state information required for the action to function. """
 

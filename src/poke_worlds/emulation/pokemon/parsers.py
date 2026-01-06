@@ -108,6 +108,10 @@ class PokemonStateParser(StateParser, ABC):
         ("dialogue_box_middle", 10, 105, 120, 30), # Middle of the dialogue box, but not on that spot where the blinking arrow cursor appears. Useful for catching particular dialogues.         
         ("dialogue_box_full", 5, 100, 150, 40), # Full dialogue box area, is useful to capture for OCR purposes
         ("screen_bottom_half", 5, 70, 150, 70), # Bottom half of the screen, useful for OCR of dialogue and other text
+        ("screen_quadrant_1", 85, 0, 60, 60), # Top right quadrant of the screen
+        ("screen_quadrant_2", 0, 0, 60, 60), # Top left quadrant of the screen
+        ("screen_quadrant_3", 0, 70, 60, 70), # Bottom left quadrant of the screen
+        ("screen_quadrant_4", 85, 70, 60, 70), # Bottom right quadrant of the screen
     ]
     """ List of common multi-target named screen regions for Pokemon games."""
 

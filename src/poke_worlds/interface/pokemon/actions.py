@@ -111,10 +111,49 @@ class BaseMovementAction(HighLevelAction, ABC):
         - 0: Finished all steps
         - 1: Took some steps, but not all, and then frame stopped changing OR the frame starts oscillating (trying to check for jitter). This usually means we ran into an obstacle.
         - 2: Took some steps, but agent state changed from free roam. This often means we entered a cutscene or battle. 
+
+    Action Returns:
+        - n_steps_taken (int): Number of steps actually taken
+        - rotated (bool or None): True if the player has not moved, but has rotated. If the player has moved, this will be None. If it is False, it means the player tried to walk straight into an obstacle. 
     """
     REQUIRED_STATE_TRACKER = CorePokemonTracker
     REQUIRED_STATE_PARSER = PokemonStateParser
 
+    def judge_movement(self, previous_frame: np.ndarray, current_frame: np.ndarray) -> Tuple[bool, bool]:
+        """
+        Judges whether movement has occurred between two frames.
+
+        Args:
+            previous_frame (np.ndarray): The previous frame.
+            current_frame (np.ndarray): The current frame.
+        Returns:
+            Tuple[bool, bool]: A tuple containing:
+            - bool: True if movement has occurred, False otherwise.
+            - bool: True if the player has not moved, but has rotated.  
+        """
+        # if the full screen hasn't changed at all, player has neither moved nor rotated
+        if not frame_changed(previous_frame, current_frame):
+            return False, False
+        # split the screen into quadrants and check which quadrants have changed. If any of them stayed the same, the player has not moved, but may have rotated. 
+        flag = False
+        for quadrant in ["screen_quadrant_1", "screen_quadrant_2", "screen_quadrant_3", "screen_quadrant_4"]:
+            prev_quad = self._emulator.state_parser.capture_named_region(previous_frame, quadrant)
+            curr_quad = self._emulator.state_parser.capture_named_region(current_frame, quadrant)
+            prev_uniform = prev_quad.max() == prev_quad.min()
+            curr_uniform = curr_quad.max() == curr_quad.min()
+            if not frame_changed(prev_quad, curr_quad) and not prev_uniform and not curr_uniform: # then screen isn't just black, but also hasn't changed.
+                flag = True
+                break
+        if flag: # then some frame stayed the same, so no movement, but maybe rotation.
+            prev_player_cell = self._emulator.state_parser.capture_grid_cells(previous_frame)[(0, 0)]
+            curr_player_cell = self._emulator.state_parser.capture_grid_cells(current_frame)[(0, 0)]
+            if frame_changed(prev_player_cell, curr_player_cell):
+                return False, True
+            else:
+                return False, False
+        else:
+            return True, None
+    
     def move(self, direction: str, steps: int) -> Tuple[np.ndarray, int]:
         """
         Move in a given direction for a number of steps.
@@ -147,23 +186,30 @@ class BaseMovementAction(HighLevelAction, ABC):
         transition_frames = []
         previous_frame = self._emulator.get_current_frame() # Do NOT get the state tracker frame, as it may have a grid on it. 
         n_step = 0
+        n_successful_steps = 0
+        has_rotated = None
         agent_state = AgentState.FREE_ROAM
         while n_step < steps and agent_state == AgentState.FREE_ROAM:
             frames, done = self._emulator.step(action)
             transition_state_dicts.append(self._state_tracker.report())
             transition_frames.extend(frames)
+            current_frame = self._emulator.get_current_frame() # Do NOT use the emulator frame, as it may have a grid on it.
             if done:
                 break
             # check if frames changed. If not, break out. 
             # We check all frames in sequence to try and catch oscillations. But nothing will catch 1 step into wall in areas like this
-            if not all([frame_changed(previous_frame, current_frame) for current_frame in frames]):
+            player_moved, player_rotated = self.judge_movement(previous_frame, current_frame)
+            if player_rotated == True:
+                has_rotated = True
+            if not player_moved and not player_rotated:
                 break
+            if player_moved:
+                n_successful_steps += 1 # don't count rotation as a step
             agent_state = self._emulator.state_parser.get_agent_state(self._emulator.get_current_frame())
             if agent_state != AgentState.FREE_ROAM:
                 break
             n_step += 1
-            previous_frame = frames[-1]
-
+            previous_frame = current_frame
         if agent_state != AgentState.FREE_ROAM:
             action_success = 2
         else:
@@ -173,42 +219,8 @@ class BaseMovementAction(HighLevelAction, ABC):
                 action_success = 0
             else:
                 action_success = 1
+        transition_state_dicts[-1]["action_return"] = {"n_steps_taken": n_successful_steps, "rotated": has_rotated}
         return transition_state_dicts, action_success 
-    
-    def chain_move(self, direction_steps: List[Tuple[str, int]]):
-        """
-        Chain together several move operations. Exit at the first action_success != 0
-        Args:
-            direction_steps (List[Tuple[str, int]]): A list of tuples, each containing a direction and number of steps to move in that direction.
-        Returns:
-            Tuple[List[Dict], int]: A tuple containing the chained move information. See self.move() for details. 
-        """
-        all_transition_states = []
-        for direction, steps in direction_steps:
-            transition_states, action_success = self.move(direction=direction, steps=steps)
-            all_transition_states.extend(transition_states)
-            if action_success != 0:
-                return all_transition_states, action_success
-        return all_transition_states, 0
-
-    def move_until_stop(self, direction, ind_step=5):
-        """
-        Move in a direction until action_success is no longer 0. 
-        Args:
-            direction (str): One of "up", "down", "left", "right"
-            ind_step (int): Number of steps to move in each individual move call.
-        Returns:
-            Tuple[List[Dict], int]: A tuple containing the move until stop information. See self.move() for details. 
-        """
-        all_transition_states = []
-        n_total_steps = 0
-        while True:
-            transition_states, action_success = self.move(direction=direction, steps=ind_step)
-            all_transition_states.extend(transition_states)
-            n_total_steps += ind_step
-            if action_success != 0 or n_total_steps >= HARD_MAX_STEPS:
-                return all_transition_states, action_success
-
 
     def is_valid(self, **kwargs):
         """
@@ -227,6 +239,10 @@ class MoveStepsAction(BaseMovementAction):
         - 0: Finished all steps
         - 1: Took some steps, but not all, and then frame stopped changing OR the frame starts oscillating (trying to check for jitter). This usually means we ran into an obstacle.
         - 2: Took some steps, but agent state changed from free roam. This often means we entered a cutscene or battle.
+
+    Action Returns:
+        - n_steps_taken (int): Number of steps actually taken
+        - rotated (bool or None): True if the player has not moved, but has rotated. If the player has moved, this will be None. If it is False, it means the player tried to walk straight into an obstacle.         
     """
 
     def get_action_space(self):
@@ -310,6 +326,10 @@ class MoveGridAction(BaseMovementAction):
         - 0: Finished all steps
         - 1: Took some steps, but not all, and then frame stopped changing OR the frame starts oscillating (trying to check for jitter). This usually means we ran into an obstacle.
         - 2: Took some steps, but agent state changed from free roam. This often means we entered a cutscene or battle.
+
+    Action Returns:
+        - n_steps_taken (int): Number of steps actually taken
+        - rotated (bool or None): True if the player has not moved, but has rotated. If the player has moved, this will be None. If it is False, it means the player tried to walk straight into an obstacle. 
     """
 
     def get_action_space(self):
@@ -382,7 +402,7 @@ class MenuAction(HighLevelAction):
             "confirm": LowLevelActions.PRESS_BUTTON_A,
             "left": LowLevelActions.PRESS_ARROW_LEFT,
             "right": LowLevelActions.PRESS_ARROW_RIGHT,
-            "exit": LowLevelActions.PRESS_BUTTON_B,
+            "back": LowLevelActions.PRESS_BUTTON_B,
             "open": LowLevelActions.PRESS_BUTTON_START
     }
 
@@ -391,7 +411,7 @@ class MenuAction(HighLevelAction):
         Checks if the menu action is valid in the current state.
 
         Args:
-            menu_action (str, optional): The menu action to check. One of "up", "down", "confirm", "exit", "open".
+            menu_action (str, optional): The menu action to check. One of "up", "down", "confirm", "back", "open".
         Returns:
             bool: True if the action is valid, False otherwise.
         """
@@ -430,7 +450,7 @@ class MenuAction(HighLevelAction):
         elif space_action == 2:
             menu_action = "confirm"
         elif space_action == 3:
-            menu_action = "exit"
+            menu_action = "back"
         elif space_action == 4:
             menu_action = "open"
         else:
@@ -1025,7 +1045,6 @@ class TestAction(HighLevelAction):
                 hits.append(keys[i])
         self._emulator.step() # just to ensure state tracker is populated. THIS FAILS IN DIALOGUE STATES. 
         ret_dict = self._state_tracker.report()
-        ret_dict["action_success_message"] = str(hits)
         return [ret_dict], 0
     
     # TODO: Add the action to break down the grid into pieces and check if the target is in each piece and return the grid coordinates where it is found. 
