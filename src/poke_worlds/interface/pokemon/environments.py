@@ -130,8 +130,8 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             "state": state
         })
         """ The observation space is the raw pixel values of the emulator's screen and messages with OCR text and error signals from HighLevelActions"""
-        self.action_buffer: List[Tuple[HighLevelAction, Dict[str, Any], int, str]] = []
-        """ Buffer of recent actions taken in the environment. Each entry is a tuple of (action, kwargs, success_code, success_message)."""
+        self.action_buffer: List[Tuple[HighLevelAction, Dict[str, Any], int, dict]] = []
+        """ Buffer of recent actions taken in the environment. Each entry is a tuple of (action, kwargs, success_code, action_returns)."""
         self.ocr_buffer: List[Tuple[int, Dict[str, str]]] = []
         """ Buffer of recent OCR results. Each entry is a tuple of (emulator_step_index (not the same as environment step), ocr_texts). Where ocr_texts is a dictionary of form {key: text} """        
 
@@ -145,20 +145,28 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             emulator_kwargs["state_tracker_class"] = Environment.safe_override_state_tracker_class(incoming_tracker, basic_tracker)
         return emulator_kwargs
 
-    def add_to_action_buffer(self, action: HighLevelAction, action_kwargs, action_success: int, success_message: str):
+    def add_to_action_buffer(self, action: HighLevelAction, action_kwargs, action_success: int, action_return: dict):
         """ Adds an action to the action buffer, maintaining the maximum size. """
-        self.action_buffer.append((action, action_kwargs, action_success, success_message))
+        self.action_buffer.append((action, action_kwargs, action_success, action_return))
         if len(self.action_buffer) > self.action_buffer_max_size:
             self.action_buffer.pop(0)
 
     def action_buffer_to_str(self) -> str:
-        """ Converts the action buffer to a string representation. """
+        """ Converts the action buffer to a simplestring representation. """
         buffer_str = ""
-        for i, (action, action_kwargs, action_success, success_message) in enumerate(self.action_buffer):
-            buffer_str += f"Action {i}: {action.__name__} with args {action_kwargs}, message: {success_message}\n" # No need to print success code for now
+        for i, (action, action_kwargs, action_success, action_return) in enumerate(self.action_buffer):
+            buffer_str += f"Action {i}: {action.__name__} | args {action_kwargs} | success code: {action_success} | return: {action_return}\n"
         return buffer_str
 
     def get_observation(self, *, action=None, action_kwargs=None, transition_states=None, action_success=None, add_to_buffers: bool=True):
+        """
+        WARNING: This method does NOT obey the gym API standards, since its returns do NOT match the observation space declared in __init__. 
+        This is because the observation space definition is too restrictive. 
+
+        In specific, this method returns "action_return" and other similar args, which is not part of the observation space.
+
+        You can make this gym friendly by wrapping this in a class to remove the extra fields.
+        """
         if transition_states is None:
             current_state = self.get_info()
             screen = current_state["core"]["current_frame"]
@@ -168,14 +176,14 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
                 ocr_combined = " | ".join([f"{kind}: {text}" for kind, text in ocr_texts.items()])
             else:
                 ocr_combined = ""
+            action_return = {}
         else:
             screen = transition_states[-1]["core"]["current_frame"]
+            action_return = {}
+            if "action_return" in transition_states[-1]:
+                action_return = transition_states[-1]["action_return"]
             if add_to_buffers:
-                if "action_success_message" not in transition_states[-1]:
-                    action_success_message = self._controller.get_action_success_message(action, action_kwargs, action_success)
-                else:
-                    action_success_message = transition_states[-1]["action_success_message"]
-                self.add_to_action_buffer(action, action_kwargs, action_success, action_success_message)
+                self.add_to_action_buffer(action, action_kwargs, action_success, action_return)
             ocr_texts_all = []
             ocr_buffer_addition = []
             for state in transition_states:
@@ -198,7 +206,11 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             "screen": screen,
             "action_buffer": self.action_buffer_to_str(),
             "ocr": ocr_combined,
-            "state": current_state
+            "state": current_state,
+            "action": action,
+            "action_kwargs": action_kwargs,
+            "action_success": action_success,
+            "action_return": action_return
         }
         return observation
     

@@ -527,6 +527,19 @@ class LocateAction(HighLevelAction):
         return "[" + ", ".join(coord_strings) + "]"
 
     def is_valid(self, target: str=None):
+        if target is not None:
+            if not isinstance(target, str):
+                return False
+            if len(target.strip()) == 0:
+                return False
+            target = target.lower().strip()
+            if target not in self.image_references.keys():
+                if target not in self.pre_described_options.keys():
+                    pass # most permissive case. 
+                else:
+                    pass # known pre-described option
+            else:
+                pass # known image reference            
         return self._state_tracker.get_episode_metric(("pokemon_core", "agent_state")) == AgentState.FREE_ROAM
     
     def get_action_space(self):
@@ -630,7 +643,11 @@ class LocateAction(HighLevelAction):
         found, potential_cells, definitive_cells = self.get_cells_found(grid_cells, percieve_prompt, image_reference=image_reference)
         self._emulator.step() # just to ensure state tracker is populated.
         ret_dict = self._state_tracker.report()
-        ret_dict["action_return"] = {"found": found, "potential_cells": potential_cells, "definitive_cells": definitive_cells}
+        ret_dict["action_return"] = {"found": found, 
+                                     "potential_cells": potential_cells, 
+                                     "definitive_cells": definitive_cells, 
+                                     "potential_cells_str": self.coords_to_string(potential_cells),
+                                     "definitive_cells_str": self.coords_to_string(definitive_cells)}
         action_success = None
         if len(definitive_cells) > 0:
             action_success = 0
@@ -641,7 +658,7 @@ class LocateAction(HighLevelAction):
         return [ret_dict], action_success
     
     def _execute(self, target: str):
-        if target in self.image_references and False:
+        if target in self.image_references:
             return self.do_location(target=self.pre_described_options[target], image_reference=self.image_references[target])
         elif target in self.pre_described_options:
             return self.do_location(target=self.pre_described_options[target])
@@ -717,6 +734,22 @@ class CheckInteractionAction(SingleHighLevelAction):
 class SeekAction(LocateAction):
     """
     Chains together location, movement and check interaction. 
+
+    Is Valid When: In Free Roam State
+    Action Success Interpretation:
+        - -1: Could not find target
+        - 0: Moved to target successfully and interacted
+        - 1: Could not move to target (obstacle completely blocking path)
+        - 2: State changed before reaching target (battle, cutscene, etc)
+        - 3: CheckInteraction VLM failure
+        - 4: CheckInteraction found nothing to interact with at target location
+        - 5: Interaction action failed
+    Action Returns:
+        - n_steps_taken (int): Number of steps actually taken during movement
+        - rotated (bool or None): True if the player has not moved, but has rotated. If the player has moved, this will be None. If it is False, it means the player tried to walk straight into an obstacle.
+        Optional:
+        - percieve_output (str): The output of the CheckInteractionAction percieve prompt at the target location.
+        - orientation (Tuple[int, int]): The orientation of the agent at the target location.
     """
     resolve_prompt = """
 You are playing Pokemon and are given a screen capture of the game. The user is looking for [TARGET] with the intent of [INTENT] and has narrowed it down to the following possible locations:
@@ -810,25 +843,32 @@ Output:
             # Now move to the selected cell
             x_move = selected_cell[0]
             y_move = selected_cell[1]
-            print("Moving with args: ", x_move, y_move)
             transition_states, move_status = MoveGridAction._execute(self, x_steps=x_move, y_steps=y_move)
-            if move_status != 0:
+            location_results.update(transition_states[-1]["action_return"])
+            if move_status in [-1, 2]: # could not move or state changed
+                transition_states[-1]["action_return"] = location_results
                 # then we stop here, return the movement status shifted up by maximum locate status
-                move_status = move_status + 3
-                # so now, 2 -> no move, 3 -> SHOULD NOT HAPPEN, 4 -> partial move, 5 -> state change
+                move_status = 1 if move_status == -1 else 2
                 return transition_states, move_status
             check_states, check_status = CheckInteractionAction._execute(self)
-            print("Got check results: ", check_states[-1]["action_return"])
+            location_results.update(check_states[-1]["action_return"])            
             transition_states.extend(check_states)
             if check_status == 0: # we can interact. Hit interact
                 interaction_states, interact_status = InteractAction._execute(self)
+                # no action_return from interact
+                interaction_states[-1]["action_return"] = location_results
                 transition_states.extend(interaction_states)
                 if interact_status == 0:
-                    return transition_states, check_status # 0 should be success here
+                    return transition_states, 0
                 else:
-                    return transition_states, 9 # 9 -> interaction failed after seek. This means checkInteract said we could interact but we couldn't.
+                    return transition_states, 5
             else:
-                return transition_states, check_status + 7 # So now 6 -> VLM failure, 7 -> Should not happen, 8 -> Nothing to interact with
+                if check_status == -1:
+                    check_status = 3
+                elif check_status == 1:
+                    check_status = 4
+                transition_states[-1]["action_return"] = location_results
+                return transition_states, check_status
             
         
 class BattleMenuAction(HighLevelAction):
