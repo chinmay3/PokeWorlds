@@ -25,6 +25,8 @@ class PokemonStateWiseController(Controller):
         # Now handle the actions with fixed options
         if action_name == "seek":
             item = action_args_str.strip()
+            if "," not in item:
+                return None, None
             intent, target = item.split(",")
             intent = intent.strip()
             target = target.strip()
