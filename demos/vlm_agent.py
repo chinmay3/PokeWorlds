@@ -415,8 +415,6 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE STEP ONE>
         if recent_ocr == "":
             recent_ocr = "No new messages."
         state = observation["state"]
-        if state.name == "IN_MENU":
-            breakpoint()
         past_ocr = self.env.ocr_buffer
         ocr_buffer_str = ""
         for ocr_step, ocr_texts in past_ocr:
@@ -426,14 +424,15 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE STEP ONE>
             ocr_buffer_str += f"Step {ocr_step}: {ocr_text_combined}\n"
         if ocr_buffer_str == "":
             ocr_buffer_str = "No previous OCR messages."
+        high_level_plan_str = "\n".join(self.high_level_plan)
         if self.steps_taken_for_current_goal > self.max_steps_per_goal:
             # Need to fail and ask supervisor for new note
-            prompt = self.full_failure_summary_prompt.replace("[HIGH_LEVEL_PLAN]", self.high_level_plan).replace("[STEP]", self.high_level_plan[self.current_step_index]).replace("[NOTE]", self.note).replace("[ACTION_BUFFER]", action_buffer_str).replace("[NOTE_BUFFER]", "\n".join(self.agent_note_buffer)).replace("[OCR_BUFFER]", ocr_buffer_str).replace("[OCR]", recent_ocr)
+            prompt = self.full_failure_summary_prompt.replace("[HIGH_LEVEL_PLAN]", high_level_plan_str).replace("[STEP]", self.high_level_plan[self.current_step_index]).replace("[NOTE]", self.note).replace("[ACTION_BUFFER]", action_buffer_str).replace("[NOTE_BUFFER]", "\n".join(self.agent_note_buffer)).replace("[OCR_BUFFER]", ocr_buffer_str).replace("[OCR]", recent_ocr)
             failure_summary = self.infer(prompt, screen)
             return "fail", failure_summary
         else:
             self.steps_taken_for_current_goal += 1
-            prompt = self.full_action_prompt.replace("[HIGH_LEVEL_PLAN]", self.high_level_plan).replace("[STEP]", self.high_level_plan[self.current_step_index]).replace("[NOTE]", self.note).replace("[ACTION_BUFFER]", action_buffer_str).replace("[NOTE_BUFFER]", "\n".join(self.agent_note_buffer[-2:])).replace("[OCR_BUFFER]", ocr_buffer_str).replace("[OCR]", recent_ocr).replace("[STATE]", state.name).replace("[ALLOWED_ACTIONS]", allowed_actions)
+            prompt = self.full_action_prompt.replace("[HIGH_LEVEL_PLAN]", high_level_plan_str).replace("[STEP]", self.high_level_plan[self.current_step_index]).replace("[NOTE]", self.note).replace("[ACTION_BUFFER]", action_buffer_str).replace("[NOTE_BUFFER]", "\n".join(self.agent_note_buffer[-2:])).replace("[OCR_BUFFER]", ocr_buffer_str).replace("[OCR]", recent_ocr).replace("[STATE]", state.name).replace("[ALLOWED_ACTIONS]", allowed_actions)
             action_valid = False
             previous_action_strings = ""
             n_attempts = 0
