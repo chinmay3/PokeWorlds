@@ -758,7 +758,7 @@ Your job is to reason about the screens and the options and identify the single 
 Format your response as follows:
 Picture Reasoning: Look at the screen and give an extremely brief description as to which area seems to best match the target description and why. State concisely where it is with respect to the player (straight ahead, to the left and forwward, etc.)
 Cell Reasoning: Out of the given possible cells, which cell seems to align best with your picture reasoning and why? You must select one answer by the end, so if you cannot decide, just pick one of them. Be very concise and use fewer words. 
-Final Answer: the single best cell to move towards in the format (<x: int> steps <right or left>, <y: int> steps <up or down>)
+Final Answer: the single best cell to move towards in the format OPTION <OPTION NUMBER> where OPTION NUMBER is the number of the cell in the list of possible cells. 
 [STOP]
 Output:
     """
@@ -795,11 +795,10 @@ Output:
         else:
             # don't discriminate between definitive and potential here. Just use both.
             possible_cells = list(set(location_results["potential_cells"] + location_results["definitive_cells"]))
-            print(f"Possible cells for seek: {self.coords_to_string(possible_cells)}")
             if len(possible_cells) > 1:
                 cell_string = ""
                 for i, cell in enumerate(possible_cells):
-                    cell_string += f"Cell {i+1}: {self.coord_to_string(cell)}. "
+                    cell_string += f"OPTION {i+1}: {self.coord_to_string(cell)}. "
                 resolve_prompt = self.resolve_prompt.replace("[TARGET]", target)
                 resolve_prompt = resolve_prompt.replace("[INTENT]", intent)
                 resolve_prompt = resolve_prompt.replace("[POSSIBLE_CELLS]", cell_string)
@@ -810,37 +809,22 @@ Output:
                     selected_cell = possible_cells[0]
                 else:
                     final_answer_part = resolve_output.lower().split("final answer:")[-1]
-                    #(x steps right/left, y steps up/down)
-                    if "(" not in final_answer_part or ")" not in final_answer_part:
+                    if "option" not in final_answer_part:
                         log_warn(error, self._parameters)
                         selected_cell = possible_cells[0]
                     else:
-                        coord_part = final_answer_part.split("(")[-1].split(")")[0]
-                        coord_parts = coord_part.split(",")
-                        if len(coord_parts) != 2:
+                        int_part = final_answer_part.split("option")[-1].strip().split()[0]
+                        int_part = int_part.split(":")[0] # in case they do OPTION 1: type syntax
+                        if not int_part.isdigit():
                             log_warn(error, self._parameters)
                             selected_cell = possible_cells[0]
                         else:
-                            x_part = coord_parts[0].strip()
-                            y_part = coord_parts[1].strip()
-                            if "steps" not in x_part or "steps" not in y_part:
+                            option_number = int(int_part)
+                            if option_number < 1 or option_number > len(possible_cells):
                                 log_warn(error, self._parameters)
                                 selected_cell = possible_cells[0]
                             else:
-                                x_steps = x_part.split("steps")[0].strip()
-                                y_steps = y_part.split("steps")[0].strip()
-                                if not x_steps.isnumeric() or not y_steps.isnumeric():
-                                    log_warn(error, self._parameters)
-                                    selected_cell = possible_cells[0]
-                                else:
-                                    x_steps = int(x_steps)
-                                    y_steps = int(y_steps)
-                                    if "left" in x_part:
-                                        x_steps = -x_steps
-                                    if "down" in y_part:
-                                        y_steps = -y_steps
-                                    selected_cell = (x_steps, y_steps)
-                                    print(f"Selected cell for seek: {self.coord_to_string(selected_cell)} from VLM output: {resolve_output}")
+                                selected_cell = possible_cells[option_number - 1]
             else:
                 selected_cell = possible_cells[0]
             # Now move to the selected cell
