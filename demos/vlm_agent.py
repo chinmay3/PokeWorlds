@@ -227,6 +227,12 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE STEP ONE>
         self.prev_action = None
         self.all_inputs = []
         self.all_outputs = []
+
+    def save_logs(self):
+        path = self.env._emulator.session_path + "/vlm_logs.csv"
+        df = pd.DataFrame({"inputs": self.all_inputs, "outputs": self.all_outputs})
+        df.to_csv(path, index=False)
+        return
         
     def infer(self, prompt, current_frame):
         current_frame = current_frame.reshape(current_frame.shape[0], current_frame.shape[1])
@@ -264,7 +270,7 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE STEP ONE>
         )[0]
         self.all_inputs.append(prompt)
         self.all_outputs.append(output_text)
-        print(full_text)
+        self.save_logs()
         return output_text
     
     def parse_plan_steps(self, plan_text):
