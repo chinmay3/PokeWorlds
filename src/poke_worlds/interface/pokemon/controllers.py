@@ -86,10 +86,10 @@ class PokemonStateWiseController(Controller):
         all_options = set(LocateAction.image_references.keys()).union(LocateAction.pre_described_options.keys())
         locate_option_strings = ", ".join(all_options)
         free_roam_action_strings = {
-            LocateAction: f"locate(<{locate_option_strings}>): Locate all instances of the specified visual entity in the current screen, and return their coordinates relative to your current position. Only the entities specified in <> are valid options, anything else will return an error. DO NOT use this action with an input that is not listed in <> (e.g. locate(pokemon) or locate(pokeball) will fail).",
+            SeekAction: f"seek(<intent: extremely short string description of intent>, <{locate_option_strings}>): Move towards the nearest instance of the specified visual entity until you are right next to it and facing it. Only the entities specified in <> are valid options, anything else will return an error. ",
+            #LocateAction: f"locate(<{locate_option_strings}>): Locate all instances of the specified visual entity in the current screen, and return their coordinates relative to your current position. Only the entities specified in <> are valid options, anything else will return an error. DO NOT use this action with an input that is not listed in <> (e.g. locate(pokemon) or locate(pokeball) will fail).",
             MoveGridAction: "move(<right or left> <steps: int>,<up or down> <steps: int>): Move in grid space by the specified right/left and up/down steps.",
             CheckInteractionAction: "checkinteraction(): Check if there is something to interact with in front of you.",
-            SeekAction: f"seek(<intent: extremely short string description of intent>, <{locate_option_strings}>): Move towards the nearest instance of the specified visual entity until you are right next to it and facing it. Only the entities specified in <> are valid options, anything else will return an error. DO NOT use this action with an input that is not listed in <> (e.g. seek(pokemon) or seek(pokeball) will fail).",
             InteractAction: "interact(): Interact with cell directly in front of you. Only works if there is something to interact with.",
         }
         dialogue_action_strings = {
