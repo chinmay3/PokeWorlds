@@ -756,8 +756,8 @@ You are playing Pokemon and are given a screen capture of the game. The user is 
 [POSSIBLE_CELLS]
 Your job is to reason about the screens and the options and identify the single best candidate cell to move towards. 
 Format your response as follows:
-Picture Reasoning: Look at the screen and describe which area seems to best match the target description and why. State roughly where it is with respect to the player (straight ahead, to the left and forwward, etc.)
-Cell Reasoning: Out of the given possible cells, which cell seems to align best with your picture reasoning and why? You must select one answer by the end, so if you cannot decide, just pick one of them. 
+Picture Reasoning: Look at the screen and give an extremely brief description as to which area seems to best match the target description and why. State concisely where it is with respect to the player (straight ahead, to the left and forwward, etc.)
+Cell Reasoning: Out of the given possible cells, which cell seems to align best with your picture reasoning and why? You must select one answer by the end, so if you cannot decide, just pick one of them. Be very concise and use fewer words. 
 Final Answer: the single best cell to move towards in the format (<x: int> steps <right or left>, <y: int> steps <up or down>)
 [STOP]
 Output:
@@ -769,8 +769,8 @@ Output:
     def move(self, **kwargs):
         return BaseMovementAction.move(self, **kwargs)
     
-    def judge_movement(self, **kwargs):
-        return BaseMovementAction.judge_movement(self, **kwargs)
+    def judge_movement(self, previous_frame, current_frame):
+        return BaseMovementAction.judge_movement(self, previous_frame, current_frame)
     
     def get_action_space(self):
         return LocateAction.get_action_space(self)
@@ -861,10 +861,10 @@ Output:
                 # no action_return from interact
                 interaction_states[-1]["action_return"] = location_results
                 transition_states.extend(interaction_states)
-                if interact_status == 0:
-                    return transition_states, 0
+                if interact_status == -1: # interaction fail
+                    return transition_states, -1
                 else:
-                    return transition_states, 5
+                    return transition_states, 0
             else:
                 if check_status == -1:
                     check_status = 3
