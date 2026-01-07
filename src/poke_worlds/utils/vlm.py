@@ -6,8 +6,6 @@ from poke_worlds.utils.log_handling import log_warn, log_error, log_info
 from typing import List, Union
 import numpy as np
 from PIL import Image
-import requests
-from PIL import Image
 import torch
 
 
@@ -60,24 +58,46 @@ class HuggingFaceVLM:
             else:
                 log_warn(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", project_parameters)
         else:
+            log_info(f"Loading Backbone HuggingFace VLM model: {project_parameters['backbone_vlm_model']}", project_parameters)
             HuggingFaceVLM._MODEL = AutoModelForImageTextToText.from_pretrained(project_parameters["backbone_vlm_model"], dtype=torch.bfloat16, device_map="auto")
             HuggingFaceVLM._PROCESSOR = AutoProcessor.from_pretrained(project_parameters["backbone_vlm_model"], padding_side="left")
 
+    
     @staticmethod
-    def multi_infer(texts: List[str], images: List[List[Union[np.ndarray, Image.Image]]], max_new_tokens: int, batch_size: int = None) -> List[str]:
+    def do_infer(model, processor, texts, images, max_new_tokens, batch_size):
+        all_images = [convert_numpy_greyscale_to_pillow(img) for img in images]
+        all_texts = [f"<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>\n{text}\n<|im_end|><|im_start|>assistant\n" for text in texts]
+        if batch_size is None:
+            batch_size = HuggingFaceVLM._BATCH_SIZE
+        all_outputs = []
+        for i in range(0, len(all_images), batch_size):
+            images = all_images[i:i+batch_size]
+            texts = all_texts[i:i+batch_size]
+            inputs = processor(text=texts, images=images, padding=True, truncation=True, return_tensors="pt").to(model.device)
+            input_length = inputs["input_ids"].shape[1]
+            outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, repetition_penalty=1.2, stop_strings=["[STOP]"], tokenizer=processor.tokenizer)
+            output_only = outputs[:, input_length:]
+            decoded_outputs = processor.batch_decode(output_only, skip_special_tokens=True)
+            all_outputs.extend(decoded_outputs)
+        return all_outputs        
+
+    
+    @staticmethod
+    def infer(texts: List[str], images: List[np.ndarray], max_new_tokens: int, batch_size: int = None) -> List[str]:
         """
-        Performs inference with the a single text and multiple images
+        Performs inference with the given texts and images        
         """
-        if len(texts) != len(images):
-            log_error(f"Texts and images must have the same length. Got {len(texts)} texts and {len(images)} image lists.", project_parameters)
         if HuggingFaceVLM._MODEL is None:
             HuggingFaceVLM.start()
         if HuggingFaceVLM._MODEL is None: # it is only still None in debug mode
-            return ["LM Output" for _ in images]
+            return ["LM Output" for text in texts]
         if max_new_tokens is None:
             log_error(f"Can't set max_new_tokens to None", project_parameters)
-        if batch_size is None:
-            batch_size = HuggingFaceVLM._BATCH_SIZE
+        return HuggingFaceVLM.do_infer(HuggingFaceVLM._MODEL, HuggingFaceVLM._PROCESSOR, texts, images, max_new_tokens, batch_size)
+
+    @staticmethod
+    def do_multi_infer(model, processor, texts, images, max_new_tokens, batch_size):
+        # Might need to branch this function out based on the VLM kind later. 
         all_outputs = []
         all_texts = []
         for i, text in enumerate(texts):
@@ -96,41 +116,32 @@ class HuggingFaceVLM:
                     else:
                         flat_images.append(img)                    
             batch_texts = all_texts[i:i+batch_size]
-            inputs = HuggingFaceVLM._PROCESSOR(text=batch_texts, images=flat_images, padding=True, truncation=True, return_tensors="pt").to(HuggingFaceVLM._MODEL.device)
+            inputs = processor(text=batch_texts, images=flat_images, padding=True, truncation=True, return_tensors="pt").to(model.device)
             input_length = inputs["input_ids"].shape[1]
-            outputs = HuggingFaceVLM._MODEL.generate(**inputs, max_new_tokens=max_new_tokens, repetition_penalty=1.2, stop_strings=["[STOP]"], tokenizer=HuggingFaceVLM._PROCESSOR.tokenizer)
+            outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, repetition_penalty=1.2, stop_strings=["[STOP]"], tokenizer=processor.tokenizer)
             output_only = outputs[:, input_length:]
-            decoded_outputs = HuggingFaceVLM._PROCESSOR.batch_decode(output_only, skip_special_tokens=True)
+            decoded_outputs = processor.batch_decode(output_only, skip_special_tokens=True)
             all_outputs.extend(decoded_outputs)
         return all_outputs
+        
 
-    
     @staticmethod
-    def infer(texts: List[str], images: List[np.ndarray], max_new_tokens: int, batch_size: int = None) -> List[str]:
+    def multi_infer(texts: List[str], images: List[List[Union[np.ndarray, Image.Image]]], max_new_tokens: int, batch_size: int = None) -> List[str]:
         """
-        Performs inference with the given texts and images        
+        Performs inference with the a single text and multiple images
         """
+        if len(texts) != len(images):
+            log_error(f"Texts and images must have the same length. Got {len(texts)} texts and {len(images)} image lists.", project_parameters)
         if HuggingFaceVLM._MODEL is None:
             HuggingFaceVLM.start()
         if HuggingFaceVLM._MODEL is None: # it is only still None in debug mode
-            return ["LM Output" for text in texts]
+            return ["LM Output" for _ in images]
         if max_new_tokens is None:
             log_error(f"Can't set max_new_tokens to None", project_parameters)
-        all_images = [convert_numpy_greyscale_to_pillow(img) for img in images]
-        all_texts = [f"<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>\n{text}\n<|im_end|><|im_start|>assistant\n" for text in texts]
         if batch_size is None:
             batch_size = HuggingFaceVLM._BATCH_SIZE
-        all_outputs = []
-        for i in range(0, len(all_images), batch_size):
-            images = all_images[i:i+batch_size]
-            texts = all_texts[i:i+batch_size]
-            inputs = HuggingFaceVLM._PROCESSOR(text=texts, images=images, padding=True, truncation=True, return_tensors="pt").to(HuggingFaceVLM._MODEL.device)
-            input_length = inputs["input_ids"].shape[1]
-            outputs = HuggingFaceVLM._MODEL.generate(**inputs, max_new_tokens=max_new_tokens, repetition_penalty=1.2, stop_strings=["[STOP]"], tokenizer=HuggingFaceVLM._PROCESSOR.tokenizer)
-            output_only = outputs[:, input_length:]
-            decoded_outputs = HuggingFaceVLM._PROCESSOR.batch_decode(output_only, skip_special_tokens=True)
-            all_outputs.extend(decoded_outputs)
-        return all_outputs
+        return HuggingFaceVLM.do_multi_infer(HuggingFaceVLM._MODEL, HuggingFaceVLM._PROCESSOR, texts, images, max_new_tokens, batch_size)
+
 
 class vLLMVLM:
     """ A class that holds the vLLM VLM shared across the project """

@@ -229,6 +229,8 @@ class OCRMetric(MetricGroup, ABC):
                 Will track ocr results in form of list of dictionaries where these kinds are keys. 
         """
         super().start()
+        if self.NAME != "ocr":
+            log_error("OCRMetric subclasses must have NAME equal to 'ocr' for the environment get_info() aggregation step to work.", self._parameters)
         if not hasattr(self, 'kinds'):
             log_error("OCRMetrics must declare self.kinds dictionary", self._parameters)
         elif not isinstance(self.kinds, dict):

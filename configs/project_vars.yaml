@@ -1,6 +1,9 @@
 debug_mode: false
 debug_skip_lm: false # Will skip all LM calls, to allow debugging on systems without LM access. 
-backbone_vlm_model: Qwen/Qwen3-VL-8B-Instruct
+backbone_vlm_model: Qwen/Qwen3-VL-8B-Instruct # The VLM that handles OCR, Locate and High level action generation.
 ocr_batch_size: 16
 ocr_max_new_tokens: 20
 use_vllm: false
+executor_vlm_model: Qwen/Qwen3-VL-8B-Instruct # The VLM that handles simple goal directed usage of High Level Actions. Use the same model as the backbone to avoid loading multiple models.
+executor_action_buffer_size: 5
+executor_retries_per_action: 3
