@@ -26,10 +26,6 @@ class History:
     """
     def __init__(self, observation, info, parameters=None):
         self._parameters = load_parameters(parameters)
-        self.reset(observation, info)
-
-    def _reset(self, observation, info):
-
         self.steps_taken: int = 0
         """ Number of HighLevelAction steps taken in the Environment. Will NOT match Emulator steps """
 
@@ -40,12 +36,12 @@ class History:
         self.rewards: List[float] = [None]
         """ List of rewards received. """
 
-    def _update(self,  next_observation: Any, next_info: Dict[str, Dict[str, Any]], reward: float):
+    def _update(self,  next_observation: Any, next_info: Dict[str, Dict[str, Any]], next_reward: float):
         if self.steps_taken is None:
             log_error(f"Cannot update History after slicing.", self._parameters)
         self.observations.append(next_observation)
         self.infos.append(next_info)
-        self.rewards.append(reward)
+        self.rewards.append(next_reward)
         self.steps_taken += 1
 
     def get_step_frames(self) -> List[np.ndarray]:
@@ -74,7 +70,7 @@ class History:
             frames.append(obs["core"]["transition_passed_frames"])
         return frames
     
-    def get_action_details(self) -> List[Tuple[HighLevelAction, Dict[str, Any], List[Dict[Dict[str, Any]]], int, dict]]:
+    def get_action_details(self) -> List[Tuple[HighLevelAction, Dict[str, Any], List[Dict[str, Dict[str, Any]]], int, dict]]:
         """
         Reads the action details from the infos stored. Will have length equal to number of steps taken.
         
@@ -206,6 +202,7 @@ class Environment(gym.Env, ABC):
         """ The pygame clock for rendering in 'human' mode. Initialized on first render call. """
         self._history: History = None
         """ The Environment History, storing all observations, state_information reports, actions and rewards over the episode. Is cleared with reset(). Access through get_history()"""
+        self.reset()
 
     def get_history(self) -> History:
         """
@@ -301,7 +298,7 @@ class Environment(gym.Env, ABC):
         self._emulator.reset()
         self._controller.seed(seed)
         observation, info = self.get_observation(), self.get_info()
-        self._history._reset(observation=observation, info=info)
+        self._history = History(observation=observation, info=info)
         return observation, info
     
     @abstractmethod
@@ -406,7 +403,7 @@ class Environment(gym.Env, ABC):
         current_state = self.get_info(action=action, action_kwargs=kwargs, transition_states=transition_states, action_success=action_success)
         terminated = self.determine_terminated(current_state)
         reward = self.determine_reward(start_state=start_state, action=action, action_kwargs=kwargs, transition_states=transition_states, action_success=action_success)
-        self._history._update(observation, next_info=current_state)
+        self._history._update(next_observation=observation, next_info=current_state, next_reward=reward)
         return observation, reward, terminated, truncated, current_state
 
     def string_to_high_level_action(self, input_str: str) -> Tuple[Optional[HighLevelAction], Optional[dict]]:
