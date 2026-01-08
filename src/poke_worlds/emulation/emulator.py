@@ -787,7 +787,6 @@ class Emulator():
         """
         return self.name
     
-
 def bytes_to_padded_hex_string(integer_value):
     """
     Converts a bytes object into a padded, '0x'-prefixed hexadecimal string.

@@ -588,6 +588,7 @@ class StateParser(ABC):
         plt.imshow(merged[:, :, 0], cmap="gray")
         plt.show()
         ```
+        
         :param current_frame: An emulator frame. 
         :type current_frame: np.ndarray
         :param quadrant: If specified, only captures cells in the given quadrant ('TL', 'TR', 'BL', 'BR').
@@ -683,7 +684,7 @@ class StateParser(ABC):
         :param grid_cells: Subset of grid cells to split. Must be a rectangular box in (x, y) space. 
         :type grid_cells: Dict[Tuple[int, int], np.ndarray]
         :return: A dictionary where the keys are quadrant keys [tr, tl, br, bl] and values are:
-        
+
             - screen: which maps to the single numpy array representing that quadrant as a screen
             - cells: A dictionary mapping cell grids to the specific screen region as numpy arrays. 
         :rtype: Dict[str, Dict[str, Union[np.ndarray, Dict[Tuple[int, int], np.ndarray]]]]

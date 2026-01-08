@@ -40,7 +40,7 @@ jobs:
       - run: |
           mkdir -p docs/assets
           cp assets/logo_tilt.png docs/assets/
-          pdoc src/poke_worlds !poke_worlds.interface.pokemon.transformers -o docs -d google -n --logo "https://dhananjayashok.github.io/PokeWorlds/assets/logo_tilt.png"
+          pdoc src/poke_worlds !poke_worlds.interface.pokemon.transformers -o docs -n --logo "https://dhananjayashok.github.io/PokeWorlds/assets/logo_tilt.png"
       - uses: actions/upload-pages-artifact@v4
         with:
           path: docs/
