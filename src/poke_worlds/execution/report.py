@@ -46,6 +46,8 @@ class ExecutionReport(ABC):
         """ List of action strings used during the execution. """
         self._action_messages: List[str] = []
         """ List of action messages received during the execution. """
+        self.environment_done: bool = None
+        """ Whether or not the environment is terminated / truncated. """
 
     def __deepcopy__(self, memo):
         if self in memo:
@@ -124,9 +126,10 @@ class ExecutionReport(ABC):
             use_action_details.append((action_string, action_class, action_kwargs, transition_states, success_code, action_return_info, action_message))
         return use_action_details
     
-    def _close(self, exit_reasoning: str):
+    def _close(self, exit_reasoning: str, environment_done: bool):
         """ Closes the execution report with the given exit reasoning. """
         self.exit_reasoning = exit_reasoning
+        self.environment_done = environment_done
         if self._history is not None:
             log_error("ExecutionReport is already closed.", self._parameters)
         self._history = self.get_history()

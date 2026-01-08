@@ -265,18 +265,18 @@ Response:
             if show_progress:
                 pbar.update(1)
             if error_out:
-                self._execution_report._close("VLM could not produce a valid action output.")
+                self._execution_report._close("VLM could not produce a valid action output.", environment_done=environment_done)
                 if show_progress:
                     pbar.close()
                 return self.get_execution_report()
             if environment_done:
-                self._execution_report._close("Environment signaled done.")
+                self._execution_report._close("Environment signaled done.", environment_done=environment_done)
                 if show_progress:
                     pbar.close()
                 return self.get_execution_report()
             if n_steps >= step_limit:
                 # need to close out
-                self._execution_report._close("Reached step limit.")
+                self._execution_report._close("Reached step limit.", environment_done=environment_done)
                 if show_progress:
                     pbar.close()
                 return self.get_execution_report()
@@ -302,7 +302,7 @@ Response:
                             next_action_thoughts=next_action_thoughts)
             exit_reasoning, exit_decision = self._check_exit_conditions()
             if exit_decision:
-                self._execution_report._close(exit_reasoning)
+                self._execution_report._close(exit_reasoning, environment_done=environment_done)
                 if show_progress:
                     pbar.close()
                 return self.get_execution_report()

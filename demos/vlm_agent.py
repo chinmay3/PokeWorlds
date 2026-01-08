@@ -254,6 +254,9 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
             print(f"Executor Analysis: {analysis}")
             print(f"Updated Lessons Learned: {lessons_learned}")
             print(f"Updated Visual Context: {visual_context}")
+            if execution_report.environment_done:
+                print("Environment Steps Done")
+                break
             prompt = self.executor_information_construction_prompt.replace("[LESSONS_LEARNED]", lessons_learned).replace("[VISUAL_CONTEXT]", visual_context)
             current_frame = self.env.get_info()["core"]["current_frame"]
             output_text = self.infer(prompt, current_frame)
@@ -273,11 +276,12 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
 @click.option("--game_variant", default="pokemon_red", type=click.Choice(AVAILABLE_POKEMON_VARIANTS))
 @click.option("--mission", default="Seek and select any one pokeball with a starter from the bench to your right, and then leave the building from the entrance below. HINT: You should typically try seek before relying on manual movement.", type=str)
 @click.option("--visual_context", default=None, type=str)
-def do(model_name, init_state, game_variant, mission, visual_context):
+@click.option("--max_steps", default=1000, type=int)
+def do(model_name, init_state, game_variant, mission, visual_context, max_steps):
     short_model = model_name.split("/")[-1]
     environment = get_pokemon_environment(game_variant=game_variant, controller=PokemonStateWiseController(), 
-                                        environment_variant="high_level",
-                                        save_video=True,
+                                        environment_variant="high_level",                                        
+                                        save_video=True, max_steps=max_steps,
                                             init_state=init_state, session_name=f"vlm_demo_{short_model}", headless=True)
     vl = VL(environment, model_name=model_name)
     vl.play(mission=mission, visual_context=visual_context)
