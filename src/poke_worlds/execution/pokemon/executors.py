@@ -1,4 +1,5 @@
 from poke_worlds.interface.pokemon.controllers import PokemonStateWiseController
+from poke_worlds.interface import HighLevelAction
 from poke_worlds.execution.executor import Executor
 from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, MoveGridAction, BattleMenuAction, PickAttackAction, CheckInteractionAction, LocateAction, SeekAction
 

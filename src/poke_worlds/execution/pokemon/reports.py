@@ -1,5 +1,7 @@
 from poke_worlds.execution.report import ExecutionReport
 from poke_worlds.emulation.pokemon.trackers import PokemonOCRTracker
+from typing import Dict, Any
+
 class PokemonExecutionReport(ExecutionReport):
     REQUIRED_STATE_TRACKER = PokemonOCRTracker
 
