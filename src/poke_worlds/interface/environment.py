@@ -435,7 +435,6 @@ class Environment(gym.Env, ABC):
         log_info("Closing environment and emulator.", self._parameters)
         self._emulator.close()
 
-    
     def _screen_render(self, screen: np.ndarray):
         """
         Renders the given screen using pygame in human mode.
@@ -456,7 +455,6 @@ class Environment(gym.Env, ABC):
         pygame.display.flip()
         self._clock.tick(60)  # Limit to 60 FPS
 
-    
     def render(self) -> Optional[np.ndarray]:
         """
         Gets the current screen from the emulator and renders it. 
@@ -513,7 +511,6 @@ class Environment(gym.Env, ABC):
         """
         raise NotImplementedError
     
-    
     def get_action_strings(self, return_all: bool = False) -> Dict[HighLevelAction, str]:
         """
         Provide a way to verbalize the allowed high level actions, along with the format of the input parameters. 
@@ -525,7 +522,6 @@ class Environment(gym.Env, ABC):
         :rtype: Dict[HighLevelAction, str]
         """
         return self._controller.get_action_strings(return_all=return_all)
-    
     
     def human_step_play(self, max_steps: int=50, show_info: bool=False):
         """
