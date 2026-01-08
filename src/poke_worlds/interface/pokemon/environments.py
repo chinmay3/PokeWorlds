@@ -177,36 +177,3 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
         }
         return observation
     
-    def render_obs(self, action=None, action_kwargs=None, transition_states=None, action_success=None): # Might cause issues if you try to render() as well
-        """
-        Renders the observation space by displaying all the frames passed during the action execution.
-
-        Args:
-            action (Optional[HighLevelAction]): The previous action taken.
-            action_kwargs (dict): The keyword arguments used for the action.
-            transition_states (Optional[List[Dict[str, Dict[str, Any]]]]): The states observed during the action execution.
-            action_success (Optional[int]): The success code of the action.
-        """
-        info = self.get_info()
-        if transition_states is not None and len(transition_states) > 0:
-            screens = transition_states[0]["core"]["passed_frames"]
-            for transition_state in transition_states[1:]:
-                screens = np.concatenate([screens, transition_state["core"]["passed_frames"]], axis=0)
-        else:
-            screens = info["core"]["passed_frames"]
-        if screens is None:
-            screens = [info["core"]["current_frame"]]
-        for screen in screens:
-            self._screen_render(screen)
-        obs = self.get_observation(action=action, action_kwargs=action_kwargs, transition_states=transition_states, action_success=action_success, add_to_buffers=False)
-        obs.pop("screen")
-        log_info(f"Obs Strings:", self._parameters)
-        log_dict(obs, parameters=self._parameters)
-
-    def render_info(self, action=None, action_kwargs=None, transition_states=None, action_success=None):
-        info = self.get_info()
-        info["core"].pop("current_frame")
-        info["core"].pop("passed_frames")
-        log_info("State: ", self._parameters)
-        log_dict(info, self._parameters)
-    
