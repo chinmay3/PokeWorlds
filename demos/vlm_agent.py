@@ -232,6 +232,7 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
         lessons_learned = "No Lessons Learned Yet."
         immediate_task = self.high_level_plan[0]
         mission_accomplished = False
+        pbar = tqdm(total=self.env._emulator.max_steps, desc="Overall VLM Agent Progress")
         while not mission_accomplished:
             print(f"Starting execution of immediate task: {immediate_task} with initial_plan: {initial_plan}")
             executor = PokemonExecutor(game="Pokemon", environment=self.env, 
@@ -263,6 +264,7 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
             immediate_task, initial_plan = self.parse_executor_information_construction(output_text)
             if immediate_task is None or initial_plan is None:
                 break
+            pbar.update(1)
         print("Finished playing VLM agent.")
         self.env.close()
 
