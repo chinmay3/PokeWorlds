@@ -50,6 +50,13 @@ class ReleaseActions(Enum):
 
 
 class Emulator():
+    """
+    Handles the running of the GameBoy emulator, including loading ROMs, managing state, performing low level actions and calling the tracker. 
+    Subclasses will likely only be needed to manually force the execution of specific button sequences when certain states are detected. (e.g. short-circuiting specific menus, etc.)
+    
+    Can be used to access the `state_parser` and `state_tracker` instances for the running game instance. 
+    """
+
     REQUIRED_STATE_PARSER = StateParser
     """ The minimal functionality StateParser needed for this emulator to run """
 
@@ -291,19 +298,14 @@ class Emulator():
             self.add_video_frames(frames)
         self.state_tracker.step(frames)
     
-    def step(self, action: LowLevelActions = None) -> Tuple[np.ndarray, bool]:
-        """ 
+    def step(self, action: LowLevelActions = None) -> Tuple[Optional[np.ndarray], bool]:
+        """
+        Takes a step in the environment by performing the given action on the emulator. If saving video, starts the video recording on the first step.
         
-        Takes a step in the environment by performing the given action on the emulator.
-        If saving video, starts the video recording on the first step.
-
-        Args:
-            action (LowLevelActions, optional): Lowest level action to perform on the emulator.
-
-        Returns:
-            np.ndarray: The stack of frames that passed while performing the action, if rendering is enabled. Is of shape [n_frames (3 right now), height, width, channels]. Otherwise, None.
-            
-            bool: Whether the max_steps limit is reached.
+        :param action: Lowest level action to perform on the emulator.
+        :type action: LowLevelActions
+        :return: The stack of frames that passed while performing the action, if rendering is enabled. Is of shape [n_frames (3 right now), height, width, channels]. Otherwise, None.
+        :rtype: Tuple[Optional[np.ndarray], bool]
         """
         if action is not None:
             if action not in LowLevelActions:

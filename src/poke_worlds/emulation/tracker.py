@@ -12,7 +12,15 @@ EPSILON = 0.0001
 """ Default epsilon for frame change detection. """
 
 class MetricGroup(ABC):
-    """Abstract Base class for organizing related metrics."""
+    """
+    Abstract Base class for organizing related metrics.
+
+    ### Documentation Guidlines:
+    Every subchild should document the following in their class docstrings:
+    - Reports (List of keys that are present in the return dict of `report`)
+    - Final Reports (List of keys that are present in the return dict of `report_final`)
+
+    """
     NAME = "base"
     """ Name of the MetricGroup. """
 
@@ -67,13 +75,12 @@ class MetricGroup(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    def report(self) -> dict:
+    def report(self) -> Dict[str, Any]:
         """
         Return metrics as dictionary for instantaneous variable tracking.
-
-        Subclasses must specify the keys used in the returned dictionary.
-        Returns:
-            dict: A dictionary containing the current metrics.
+        
+        :return: Dictionary of metrics
+        :rtype: Dict[str, Any]
         """
         raise NotImplementedError
     
@@ -83,21 +90,20 @@ class MetricGroup(ABC):
         Return metrics as dictionary for logging. Called at end of environment (before close).
         Will never be called before `self.close`.
 
-        Subclasses must specify the keys used in the returned dictionary.
-        Returns:
-            dict: A dictionary containing the final metrics.
+        :return: Dictionary of metrics
+        :rtype: Dict[str, Any]
         """
         raise NotImplementedError
     
     def log_info(self, message: str):
         """
-        Logs with MetricGroup's name
+        Logs with MetricGroup's name. Primarily for debugging.
         """
         log_info(f"[Metric({self.NAME})]: {message}", self._parameters)
 
     def log_warn(self, message: str):
         """
-        Logs with MetricGroup's name
+        Logs with MetricGroup's name. Primarily for debugging.
         """
         log_warn(f"[Metric({self.NAME})]: {message}", self._parameters)
 
@@ -111,12 +117,21 @@ class MetricGroup(ABC):
 
 class CoreMetrics(MetricGroup):
     """
-    Tracks basic metrics available in all games:
-    1. steps: Number of steps taken in the episode.
-    2. frame_changed:
-            For every available recent frame, sees if any of them differ from the previous frame. If so sets frame_changed to True. Is not robust to jitter on screen. 
-    3. current_frame
-    4. passed_frames (last element is equal to current_frame)
+    Tracks basic metrics that are guaranteed to be available in state tracker reports for any and all games:
+
+    Reports:
+    - `steps`: Number of steps taken in the episode.
+    - `frame_changed`: Whether the frame has changed since the last step.
+    - `current_frame`: The current frame.
+    - `passed_frames`: All frames that have passed since the last step.
+
+    Final Reports:
+    - `total_episodes`: Total number of episodes completed.
+    - `average_steps_per_episode`: Average number of steps taken per episode.
+    - `max_steps`: Maximum number of steps taken in any episode.
+    - `min_steps`: Minimum number of steps taken in any episode.
+    - `std_steps`: Standard deviation of steps taken across episodes.
+
     """
     NAME = "core"
 
@@ -161,7 +176,7 @@ class CoreMetrics(MetricGroup):
             "std_steps": float(std_steps)
         }
 
-    def step(self, current_frame: np.ndarray, recent_frames: Optional[np.ndarray]):
+    def step(self, current_frame, recent_frames):
         self.steps += 1
         self.current_frame = current_frame
         self.passed_frames = recent_frames
@@ -184,15 +199,13 @@ class CoreMetrics(MetricGroup):
             self.frame_changed = frame_changed
         self.previous_frame = current_frame    
 
-    def report(self) -> dict:
+    def report(self):
         """
         Provides the following metrics:
         - `steps`: Number of steps taken in the episode.
         - `frame_changed`: Whether the frame has changed since the last step.
         - `current_frame`: The current frame.
         - `passed_frames`: All frames that have passed since the last step.
-        Returns:
-            dict: A dictionary containing the current metrics.
         """
         return {
             "steps": self.steps,
@@ -201,7 +214,7 @@ class CoreMetrics(MetricGroup):
             "passed_frames": self.passed_frames
         }
     
-    def report_final(self) -> dict:
+    def report_final(self):
         """
         Provides the following metrics:
         - `total_episodes`: Total number of episodes completed.
@@ -209,16 +222,21 @@ class CoreMetrics(MetricGroup):
         - `max_steps`: Maximum number of steps taken in any episode.
         - `min_steps`: Minimum number of steps taken in any episode.
         - `std_steps`: Standard deviation of steps taken across episodes.
-
-        Returns:
-            dict: A dictionary containing the final metrics.
         """
         return self.final_metrics
 
 
 class OCRMetric(MetricGroup, ABC):
     """
-    MetricGroup for OCR results.
+    Watch particular screen regions and capture OCR results when possible. Children implementing this must define self.kinds in `start()` and then call on `super().start()`.
+
+    Reports:
+    - `ocr_texts`: A dictionary mapping kinds to recognized text in the current step.
+    - `step`: The current step number. Useful for differentiating when multiple OCR texts were found in the same episode. You can typically safely ignore this. 
+
+    Final Reports:
+    - `ocr_texts`: A list of tuples for all steps where OCR was detected. Is in form: `List[Tuple[int, Dict[str, str]]]` where the int is the step number and the Dict maps kinds to recognized text.
+
     """
     NAME = "ocr"
     
@@ -353,7 +371,7 @@ class OCRMetric(MetricGroup, ABC):
         self.steps += 1    
 
 
-    def report(self) -> dict:
+    def report(self):
         """
         Reports just the previous OCR texts extracted in the episode.
         Returns:
@@ -367,7 +385,7 @@ class OCRMetric(MetricGroup, ABC):
         else:
             return {}
     
-    def report_final(self) -> dict:
+    def report_final(self):
         """
         Reports all the OCR texts extracted in the episode.
         """
@@ -490,8 +508,8 @@ specific_final_metric = state_tracker.get_final_metric(("core", "average_steps_p
         """
         Returns the current episode metrics.
 
-        Returns:
-            Dict[str, Dict[str, Any]]: A nested dictionary containing the current episode metrics.
+        :return: A nested dictionary containing the current episode metrics.
+        :rtype: Dict[str, Dict[str, Any]]
         """
         return self.episode_metrics
     
@@ -506,7 +524,7 @@ specific_final_metric = state_tracker.get_final_metric(("core", "average_steps_p
             return {}
         return self.final_metrics
 
-    def _get_specific_metric(self, metrics_dict, key: Tuple[str, str]) -> Dict[str, Any]:
+    def _get_specific_metric(self, metrics_dict, key: Tuple[str, str]):
         if metrics_dict is None:
             log_error("No metrics available. Have you called step() or close()?")
         metric_group_name, metric_name = key
@@ -516,30 +534,27 @@ specific_final_metric = state_tracker.get_final_metric(("core", "average_steps_p
             log_error(f"Metric {metric_name} not found in metric group {metric_group_name}. Available metrics: {list(metrics_dict[metric_group_name].keys())}")
         return metrics_dict[metric_group_name][metric_name]
     
-    def get_episode_metric(self, key: Tuple[str, str]) -> Dict[str, Any]:
+    def get_episode_metric(self, key: Tuple[str, str]):
         """
         Returns the metrics for a specific episode and metric group.
 
         Does not give final metrics at any point. 
 
-        Args:
-            key (Tuple[str, str]): A tuple containing the episode ID and metric group name.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing the metrics for the specified episode and metric group.
+        :param key: A tuple of the form (metric_group_name, metric_name).
+        :type key: Tuple[str, str]
+        :return: The requested metric value
+        :rtype: Any
         """
         return self._get_specific_metric(self.episode_metrics, key)
     
-    def get_final_metric(self, key: Tuple[str, str]) -> Dict[str, Any]:
+    def get_final_metric(self, key: Tuple[str, str]):
         """
         Returns the final metrics for a specific metric group.
 
-        Args:
-            key (Tuple[str, str]): A tuple containing the metric group name and metric name.
-
-
-        Returns:
-            Dict[str, Any]: A dictionary containing the final metrics for the specified metric group.
+        :param key: A tuple of the form (metric_group_name, metric_name).
+        :type key: Tuple[str, str]
+        :return: The requested final metric value
+        :rtype: Any
         """
         return self._get_specific_metric(self.final_metrics, key)
 

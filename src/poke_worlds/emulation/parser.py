@@ -9,7 +9,7 @@ from poke_worlds.utils import log_error, log_warn, verify_parameters, show_frame
 import numpy as np
 
 import os
-from typing import Dict, Tuple, Optional, List
+from typing import Dict, Tuple, Optional, List, Union
 import cv2
 from PIL import Image
 
@@ -22,7 +22,7 @@ class NamedScreenRegion:
         """
         Initializes a named screen region.
 
-        Args:
+        Parameters:
             name (str): The name of the screen region.
             start_x (int): The starting x-coordinate of the region in pixel space of the full resolution game screen. 
             start_y (int): The starting y-coordinate of the region in pixel space of the full resolution game screen.
@@ -72,13 +72,15 @@ class NamedScreenRegion:
                 self.target_path = target_path
                 self.target = self._sanity_load_target(target_path)
 
+    
     def _sanity_load_target(self, target_path: str) -> Optional[np.ndarray]:
         """
         Loads the target image from the given path.
-        Args:
-            target_path (str): Path to the .npy file containing the target image.
-        Returns:
-            Optional[np.ndarray]: The loaded target image as a numpy array, or None if the file does not exist and debug_mode is enabled.
+
+        :param target_path: Path to the .npy file containing the target image.
+        :type target_path: str
+        :return: The loaded target image as a numpy array, or None if the file does not exist and debug_mode is enabled.      
+        :rtype: ndarray[_AnyShape, dtype[Any]] | None
         """
         if not target_path.endswith(".npy"):
             target_path = target_path + ".npy"
@@ -112,9 +114,9 @@ class NamedScreenRegion:
     def get_corners(self) -> Tuple[int, int, int, int]:
         """
         Returns the corners of the named screen region as (start_x, start_y, end_x, end_y).
-
-        Returns:
-            Tuple[int, int, int, int]: The corners of the named screen region.
+        
+        :return: The corners of the named screen region.
+        :rtype: Tuple[int, int, int, int]
         """
         return (self.start_x, self.start_y, self.get_end_x(), self.get_end_y())
 
@@ -127,13 +129,13 @@ class NamedScreenRegion:
     def compare_against_target(self, reference: np.ndarray, strict_shape: bool=True) -> float:
         """
         Computes the Absolute Error (AE) between the given reference image and the target image.
-        Args:
-            reference (np.ndarray): The reference image to compare.
-            strict_shape (bool, optional): Whether to error out if the array shapes do not match.
 
-        Returns:
-            float: The Absolute Error (AE) between the reference and target images.
-
+        :param reference: The reference image to compare.
+        :type reference: np.ndarray
+        :param strict_shape: Whether to error out if the array shapes do not match.
+        :type strict_shape: bool
+        :return: The Absolute Error (AE) between the reference and target images.
+        :rtype: float
         """
         if self.target is None:
             if self._parameters["debug_mode"]:
@@ -150,13 +152,17 @@ class NamedScreenRegion:
     
     def compare_against_multi_target(self, target_name: str, reference: np.ndarray, strict_shape: bool=True) -> float:
         """
-        Computes the Absolute Error (AE) between the given reference image and one of the multiple target images.
-        Args:
-            target_name (str): The name of the target image to compare against.
-            reference (np.ndarray): The reference image to compare.
-            strict_shape (bool, optional): Whether to error out if the array shapes do not match.
-        Returns:
-            float: The Absolute Error (AE) between the reference and specified target images.
+         Computes the Absolute Error (AE) between the given reference image and one of the multiple target images.
+
+        :param self: Description
+        :param target_name: The name of the target image to compare against.
+        :type target_name: str
+        :param reference: The reference image to compare.
+        :type reference: np.ndarray
+        :param strict_shape: Whether to error out if the array shapes do not match.
+        :type strict_shape: bool
+        :return: The Absolute Error (AE) between the reference and specified target images.
+        :rtype: float
         """
         if self.multi_targets is None or target_name not in self.multi_targets:
             log_error(f"No multi target image set for NamedScreenRegion {self.name} with target name {target_name}. Cannot compare.", self._parameters)
@@ -169,12 +175,15 @@ class NamedScreenRegion:
     def matches_target(self, reference: np.ndarray, strict_shape: bool=True, epsilon=0.01) -> bool:
         """
         Compares the given reference image to the target image using Absolute Error (AE).
-        Args:
-            reference (np.ndarray): The reference image to compare.
-            strict_shape (bool, optional): Whether to error out if the array shapes do not match. 
-            epsilon (float, optional): The threshold for considering a match. 
-        Returns:
-            bool: True if the AE is below the epsilon threshold, False otherwise.
+        
+        :param self: Description
+        :param reference: The reference image to compare.
+        :type reference: np.ndarray
+        :param strict_shape: Whether to error out if the array shapes do not match. 
+        :type strict_shape: bool
+        :param epsilon: The threshold for considering a match. 
+        :return: True if the AE is below the epsilon threshold, False otherwise.
+        :rtype: bool
         """
         mae = self.compare_against_target(reference, strict_shape)
         if mae <= epsilon:
@@ -184,12 +193,15 @@ class NamedScreenRegion:
     def matches_multi_target(self, target_name: str, reference: np.ndarray, strict_shape: bool=True) -> bool:
         """
         Compares the given reference image to one of the multiple target images using Absolute Error (AE).
-        Args:
-            target_name (str): The name of the target image to compare against.
-            reference (np.ndarray): The reference image to compare.
-            strict_shape (bool, optional): Whether to error out if the array shapes do not match.
-        Returns:
-            bool: True if the AE is below the epsilon threshold, False otherwise.
+        
+        :param target_name: The name of the target image to compare against.
+        :type target_name: str
+        :param reference: The reference image to compare.
+        :type reference: np.ndarray
+        :param strict_shape: Whether to error out if the array shapes do not match.
+        :type strict_shape: bool
+        :return: True if the AE is below the epsilon threshold, False otherwise.
+        :rtype: bool
         """
         if self.multi_targets is None or target_name not in self.multi_targets:
             log_error(f"No multi target image set for NamedScreenRegion {self.name} with target name {target_name}. Cannot compare.", self._parameters)
@@ -576,16 +588,17 @@ class StateParser(ABC):
         plt.imshow(merged[:, :, 0], cmap="gray")
         plt.show()
         ```
-        Args:
-            current_frame (np.ndarray): The current frame from the emulator.
-            quadrant (str, optional): If specified, only captures cells in the given quadrant ('TL', 'TR', 'BL', 'BR').
-            grid_skip (int, optional): The number of pixels between grid lines.
-            x_offset (int, optional): The x-offset to apply when capturing cells.
-            y_offset (int, optional): The y-offset to apply when capturing cells.
-
-        Returns:
-            Dict[Tuple[int, int], np.ndarray]: A dictionary mapping grid cell coordinates to their captured images.
+        :param current_frame: An emulator frame. 
+        :type current_frame: np.ndarray
+        :param quadrant: If specified, only captures cells in the given quadrant ('TL', 'TR', 'BL', 'BR').
+        :type quadrant: str
+        :param grid_skip: The number of pixels between grid lines.
+        :type grid_skip: int
+        :param x_offset: The x-offset to apply when capturing cells.
+        :param y_offset: The y-offset to apply when capturing cells.
+        :return: A dictionary mapping grid cell coordinates to their captured images.
             The grid cells are with the central cell as (0,0)
+        :rtype: Dict[Tuple[int, int], ndarray[_AnyShape, dtype[Any]]]
         """
         if quadrant is not None:
             if quadrant.lower() not in ["tl", "tr", "bl", "br"]:
@@ -663,9 +676,17 @@ class StateParser(ABC):
         full_image = np.concatenate(new_rows, axis=0)
         return full_image
     
-    def get_quadrant_frame(self, grid_cells: Dict[Tuple[int, int], np.ndarray]=None) -> Dict[str, Tuple[Dict[Tuple[int, int], np.ndarray], np.ndarray]]:
+    def get_quadrant_frame(self, grid_cells: Dict[Tuple[int, int], np.ndarray]=None) -> Dict[str, Dict[str, Union[np.ndarray, Dict[Tuple[int, int], np.ndarray]]]]:
         """
         Divides the current frame or subframe into quadrants and returns groups of quadrants
+        
+        :param grid_cells: Subset of grid cells to split. Must be a rectangular box in (x, y) space. 
+        :type grid_cells: Dict[Tuple[int, int], np.ndarray]
+        :return: A dictionary where the keys are quadrant keys [tr, tl, br, bl] and values are:
+        
+            - screen: which maps to the single numpy array representing that quadrant as a screen
+            - cells: A dictionary mapping cell grids to the specific screen region as numpy arrays. 
+        :rtype: Dict[str, Dict[str, Union[np.ndarray, Dict[Tuple[int, int], np.ndarray]]]]
         """
         if grid_cells is None:
             grid_cells = self.capture_grid_cells(self.get_current_frame())
