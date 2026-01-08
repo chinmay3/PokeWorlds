@@ -21,14 +21,15 @@ You are playing a Pokemon game. Your overall mission is to [MISSION]. You are to
 The player agent can take the following actions (depending on the situation): [ALLOWED_ACTIONS]
 Given the screen state of the game, come up with a high-level plan, with multiple steps to achieve this mission.
 Then, craft a single, concise note for your player agent to follow to achieve the first step of this plan.
+For each step, give a simple description of the step and a criteria for completion.
 Format your response as:
 High Level Plan: 
-1. STEP ONE (Simple description of step and Criteria for completion)
+1. <STEP ONE>
 [SEP]
-2. STEP TWO (Simple description of step and Criteria for completion)
+2. <STEP TWO>
 [SEP]
 ...
-Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE STEP ONE>
+Note: <NOTE OR GUIDE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE STEP ONE>
     """
     def __init__(self, env, mission, model_name = f"Qwen/Qwen3-VL-32B-Instruct", max_steps_per_goal=15, max_action_attempts=3, max_total_steps=100):
         backbone_model_name = load_parameters()['backbone_vlm_model']
@@ -107,10 +108,10 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE STEP ONE>
     
     def parse_plan_steps(self, plan_text):
         steps = []
-        for line in plan_text.lower().split("[sep]"):
+        for line in plan_text.lower().replace("high level plan:", "").split("[sep]"):
             line = line.strip()
             if line != "":
-                steps.append(line)
+                steps.append(line.strip())
         return steps
 
     def parse_supervisor_start(self, output_text):
@@ -144,7 +145,7 @@ Note: <CONCISE NOTE FOR PLAYER AGENT TO FOLLOW TO ACHIEVE STEP ONE>
         # game: str, environment: Environment, execution_report_class: Type[ExecutionReport], high_level_goal: str, immediate_task: str, initial_plan: str, visual_context: str, exit_conditions: List[str], 
         executor = PokemonExecutor(game="Pokemon", environment=self.env, 
                                    execution_report_class=PokemonExecutionReport, 
-                                   high_level_goal=self.mission, 
+                                   high_level_goal=self.mission + f" with the overall steps being: {self.high_level_plan}", 
                                    immediate_task=self.high_level_plan[0], initial_plan=note, 
                                    visual_context="You are in Professor Oaks Lab along with Blue, your rival. There are 3 pokeballs on the bench to your right.", 
                                    exit_conditions=[])
@@ -164,7 +165,7 @@ def do(model_name):
                                         environment_variant="high_level",
                                         save_video=True,
                                             init_state="starter", session_name=f"high_level_{short_model}", headless=True)
-    mission = "Seek and select any one pokeball with a starter from the bench to your right, and then leave the building from the entrance below."
+    mission = "Seek and select any one pokeball with a starter from the bench to your right, and then leave the building from the entrance below. HINT: You should typically try seek before relying on manual movement."
     vl = VL(environment, mission, model_name=model_name)
     vl.play()
 
