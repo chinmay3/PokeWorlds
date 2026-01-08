@@ -10,4 +10,4 @@ You can skim the abstract base class documentation to understand the structure t
 """
 from poke_worlds.interface.action import HighLevelAction
 from poke_worlds.interface.controller import Controller
-from poke_worlds.interface.environment import Environment
+from poke_worlds.interface.environment import Environment, History

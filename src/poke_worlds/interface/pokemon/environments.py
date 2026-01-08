@@ -108,32 +108,24 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
     REQUIRED_STATE_TRACKER = PokemonOCRTracker
     REQUIRED_EMULATOR = PokemonEmulator
 
-    def __init__(self, action_buffer_max_size: int = 3, ocr_buffer_max_size: int = 10, **kwargs):
+    def __init__(self, **kwargs):
         """
         Initializes the DummyEnvironment with the given emulator and controller.
 
         It is safe to overwrite the self.observation_space in the subclass after calling this __init__ method.
         """
         super().__init__(**kwargs)
-        self.action_buffer_max_size = action_buffer_max_size
-        self.ocr_buffer_max_size = ocr_buffer_max_size
         screen_shape = self._emulator.screen_shape
         screen_space = spaces.Box(low=0, high=255, shape=(screen_shape[1], screen_shape[0], 1), dtype=np.uint8)
-        action_buffer = spaces.Text(max_length=512)
         ocr = spaces.Text(max_length=512)
         state = spaces.Discrete(4) # In Dialogue, In Menu, Battle, Free Roam
 
         self.observation_space = spaces.Dict({
             "screen": screen_space,
-            "action_buffer": action_buffer,
             "ocr": ocr,
             "state": state
         })
-        """ The observation space is the raw pixel values of the emulator's screen and messages with OCR text and error signals from HighLevelActions"""
-        self.action_buffer: List[Tuple[HighLevelAction, Dict[str, Any], int, dict]] = []
-        """ Buffer of recent actions taken in the environment. Each entry is a tuple of (action, kwargs, success_code, action_returns)."""
-        self.ocr_buffer: List[Tuple[int, Dict[str, str]]] = []
-        """ Buffer of recent OCR results. Each entry is a tuple of (emulator_step_index (not the same as environment step), ocr_texts). Where ocr_texts is a dictionary of form {key: text} """        
+        """ The observation space is the raw pixel values of the emulator's screen and messages with OCR text and error signals from HighLevelActions. """
 
     @staticmethod
     def override_emulator_kwargs(emulator_kwargs: dict) -> dict:
@@ -145,28 +137,16 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
             emulator_kwargs["state_tracker_class"] = Environment.safe_override_state_tracker_class(incoming_tracker, basic_tracker)
         return emulator_kwargs
 
-    def add_to_action_buffer(self, action: HighLevelAction, action_kwargs, action_success: int, action_return: dict):
-        """ Adds an action to the action buffer, maintaining the maximum size. """
-        self.action_buffer.append((action, action_kwargs, action_success, action_return))
-        if len(self.action_buffer) > self.action_buffer_max_size:
-            self.action_buffer.pop(0)
-
-    def action_buffer_to_str(self) -> str:
-        """ Converts the action buffer to a simplestring representation. """
-        buffer_str = ""
-        for i, (action, action_kwargs, action_success, action_return) in enumerate(self.action_buffer):
-            buffer_str += f"Action {i}: {action.__name__} | args {action_kwargs} | success code: {action_success} | return: {action_return}\n"
-        return buffer_str
-
-    def get_observation(self, *, action=None, action_kwargs=None, transition_states=None, action_success=None, add_to_buffers: bool=True):
+    def get_agent_state(self) -> Any:
         """
-        WARNING: This method does NOT obey the gym API standards, since its returns do NOT match the observation space declared in __init__. 
-        This is because the observation space definition is too restrictive. 
-
-        In specific, this method returns "action_return" and other similar args, which is not part of the observation space.
-
-        You can make this gym friendly by wrapping this in a class to remove the extra fields.
+        Returns a string-like identifier of the current agent state in the environment.
+        Is useful for VLM prompts to describe what the agent is currently doing.
+        Returns:
+            Any: The current agent state identifier.
         """
+        return self._emulator.state_parser.get_agent_state(self._emulator.get_current_frame())
+    
+    def get_observation(self, *, action=None, action_kwargs=None, transition_states=None, action_success=None):
         if transition_states is None:
             current_state = self.get_info()
             screen = current_state["core"]["current_frame"]
@@ -176,50 +156,27 @@ class PokemonHighLevelEnvironment(DummyEnvironment):
                 ocr_combined = " | ".join([f"{kind}: {text}" for kind, text in ocr_texts.items()])
             else:
                 ocr_combined = ""
-            action_return = {}
         else:
             screen = transition_states[-1]["core"]["current_frame"]
-            action_return = {}
-            if "action_return" in transition_states[-1]:
-                action_return = transition_states[-1]["action_return"]
-            if add_to_buffers:
-                self.add_to_action_buffer(action, action_kwargs, action_success, action_return)
             ocr_texts_all = []
-            ocr_buffer_addition = []
             for state in transition_states:
                 if "ocr" in state and "ocr_texts" in state["ocr"]:
                     ocr_texts = state["ocr"]["ocr_texts"] # is a dict with kind -> text
                     ocr_step = state["ocr"]["step"]
                     ocr_texts_all.append(ocr_texts)
-                    ocr_buffer_addition.append((ocr_step, ocr_texts))
             # combine all ocr texts
             ocr_combined = ""
             for ocr_texts in ocr_texts_all:
                 for kind, text in ocr_texts.items():
                     ocr_combined += f"{kind}: {text} | "
-            if add_to_buffers:
-                self.ocr_buffer.extend(ocr_buffer_addition)
-                if len(self.ocr_buffer) > self.ocr_buffer_max_size:
-                    self.ocr_buffer = self.ocr_buffer[-self.ocr_buffer_max_size:]
         current_state = self._emulator.state_parser.get_agent_state(screen)
         observation = {
             "screen": screen,
-            "action_buffer": self.action_buffer_to_str(),
             "ocr": ocr_combined,
             "state": current_state,
-            "action": action,
-            "action_kwargs": action_kwargs,
-            "action_success": action_success,
-            "action_return": action_return
         }
         return observation
     
-    def get_action_buffer(self):
-        return self.action_buffer
-    
-    def get_ocr_buffer(self):
-        return self.ocr_buffer
-
     def render_obs(self, action=None, action_kwargs=None, transition_states=None, action_success=None): # Might cause issues if you try to render() as well
         """
         Renders the observation space by displaying all the frames passed during the action execution.

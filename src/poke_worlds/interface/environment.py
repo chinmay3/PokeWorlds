@@ -11,12 +11,112 @@ from poke_worlds.interface.action import HighLevelAction
 import numpy as np
 import gymnasium as gym
 import warnings 
+from copy import deepcopy
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html")
 # This is to ignore deprecation warnings from pygame about pkg_resources
 import pygame
 import matplotlib.pyplot as plt
 
 
+class History:
+    """ 
+    A simple class to hold history of observations, rewards and infos etc.
+    Has getter functions to extract useful information like frames, action details, ocr history etc. 
+    All attribute lists have length equal to number of steps taken + 1
+    """
+    def __init__(self, observation, info, parameters=None):
+        self._parameters = load_parameters(parameters)
+        self.reset(observation, info)
+
+    def _reset(self, observation, info):
+
+        self.steps_taken: int = 0
+        """ Number of HighLevelAction steps taken in the Environment. Will NOT match Emulator steps """
+
+        self.observations: List[Any] = [observation]
+        """ List of observations. """
+        self.infos: List[Dict[str, Dict[str, Any]]] = [info]
+        """ List of infos received. """
+        self.rewards: List[float] = [None]
+        """ List of rewards received. """
+
+    def _update(self,  next_observation: Any, next_info: Dict[str, Dict[str, Any]], reward: float):
+        if self.steps_taken is None:
+            log_error(f"Cannot update History after slicing.", self._parameters)
+        self.observations.append(next_observation)
+        self.infos.append(next_info)
+        self.rewards.append(reward)
+        self.steps_taken += 1
+
+    def get_step_frames(self) -> List[np.ndarray]:
+        """
+        Get a list of all game screens before each step. 
+        
+        :param self: Description
+        :return: List of frames as numpy arrays with shape (height, width, channels). This list has length equal to number of steps taken + 1 (including initial frame).
+        :rtype: List[ndarray[_AnyShape, dtype[Any]]]
+        """
+        frames = []
+        for obs in self.infos:
+            frames.append(obs["core"]["current_frame"])
+        return frames
+    
+    def get_transition_frames(self) -> List[np.ndarray]:
+        """
+        Get a list of all game screens seen during each action execution. This differs from get_frames() which only gets the screen before each step.
+        The final frame in each list of transition frames is the same as the frame in get_frames().
+        
+        :return: List of frames as numpy arrays. Each array shape is (num_frames, height, width, channels). The list has length equal to number of steps taken.
+        :rtype: List[ndarray[_AnyShape, dtype[Any]]]
+        """
+        frames = []
+        for obs in self.infos:
+            frames.append(obs["core"]["transition_passed_frames"])
+        return frames
+    
+    def get_action_details(self) -> List[Tuple[HighLevelAction, Dict[str, Any], List[Dict[Dict[str, Any]]], int, dict]]:
+        """
+        Reads the action details from the infos stored. Will have length equal to number of steps taken.
+        
+        :param self: Description
+        :return: A list containing the high level actions used, each entry with: (action_class, action_kwargs, transition_states, action_success_code, action_return). Length equal to number of steps taken.
+        :rtype: List[Tuple[HighLevelAction, Dict[str, Any], int, str]]
+        """
+        action_details = []
+        for obs in self.infos:
+            if "previous_action_details" in obs["core"]:
+                action, action_kwargs, transition_states, action_success, action_return = obs["core"]["previous_action_details"]
+                action_details.append((action, action_kwargs, transition_states, action_success, action_return))
+        return action_details
+    
+    def get_ocr_history(self) -> List[List[Dict[str, str]]]:
+        """
+        Get a list of all OCR results seen during each action execution.
+        List length is equal to number of steps taken + 1.
+
+        :return: Description
+        :rtype: List[List[Dict[str, str]]]
+        """
+        ocr_history = []
+        for obs in self.infos:
+            if "ocr" in obs and "transition_ocr_texts" in obs["ocr"]:
+                ocr_history.append(obs["ocr"]["transition_ocr_texts"].copy())
+            elif "ocr" in obs and "ocr_texts" in obs["ocr"]:
+                ocr_history.append([obs["ocr"]["ocr_texts"]])
+            else:
+                ocr_history.append([])
+        return ocr_history
+    
+    def __getitem__(self, key):
+        new_history = History(self.observations[key][0], self.infos[key][0])
+        new_history.observations = self.observations[key]
+        new_history.infos = self.infos[key]
+        new_history.rewards = self.rewards[key]
+        new_history.steps_taken = None # After slicing
+        return deepcopy(new_history)
+    
+    def __len__(self):
+        return len(self.observations) # is steps_taken + 1.
 
 
 class Environment(gym.Env, ABC):
@@ -104,6 +204,14 @@ class Environment(gym.Env, ABC):
         """ The pygame window for rendering in 'human' mode. Initialized on first render call. """
         self._clock = None
         """ The pygame clock for rendering in 'human' mode. Initialized on first render call. """
+        self._history: History = None
+        """ The Environment History, storing all observations, state_information reports, actions and rewards over the episode. Is cleared with reset(). Access through get_history()"""
+
+    def get_history(self) -> History:
+        """
+        Get a copy of the Environment History which stores all observations, state_information reports, actions and rewards over the episode. Is cleared with reset(). 
+        """
+        return deepcopy(self._history)
 
     @abstractmethod
     def get_observation(self, *, action: Optional[HighLevelAction]=None, action_kwargs:Optional[dict]=None, transition_states: Optional[List[Dict[str, Dict[str, Any]]]] = None, action_success: Optional[int] = None) -> gym.spaces.Space:
@@ -159,11 +267,13 @@ class Environment(gym.Env, ABC):
 
             # Aggregate OCR texts from transition states
             all_ocr_texts = []
-            for transition_state in transition_states[:-1]: # exclude last state since its OCR is already in state_info TODO: Verify this
+            for transition_state in transition_states:
                 if "ocr" in transition_state and "ocr_texts" in transition_state["ocr"]:
                     all_ocr_texts.append(transition_state["ocr"]["ocr_texts"])
             if "ocr" in state_info:
                 state_info["ocr"]["transition_ocr_texts"] = all_ocr_texts
+            else:
+                state_info["ocr"] = {"transition_ocr_texts": all_ocr_texts}
         return state_info
 
 
@@ -188,10 +298,11 @@ class Environment(gym.Env, ABC):
             info (dict): Additional information about the reset.
         """
         super().reset(seed=seed, options=options)
-
         self._emulator.reset()
         self._controller.seed(seed)
-        return self.get_observation(), self.get_info()
+        observation, info = self.get_observation(), self.get_info()
+        self._history._reset(observation=observation, info=info)
+        return observation, info
     
     @abstractmethod
     def determine_reward(self, start_state: Dict[str, Dict[str, Any]], *, action: Optional[HighLevelAction]=None, action_kwargs:Optional[dict]=None, transition_states: Optional[List[Dict[str, Dict[str, Any]]]] = None, action_success: Optional[int] = None) -> float:
@@ -295,6 +406,7 @@ class Environment(gym.Env, ABC):
         current_state = self.get_info(action=action, action_kwargs=kwargs, transition_states=transition_states, action_success=action_success)
         terminated = self.determine_terminated(current_state)
         reward = self.determine_reward(start_state=start_state, action=action, action_kwargs=kwargs, transition_states=transition_states, action_success=action_success)
+        self._history._update(observation, next_info=current_state)
         return observation, reward, terminated, truncated, current_state
 
     def string_to_high_level_action(self, input_str: str) -> Tuple[Optional[HighLevelAction], Optional[dict]]:
