@@ -204,6 +204,7 @@ class Emulator:
             pyboy.save_state(f)
         pyboy.stop()
         log_info(f"Created initial state file at {state_path}")
+        sys.exit(0)
 
     def clear_tmp_sessions(self):
         """

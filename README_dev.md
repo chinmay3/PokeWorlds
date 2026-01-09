@@ -19,36 +19,41 @@
 
 See the [API documentation](https://dhananjayashok.github.io/PokeWorlds/) to understand the code base, the rest of this document goes into details on how you would implement new features or test tasks in <img src="assets/logo.png" width="70">. 
 
+  - [Custom Starting States](#I-want-to-create-my-own-starting-states)
+  - [Descriptive State and Event Tracking](#I-want-to-track-fine-grained-details)
+  - [Reward Engineering](#I-want-to-engineer-my-own-reward-functions)
+  - [Adding New ROMs](#I-want-to-add-a-new-ROM-Hack)
+
 ### I want to create my own starting states
 Easy. The only question is whether you want to save an mGBA state (perhaps you use cheats to lazily put the agent in a very specific state) or save a PyBoy state directly (i.e. you start from an existing state and play to the new state).
 
 **From mGBA state:**
 
-First, start with mGBA and **make sure** to match the player name, rival name (BLUE or SILVER) and text box frame options from the existing default states. This is vital to ensure the state parsing system works. Play till the point you want to replicate with a state and save the game (go to the start menu and save) in the state you want to restore from. This will make a `variant_ROMNAME.sav` file in the same directory as the rom file. Then run:
+First, start with mGBA and **make sure** to match the player name, rival name (BLUE or SILVER) and text box frame options from the existing default states. This is vital to ensure the state parsing system works. Play till the point you want to replicate with a state and save the game (go to the start menu and save) in the state you want to restore from. This will make a `game_ROMNAME.sav` file in the same directory as the rom file. Then run:
 
 ```bash
-python dev/save_state.py --variant <variant> --state_name <name>
+python dev/save_state.py --game <game> --state_name <name>
 ```
 
-This will save the state to `rom_data/<variant>/states/name.state` and allows you to load it by specifying it as a state name. 
+This will save the state and allows you to load it by specifying it as a state name. 
 
 
 To get to the state from PyBoy, first make sure the `gameboy_dev_play_stop` parameter is [configured](configs/gameboy_vars.yaml) to `false`. Then, run:
 ```bash 
-python dev/dev_play.py --variant <variant> --init_state <optional_starting_state>
+python dev/dev_play.py --game <game> --init_state <optional_starting_state>
 ```
 
 This will run the game with the option to enter dev mode. Play the game like you usually would, until you reach the state you want to save. Then, go to [the gameboy configs](configs/gameboy_vars.yaml) *while* playing the game (at the state you want to save), change the `gameboy_dev_play_stop` parameter to `true` (save the configs file) and then check the terminal. You will get a message with the possible dev actions. The one you're looking for is `s <name>`, which saves the state.
 
 Regardless of how you did it, you can test that your state save worked with:
 ```bash
-python demos/emulator --variant <variant> --init_state <name>
+python demos/emulator --game <game> --init_state <name>
 ```
 
 ### I want to track fine-grained details
 Maybe you want to enhance the observation space of the agent with information about the current playthrough (e.g. current map ID, enemy team level). Perhaps you want to train text-only / weak visual agents, and parse as much of the screen image as possible into numerical signals / text (e.g. your team stats, bag contents). Some might not even care about their agents, but want to have a sophisticated set of metrics that they can look at to assess goal conditions, judge the quality of a playthrough, or [craft a good reward function](#i-want-to-engineer-my-own-reward-functions). 
 
-Whatever you motivation, <img src="assets/logo.png" width="70"> provides a powerful set of approaches for reading game states, and then allows you to aggregate over these values over time to compute useful metrics for reward assignment and evaluation. 
+Whatever your motivation, <img src="assets/logo.png" width="70"> provides a powerful set of approaches for reading game states, and then allows you to aggregate over these values over time to compute useful metrics for reward assignment and evaluation. 
 
 The first thing to do is detect an event at a moment in time. This is done in subclasses of the `StateParser` [object](src/poke_worlds//emulation/emulator.py) in one of two ways: 
 
@@ -57,18 +62,18 @@ The first thing to do is detect an event at a moment in time. This is done in su
 
 These approaches allow your state parsers to give instant-wise decisions or indications when an event has occured. You can then configure your `StateTracker` to use the parser to check for this flag, and store appropriate metrics. See the existing [parsers](src/poke_worlds/emulation/pokemon/parsers.py) and [trackers](src/poke_worlds/emulation/pokemon/trackers.py) for examples. 
 
-### I want to add a new ROM Hack
-Setting up a new ROM Hack is an easy process that doesn't take more than an hour once you've understood how. Please do reach out to me if you have any questions, and we can work to merge the new ROM into <img src="assets/logo.png" width="70"> together. 
+### I want to add a new ROM Hack or GameBoy Game
+Setting up a new game is an easy process that doesn't take more than an hour once you've understood how. Please do reach out to me if you have any questions, and we can work to merge the new ROM into <img src="assets/logo.png" width="70"> together. 
 
 #### Initial Steps:
 
 0. Set the repo to `debug` mode by editing the [config file](configs/project_vars.yaml)
-1. Create a `$variant_rom_data_path` parameter in the [configs](configs) (either as a new file or in an existing one, see [Pokémon Brown](configs/pokemon_brown_vars.yaml) for an example)
-2. Obtain the ROM hack and place it in the desired path under the [ROM data folder](rom_data). 
+1. Create a `${game}_rom_data_path` parameter in the [configs](configs) (either as a new file or in an existing one)
+2. Obtain the ROM and place it in the desired path under the ROM data folder. Remember, the `${game}_rom_data_path` folder is rooted at the `storage_dir` from the [configs](configs/private_vars.yaml). 
 3. Go to the [parsers](src/poke_worlds/emulation/pokemon/parsers.py) and add the required ROM hack. See the `PokemonBrownGameStateParser` as an example. 
-4. Go to the [registry](src/poke_worlds/emulation/pokemon/__init__.py) and add the ROM hack to `VARIANT_TO_GB_NAME`, `_VARIANT_TO_BASE_MAP`, `_VARIANT_TO_PARSER`
-5. Run `python dev/create_first_state.py --variant <variant_name>`. This will create a default state. You will not be able to run the `Emulator` on this ROM before doing this. 
-6. Run `python dev/dev_play.py --variant <variant_name>` (with the [`gameboy_dev_play_stop` parameter](configs/gameboy_vars.yaml) set to `false`) and proceed through the game until you reach a satisfactory default starting state. Then, open the [config file](configs/gameboy_vars.yaml) and set `gameboy_dev_play_stop` to `true` and save the file. This will trigger a dev mode and ask you for a terminal input. Enter `s default` and you will set that as the new default state. Enter `s initial` as well to save it properly. 
+4. Go to the [registry](src/poke_worlds/emulation/registry.py) and add the ROM name to `GAME_TO_GB_NAME`. Add the parser to `_STRONGEST_PARSERS`. Add the game to `AVAILABLE_STATE_TRACKERS` (give it a `default` value of `StateTracker`). Finally, add the game to `AVAILABLE_EMULATORS` (give it a `default` value of `Emulator`).
+5. Run `python dev/create_first_state.py --game <game>`. This will create a default state. You will not be able to run the `Emulator` on this ROM before doing this. 
+6. Run `python dev/dev_play.py --game <game>` (with the [`gameboy_dev_play_stop` parameter](configs/gameboy_vars.yaml) set to `false`) and proceed through the game until you reach a satisfactory default starting state. Then, open the [config file](configs/gameboy_vars.yaml) and set `gameboy_dev_play_stop` to `true` and save the config file. This will trigger a dev mode and ask you for a terminal input. Enter `s default` and you will set that as the new default state. Enter `s initial` as well to save it properly. 
 
 I have provided an [example](https://drive.google.com/file/d/1fsMjkOjpbyeLLNxP3JVaj6uVXycwSAVC/view?usp=sharing) video for this process.
 
@@ -81,7 +86,7 @@ I have provided an [example](https://drive.google.com/file/d/1EEpoxHAnNwdSMSYcc9
 
 If the capture doesn't look right and needs to be shifted, you can use `override_regions`. Follow the example of `battle_enemy_hp_text` for [StarBeasts](src/poke_worlds/emulation/pokemon/parsers.py). 
 
-You will know that you have filled out all required regions when you can run `python demos/emulator.py --variant <variant_name>` without debug mode. 
+You will know that you have filled out all required regions when you can run `python demos/emulator.py --game <variant>` without debug mode. 
 
 **Setup Speedrun Guide:**
 I've documented the fastest workflow I have found to capturing all the screens for a ROM properly. 
@@ -93,7 +98,7 @@ Start by just playing through the game (super high `gameboy_headed_emulation_spe
 
 Then, start with:
 ```
-python dev/dev_play.py --variant <variant> --init_state initial
+python dev/dev_play.py --game <game> --init_state initial
 ```
 You can tick off the following captures:
 * `dialogue_bottom_right`: usually theres something you can interact with in your starting room
@@ -111,7 +116,7 @@ Then, switch out to the start choice state with `l starter`. Use this state to c
 
 Then honestly you probably want to exit with `e` and start again at the `pokedex` state with:
 ```bash
-python dev/dev_play.py --variant <variant> --init_state pokedex
+python dev/dev_play.py --game <game> --init_state pokedex
 ```
 You'll get a message letting you know what's left. You can finish them all off now. If any of the captures weren't clean and good, you should leave them for the end and override their named screen regions. 
 

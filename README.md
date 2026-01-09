@@ -48,10 +48,6 @@ Another major hurdle to progress is the difficulty of learning how abstract acti
 - [Installation](#Installation)
 - [Quickstart](#Quickstart)
 - [Developer Tools](#Development)
-  - [Custom Starting States](#I-want-to-create-my-own-starting-states)
-  - [Descriptive State and Event Tracking](#I-want-to-track-fine-grained-details)
-  - [Reward Engineering](#I-want-to-engineer-my-own-reward-functions)
-  - [Adding New ROMs](#I-want-to-add-a-new-ROM-Hack)
 
 # Installation
 
