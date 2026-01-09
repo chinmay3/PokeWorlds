@@ -5,7 +5,8 @@ from poke_worlds.utils import load_parameters, log_error, log_info, log_warn, ge
 
 
 from poke_worlds.emulation import Emulator, StateTracker
-from poke_worlds.interface.controller import Controller, LowLevelController
+from poke_worlds.emulation.registry import get_state_tracker_class
+from poke_worlds.interface.controller import Controller
 from poke_worlds.interface.action import HighLevelAction
 
 import numpy as np
@@ -15,7 +16,6 @@ from copy import deepcopy
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html")
 # This is to ignore deprecation warnings from pygame about pkg_resources
 import pygame
-import matplotlib.pyplot as plt
 
 
 class History:
@@ -130,7 +130,7 @@ class Environment(gym.Env, ABC):
 
         Override this method in subclasses to modify the default emulator keyword arguments.
 
-        You may want to use safe_override_state_tracker_class to ensure compatibility of state tracker classes.
+        You may want to use `override_state_tracker_class` or that style to ensure compatibility of state tracker classes.
 
         Args:
             emulator_kwargs (dict): Incoming emulator keyword arguments.
@@ -140,54 +140,51 @@ class Environment(gym.Env, ABC):
         return emulator_kwargs
 
     @staticmethod
-    def safe_override_state_tracker_class(incoming_state_tracker_class: Type[StateTracker], required_state_tracker_class: Type[StateTracker]) -> Type[StateTracker]:
+    def override_state_tracker_class(emulator_kwargs: dict, required_state_tracker_class: Type[StateTracker]):
         """
         Safely overrides the state tracker class for the environment.
 
-        Use this in override_emulator_kwargs to ensure that the lowest level state tracker class is chosen.
+        Use this in `override_emulator_kwargs` to ensure that the lowest level state tracker class is chosen.
         
         Args:
-            incoming_state_tracker_class (Type[StateTracker]): The incoming state tracker class.
+            emulator_kwargs (dict): Incoming emulator keyword arguments.
             required_state_tracker_class (Type[StateTracker]): Usually the required state tracker class for the environment.
-        Returns:
-            Type[StateTracker]: The chosen state tracker class.
         """
+        game = emulator_kwargs["game"]
+        incoming_state_tracker_class = emulator_kwargs.get("state_tracker_class", "default")
+        if isinstance(incoming_state_tracker_class, str):
+            incoming_state_tracker_class = get_state_tracker_class(game, incoming_state_tracker_class)
         if issubclass(incoming_state_tracker_class, required_state_tracker_class):
             return incoming_state_tracker_class
         elif issubclass(required_state_tracker_class, incoming_state_tracker_class):
-            return required_state_tracker_class
+            emulator_kwargs["state_tracker_class"] = required_state_tracker_class
         else:
-            return incoming_state_tracker_class # Don't know which one to pick, so just go with the incoming one.
+            emulator_kwargs["state_tracker_class"] = incoming_state_tracker_class # Don't know which one to pick, so just go with the incoming one.
+        return
     
-    def __init__(self):
+    def __init__(self, emulator: Emulator, controller: Controller, parameters: Optional[dict]=None):
         """
         Ensures that the environment has the required attributes.
         All subclasses must call this __init__ method AFTER setting up the required attributes.
 
         If you are implementing a subclass, ensure that the following attributes are set:
-            - _parameters: dict of config parameters
-            - _emulator: emulator instance
-            - _controller: controller instance
             - observation_space: gym space defining observation space structure
         """
-        if not hasattr(self, "_parameters"):
-            raise ValueError("Environment must have a '_parameters' attribute.")
-        self._parameters: dict = self._parameters
-        required_attributes = ["_emulator", "_controller", "observation_space"]
+        self._parameters = load_parameters(parameters)
+        self._emulator = emulator
+        self._controller = controller
+        required_attributes = ["observation_space"]
         for attr in required_attributes:
             if not hasattr(self, attr):
                 log_error(f"Environment requires attribute '{attr}' to be set. Implement this in the subclass __init__", self._parameters)
-        self._emulator: Emulator = self._emulator
-        self._controller: Controller = self._controller
         self.observation_space: gym.spaces.Space = self.observation_space
-        # For Intellisence lol
         if not issubclass(type(self._emulator), self.REQUIRED_EMULATOR):
-            log_error(f"Environment requires an Emulator of type {self.REQUIRED_EMULATOR.NAME}, but got {type(self._emulator).NAME}", self._parameters)
+            log_error(f"Environment requires an Emulator of type {self.REQUIRED_EMULATOR}, but got {type(self._emulator)}", self._parameters)
         if not isinstance(self._controller, Controller):
             log_error(f"Environment requires a Controller instance, but got {type(self._controller)}", self._parameters)
         self.REQUIRED_STATE_TRACKER = get_lowest_level_subclass([self.REQUIRED_STATE_TRACKER, self._controller.REQUIRED_STATE_TRACKER])
         if not issubclass(type(self._emulator.state_tracker), self.REQUIRED_STATE_TRACKER):
-            log_error(f"Environment requires a StateTracker of type {self.REQUIRED_STATE_TRACKER.NAME}, but got {type(self._emulator.state_tracker).NAME}", self._parameters)
+            log_error(f"Environment requires a StateTracker of type {self.REQUIRED_STATE_TRACKER}, but got {type(self._emulator.state_tracker)}", self._parameters)
         self._controller.assign_emulator(self._emulator)
         self.action_space = self._controller.get_action_space()
         """ The Gym action Space provided by the controller. """
@@ -589,13 +586,10 @@ class DummyEnvironment(Environment):
 
         It is safe to overwrite the self.observation_space in the subclass after calling this __init__ method.
         """
-        self._parameters = load_parameters(parameters)
-        self._emulator = emulator
-        self._controller = controller
-        screen_shape = self._emulator.screen_shape
+        screen_shape = emulator.screen_shape
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=(screen_shape[1], screen_shape[0], 1), dtype=np.uint8)
         """ The observation space is the raw pixel values of the emulator's screen. """
-        super().__init__()
+        super().__init__(emulator=emulator, controller=controller, parameters=parameters)
 
     def get_observation(self, **kwargs):
         return self._emulator.get_current_frame()

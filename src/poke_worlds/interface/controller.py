@@ -1,6 +1,5 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any, Dict, Tuple, List, Optional, Type
-from enum import Enum
 from poke_worlds.utils import verify_parameters, log_info, log_warn, log_error, load_parameters, get_lowest_level_subclass
 from poke_worlds.emulation.emulator import Emulator, LowLevelActions
 from poke_worlds.interface.action import HighLevelAction, LowLevelAction, RandomPlayAction, LowLevelPlayAction
@@ -331,3 +330,9 @@ class RandomPlayController(Controller):
     """ A controller that performs random play on the emulator using low level actions. """
     ACTIONS = [RandomPlayAction]
     """ A HighLevelAction subclass that performs random low level actions. """
+
+_ALWAYS_VALID_CONTROLLERS = {"low_level": LowLevelController, 
+                             "low_level_play": LowLevelPlayController, 
+                             "random_play": RandomPlayController
+                             }
+""" Controllers that are always valid for any game and environment. """

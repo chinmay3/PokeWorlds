@@ -13,7 +13,7 @@ if project_parameters["full_importable"]:
 else:
     pass
 
-
+project_parameters["warned_debug_lm"] = False
 class ExecutorVLM:
     """A class that holds the Executor VLM that is potentially the same as HuggingFaceVLM"""
     _MODEL = None
@@ -30,7 +30,9 @@ class ExecutorVLM:
             if not project_parameters["debug_mode"]:
                 log_error(f"Tried to instantiate an Executor VLM, but the required packages are not installed. Run `uv pip install -e \".[full]\"` to install required packages.", project_parameters)
             else:
-                log_warn(f"Tried to instantiate an Executor VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", project_parameters)
+                if not project_parameters["warned_debug_lm"]:
+                    log_warn(f"Tried to instantiate an Executor VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", project_parameters)
+                    project_parameters["warned_debug_lm"] = True
         else:
             model_name = project_parameters["executor_vlm_model"]
             backbone_name = project_parameters["backbone_vlm_model"]

@@ -4,6 +4,22 @@ import logging
 import importlib.util
 from typing import Dict
 
+
+class RelativePathFormatter(logging.Formatter):
+    def format(self, record):
+        # record.pathname is the full system path
+        path = record.pathname
+        
+        # Look for 'src' and keep everything after it
+        if 'src' in path:
+            # Splits at 'src', takes the last part, and removes leading slashes
+            record.custom_path = "poke_worlds" + path.split('poke_worlds')[-1]
+        else:
+            # Fallback to just the filename if 'src' isn't found
+            record.custom_path = record.filename
+            
+        return super().format(record)
+
 def get_logger(level: int = logging.INFO, filename: str = None, add_console: bool = True) -> logging.Logger:
     """
     Sets up and returns a logger with specified configurations.
@@ -14,18 +30,18 @@ def get_logger(level: int = logging.INFO, filename: str = None, add_console: boo
     Returns:
         logging.Logger: Configured logger instance.
     """
-    fmt_str = "%(asctime)s, [%(levelname)s, %(filename)s:%(lineno)d] %(message)s"
+    fmt_str = "%(asctime)s, [%(levelname)s, %(custom_path)s:%(lineno)d] %(message)s"
     logging.basicConfig(format=fmt_str)
-    logger = logging.getLogger("PROJECT_NAME")
+    logger = logging.getLogger("PokeWorlds")
     if add_console:
         logger.handlers.clear()
         console_handler = logging.StreamHandler()
-        log_formatter = logging.Formatter(fmt_str)
+        log_formatter = RelativePathFormatter(fmt_str)
         console_handler.setFormatter(log_formatter)
         logger.addHandler(console_handler)
     if filename is not None:
         file_handler = logging.FileHandler(filename, mode="a")
-        log_formatter = logging.Formatter(fmt_str)
+        log_formatter = RelativePathFormatter(fmt_str)
         file_handler.setFormatter(log_formatter)
         logger.addHandler(file_handler)
     if level is not None:

@@ -2,12 +2,9 @@ from typing import Optional, Dict, Any, List, Tuple
 
 from gymnasium import spaces
 
-from poke_worlds.emulation.pokemon.parsers import AgentState
-from poke_worlds.interface.action import HighLevelAction
-from poke_worlds.interface.pokemon.actions import InteractAction, MoveStepsAction
-from poke_worlds.utils import load_parameters, log_dict, log_info, ocr
+from poke_worlds.utils import load_parameters, log_dict, log_info
 from poke_worlds.emulation.pokemon.emulators import PokemonEmulator
-from poke_worlds.emulation.pokemon.trackers import CorePokemonTracker, PokemonRedStarterTracker, PokemonOCRTracker
+from poke_worlds.emulation.pokemon.trackers import PokemonRedStarterTracker, PokemonOCRTracker
 from poke_worlds.interface.environment import DummyEnvironment, Environment
 from poke_worlds.interface.controller import Controller
 
@@ -17,9 +14,78 @@ import numpy as np
 
 
 class PokemonEnvironment(DummyEnvironment):
+    """
+    A basic Pokemon Environment.
+    """
     REQUIRED_EMULATOR = PokemonEmulator
     
+class PokemonOCREnvironment(DummyEnvironment):
+    """ 
+    A Pokemon Environment that includes OCR observations and agent state.
+    """
+    REQUIRED_STATE_TRACKER = PokemonOCRTracker
+    REQUIRED_EMULATOR = PokemonEmulator
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        screen_shape = self._emulator.screen_shape
+        screen_space = spaces.Box(low=0, high=255, shape=(screen_shape[1], screen_shape[0], 1), dtype=np.uint8)
+        ocr = spaces.Text(max_length=512)
+        state = spaces.Discrete(4) # In Dialogue, In Menu, Battle, Free Roam
+
+        self.observation_space = spaces.Dict({
+            "screen": screen_space,
+            "ocr": ocr,
+            "state": state
+        })
+        """ The observation space is the raw pixel values of the emulator's screen and messages with OCR text. """
+
+    @staticmethod
+    def override_emulator_kwargs(emulator_kwargs: dict) -> dict:
+        required_tracker = PokemonOCRTracker
+        Environment.override_state_tracker_class(emulator_kwargs, required_tracker)
+        return emulator_kwargs
+
+    def get_agent_state(self) -> Any:
+        """
+        Returns a string-like identifier of the current agent state in the environment.
+        Is useful for VLM prompts to describe what the agent is currently doing.
+        Returns:
+            Any: The current agent state identifier.
+        """
+        return self._emulator.state_parser.get_agent_state(self._emulator.get_current_frame())
+    
+    def get_observation(self, *, action=None, action_kwargs=None, transition_states=None, action_success=None):
+        if transition_states is None:
+            current_state = self.get_info()
+            screen = current_state["core"]["current_frame"]
+            # Will not try to add to OCR buffers, because no transition states should only be called on init. 
+            if "ocr" in current_state and "ocr_texts" in current_state["ocr"]:
+                ocr_texts = current_state["ocr"]["ocr_texts"] # is a dict with kind -> text
+                ocr_combined = " | ".join([f"{kind}: {text}" for kind, text in ocr_texts.items()])
+            else:
+                ocr_combined = ""
+        else:
+            screen = transition_states[-1]["core"]["current_frame"]
+            ocr_texts_all = []
+            for state in transition_states:
+                if "ocr" in state and "ocr_texts" in state["ocr"]:
+                    ocr_texts = state["ocr"]["ocr_texts"] # is a dict with kind -> text
+                    ocr_step = state["ocr"]["step"]
+                    ocr_texts_all.append(ocr_texts)
+            # combine all ocr texts
+            ocr_combined = ""
+            for ocr_texts in ocr_texts_all:
+                for kind, text in ocr_texts.items():
+                    ocr_combined += f"{kind}: {text} | "
+        current_state = self._emulator.state_parser.get_agent_state(screen)
+        observation = {
+            "screen": screen,
+            "ocr": ocr_combined,
+            "state": current_state,
+        }
+        return observation
+    
 
 class PokemonRedChooseCharmanderFastEnv(Environment):
     """
@@ -49,7 +115,7 @@ class PokemonRedChooseCharmanderFastEnv(Environment):
         """
         Override default emulator keyword arguments for this environment.
         """
-        emulator_kwargs["state_tracker_class"] = PokemonRedStarterTracker
+        Environment.override_state_tracker_class(emulator_kwargs, PokemonRedStarterTracker)
         emulator_kwargs["init_state"] = "starter"
         return emulator_kwargs
 
@@ -104,79 +170,3 @@ class PokemonRedChooseCharmanderFastEnv(Environment):
             return 500.0 + step_bonus
         else:
             return 100.0 + step_bonus# Penalty for choosing the wrong starter. For now, just less reward.
-
-
-class PokemonHighLevelEnvironment(DummyEnvironment):
-    """ A dummy Pokemon environment that does nothing special. """
-    REQUIRED_STATE_TRACKER = PokemonOCRTracker
-    REQUIRED_EMULATOR = PokemonEmulator
-
-    def __init__(self, **kwargs):
-        """
-        Initializes the DummyEnvironment with the given emulator and controller.
-
-        It is safe to overwrite the self.observation_space in the subclass after calling this __init__ method.
-        """
-        super().__init__(**kwargs)
-        screen_shape = self._emulator.screen_shape
-        screen_space = spaces.Box(low=0, high=255, shape=(screen_shape[1], screen_shape[0], 1), dtype=np.uint8)
-        ocr = spaces.Text(max_length=512)
-        state = spaces.Discrete(4) # In Dialogue, In Menu, Battle, Free Roam
-
-        self.observation_space = spaces.Dict({
-            "screen": screen_space,
-            "ocr": ocr,
-            "state": state
-        })
-        """ The observation space is the raw pixel values of the emulator's screen and messages with OCR text and error signals from HighLevelActions. """
-
-    @staticmethod
-    def override_emulator_kwargs(emulator_kwargs: dict) -> dict:
-        basic_tracker = PokemonOCRTracker
-        incoming_tracker = emulator_kwargs.get("state_tracker_class", "default")
-        if isinstance(incoming_tracker, str):
-            emulator_kwargs["state_tracker_class"] = basic_tracker
-        else:
-            emulator_kwargs["state_tracker_class"] = Environment.safe_override_state_tracker_class(incoming_tracker, basic_tracker)
-        return emulator_kwargs
-
-    def get_agent_state(self) -> Any:
-        """
-        Returns a string-like identifier of the current agent state in the environment.
-        Is useful for VLM prompts to describe what the agent is currently doing.
-        Returns:
-            Any: The current agent state identifier.
-        """
-        return self._emulator.state_parser.get_agent_state(self._emulator.get_current_frame())
-    
-    def get_observation(self, *, action=None, action_kwargs=None, transition_states=None, action_success=None):
-        if transition_states is None:
-            current_state = self.get_info()
-            screen = current_state["core"]["current_frame"]
-            # Will not try to add to OCR buffers, because no transition states should only be called on init. 
-            if "ocr" in current_state and "ocr_texts" in current_state["ocr"]:
-                ocr_texts = current_state["ocr"]["ocr_texts"] # is a dict with kind -> text
-                ocr_combined = " | ".join([f"{kind}: {text}" for kind, text in ocr_texts.items()])
-            else:
-                ocr_combined = ""
-        else:
-            screen = transition_states[-1]["core"]["current_frame"]
-            ocr_texts_all = []
-            for state in transition_states:
-                if "ocr" in state and "ocr_texts" in state["ocr"]:
-                    ocr_texts = state["ocr"]["ocr_texts"] # is a dict with kind -> text
-                    ocr_step = state["ocr"]["step"]
-                    ocr_texts_all.append(ocr_texts)
-            # combine all ocr texts
-            ocr_combined = ""
-            for ocr_texts in ocr_texts_all:
-                for kind, text in ocr_texts.items():
-                    ocr_combined += f"{kind}: {text} | "
-        current_state = self._emulator.state_parser.get_agent_state(screen)
-        observation = {
-            "screen": screen,
-            "ocr": ocr_combined,
-            "state": current_state,
-        }
-        return observation
-    

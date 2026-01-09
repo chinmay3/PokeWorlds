@@ -1,32 +1,27 @@
-from poke_worlds import AVAILABLE_POKEMON_VARIANTS, get_pokemon_environment, LowLevelController, RandomPlayController, LowLevelPlayController
-from poke_worlds.interface.pokemon.controllers import PokemonStateWiseController
-from poke_worlds.interface.pokemon.environments import PokemonHighLevelEnvironment
+from poke_worlds import get_environment, AVAILABLE_GAMES
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import click
 
-# python demos/environment.py --play_mode human --environment_variant high_level
+# python demos/environment.py --play_mode human
 
 @click.command()
-@click.option("--play_mode", type=click.Choice(["human", "random", "restricted_random", "grouped_random"]), default="random", help="Play mode: 'random' for random actions.")
-@click.option("--environment_variant", type=str, default="charmander_enthusiast", help="The environment variant to use.")
+@click.option("--game", type=click.Choice(AVAILABLE_GAMES), default="pokemon_red", help="Variant of the game to emulate.")
+@click.option("--play_mode", type=click.Choice(["human", "random", "random_play"]), default="random", help="Play mode: 'random' for random actions.")
+@click.option("--environment_variant", type=str, default="default", help="The environment variant to use.")
+@click.option("--max_steps", type=int, default=500, help="Maximum number of steps to run in the environment.")
 @click.option("--init_state", type=str, default="starter", help="Initial state to start the environment in (if supported).")
 @click.option("--render", type=bool, default=False, help="Whether to render the environment with PyGame.")
 @click.option("--save_video", type=bool, default=None, help="Whether to save a video of the gameplay. If not specified, uses default from config.")
-def main(play_mode, environment_variant, init_state, render, save_video):
-    if play_mode == "random":
-        controller = LowLevelController()
-    elif play_mode == "restricted_random":
-        controller = LowLevelPlayController()
-    elif play_mode == "grouped_random":
-        controller = RandomPlayController()
+def main(game, play_mode, environment_variant, max_steps, init_state, render, save_video):
+    if play_mode == "human":
+        controller_variant = "state_wise"
     else:
-        controller = LowLevelPlayController()
+        controller_variant = play_mode.replace("random", "low_level")
+    environment = get_environment(game=game, environment_variant=environment_variant, controller_variant=controller_variant, save_video=save_video,
+                                  max_steps=max_steps, headless=True, init_state=init_state)
     if play_mode != "human":
-        environment = get_pokemon_environment(game_variant="pokemon_red", controller=controller, save_video=save_video,
-                                    environment_variant=environment_variant, max_steps=500, headless=True, init_state=init_state)
         steps = 0
-        max_steps = 500
         pbar = tqdm(total=max_steps)
         rewards = []
         while steps < max_steps:
@@ -46,12 +41,9 @@ def main(play_mode, environment_variant, init_state, render, save_video):
             plt.plot(rewards)
             plt.xlabel("Step")
             plt.ylabel("Reward")
-            plt.title("Rewards over Time in Charmander Enthusiast Environment")
+            plt.title("Rewards over Time")
             plt.show()
     else:
-        environment = get_pokemon_environment(game_variant="pokemon_red", environment_variant=environment_variant,
-                                              controller=PokemonStateWiseController(), save_video=save_video,
-                                              max_steps=500, headless=True, init_state=init_state)
         environment.human_step_play()
 
 if __name__ == "__main__":

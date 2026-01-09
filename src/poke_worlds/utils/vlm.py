@@ -41,7 +41,7 @@ if project_parameters["use_vllm"]:
     else:
         pass # Do not warn if neither is installed. 
 
-
+project_parameters["warned_debug_llm"] = False
 class HuggingFaceVLM:
     """A class that holds the HuggingFace VLM that is shared across the project"""
     _BATCH_SIZE=8
@@ -56,7 +56,9 @@ class HuggingFaceVLM:
             if not project_parameters["debug_mode"]:
                 log_error(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Run `uv pip install -e \".[full]\"` to install required packages.", project_parameters)
             else:
-                log_warn(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", project_parameters)
+                if not project_parameters["warned_debug_llm"]:
+                    log_warn(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", project_parameters)
+                    project_parameters["warned_debug_llm"] = True
         else:
             log_info(f"Loading Backbone HuggingFace VLM model: {project_parameters['backbone_vlm_model']}", project_parameters)
             HuggingFaceVLM._MODEL = AutoModelForImageTextToText.from_pretrained(project_parameters["backbone_vlm_model"], dtype=torch.bfloat16, device_map="auto")

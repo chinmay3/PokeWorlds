@@ -63,12 +63,12 @@ class Emulator:
     REQUIRED_STATE_TRACKER = StateTracker
     """ The minimal functionality StateTracker needed for this emulator to run """
 
-    def __init__(self, name: str, gb_path: str, state_parser_class: Type[StateParser], state_tracker_class: Type[StateTracker], init_state: str, parameters: dict, *, headless: bool = True, max_steps: int = None, save_video: bool = None, session_name: str = None, instance_id: str = None):
+    def __init__(self, game: str, gb_path: str, state_parser_class: Type[StateParser], state_tracker_class: Type[StateTracker], init_state: str, parameters: dict, *, headless: bool = True, max_steps: int = None, save_video: bool = None, session_name: str = None, instance_id: str = None):
         """
         Start the GameBoy emulator with the given ROM file and initial state.
 
         Args:
-            name (str): Name of the emulator instance.
+            game (str): Name of game variant being emulated.
             gb_path (str): Path to the GameBoy ROM file.
             state_parser_class (Type[StateParser]): A class that inherits from StateParser to parse game state variables.
             state_tracker_class (Type[StateTracker]): A class that inherits from StateTracker to track game state metrics.
@@ -82,8 +82,8 @@ class Emulator:
         """
         verify_parameters(parameters)
         self._parameters = parameters
-        if name is None or name == "":
-            log_error("You must provide a name for the emulator instance.", self._parameters)
+        if game is None or game == "":
+            log_error("You must provide a name for the game variant being emulated.", self._parameters)
         if gb_path is None:
             log_error("You must provide a path to the GameBoy ROM file.", self._parameters)
         if not issubclass(state_parser_class, self.REQUIRED_STATE_PARSER):
@@ -94,8 +94,8 @@ class Emulator:
             log_error("You must provide an initial state file to load.", self._parameters)
         if headless not in [True, False]:
             log_error("headless must be a boolean.", self._parameters)
-        self.name = name
-        """ Name of the emulator (does not need to be unique across instances, e.g. 'PokemonRed'). """
+        self.game = game
+        """ Name of game variant being emulated. """
         self._gb_path = gb_path
         self._set_init_state(init_state)
         # validate init_state exists and ends with .state
@@ -165,7 +165,7 @@ class Emulator:
         self.state_parser = state_parser_class(self._pyboy, self._parameters)
         """ Instance of the StateParser to parse game state variables. """
 
-        self.state_tracker = state_tracker_class(self.name, self.session_name, self.instance_id, self.state_parser, self._parameters)
+        self.state_tracker = state_tracker_class(self.game, self.session_name, self.instance_id, self.state_parser, self._parameters)
         """ Instance of the StateTracker to track game state metrics. """
 
         #self.screen = self.pyboy.botsupport_manager().screen()
@@ -762,7 +762,7 @@ class Emulator:
         
         :return: string name identifier of the particular env e.g. PokemonRed
         """
-        return self.name
+        return self.game
     
 def bytes_to_padded_hex_string(integer_value):
     """
