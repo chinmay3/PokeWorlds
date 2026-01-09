@@ -10,7 +10,7 @@ Provides methods to access these.
 """
 from poke_worlds.utils import log_error, load_parameters, log_warn
 from typing import Optional, Union, Type, Dict
-from poke_worlds.emulation.parser import StateParser
+from poke_worlds.emulation.parser import StateParser, DummyParser
 from poke_worlds.emulation.pokemon.parsers import MemoryBasedPokemonRedStateParser, PokemonBrownStateParser, PokemonStarBeastsStateParser, PokemonCrystalStateParser, PokemonPrismStateParser, PokemonFoolsGoldStateParser
 from poke_worlds.emulation.tracker import StateTracker
 from poke_worlds.emulation.pokemon.trackers import PokemonOCRTracker, PokemonRedStarterTracker

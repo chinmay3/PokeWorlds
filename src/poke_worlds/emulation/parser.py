@@ -737,7 +737,6 @@ class StateParser(ABC):
         if reference_name not in self.image_references:
             log_error(f"Image reference {reference_name} not found. Available options: {self.image_references.keys()}. If you want to add an image reference, add a file to the image_references folder.", self._parameters)
         return self.image_references[reference_name]
-
     
     @abstractmethod
     def __repr__(self) -> str:
@@ -746,3 +745,8 @@ class StateParser(ABC):
         :return: string name of the parser
         """
         raise NotImplementedError
+    
+
+class DummyParser(StateParser):
+    def __repr__(self) -> str:
+        return "DummyParser"

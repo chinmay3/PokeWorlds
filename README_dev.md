@@ -57,10 +57,10 @@ Whatever your motivation, <img src="assets/logo.png" width="70"> provides a powe
 
 The first thing to do is detect an event at a moment in time. This is done in subclasses of the `StateParser` [object](src/poke_worlds//emulation/emulator.py) in one of two ways: 
 
-1. **Emulator Screen Captures:** Often particular game states can be cleanly identified by a unique text popup, or some other characteristic marker on the screen. Any of these can be easily captured and checked with the existing parsing system. For example, the current implementation for Pokémon Red has screen captures set up to identify which starter the player chooses. See the [section below](#capturing-screens) for examples of this being done.
+1. **Emulator Screen Captures:** Often particular game states can be cleanly identified by a unique text popup, or some other characteristic marker on the screen. Any of these can be easily captured and checked with the existing parsing system. For example, the current implementation for Pokémon Red has screen captures set up to identify which starter the player chooses. See the [section below](#state-parser-set-up) for examples of this being done. See the [`StateParser` API documentation](https://dhananjayashok.github.io/PokeWorlds/poke_worlds/emulation/parser.html) for a quick overview on how this works.  
 2. **Memory Slot Hooks:** A strong alternative is to just directly read statistics from the game's WRAM. Visually inaccessible information (e.g. the attack stats of all Pokémon on the opponents team) are often easy to obtain this way. The only catch is, this method relies on knowing which memory slots to look for. That's easy enough for the original games which have excellent [decompilation guides](https://github.com/pret/pokered/blob/symbols/pokered.sym), but is much harder to do for ROM hacks, which may mess around with the slots arbitrarily. See the [memory reader](src/poke_worlds/emulation/pokemon/parsers.py) state parser to get a sense of how you should go about this. 
 
-These approaches allow your state parsers to give instant-wise decisions or indications when an event has occured. You can then configure your `StateTracker` to use the parser to check for this flag, and store appropriate metrics. See the existing [parsers](src/poke_worlds/emulation/pokemon/parsers.py) and [trackers](src/poke_worlds/emulation/pokemon/trackers.py) for examples. 
+These approaches allow your state parsers to give instant-wise decisions or indications when an event has occured. You can then configure your `StateTracker` to use the parser to check for this flag / read this information, and store appropriate metrics. See the existing [parsers](src/poke_worlds/emulation/pokemon/parsers.py) and [trackers](src/poke_worlds/emulation/pokemon/trackers.py) for examples. 
 
 ### I want to add a new ROM Hack or GameBoy Game
 Setting up a new game is an easy process that doesn't take more than an hour once you've understood how. Please do reach out to me if you have any questions, and we can work to merge the new ROM into <img src="assets/logo.png" width="70"> together. 
@@ -68,28 +68,28 @@ Setting up a new game is an easy process that doesn't take more than an hour onc
 #### Initial Steps:
 
 0. Set the repo to `debug` mode by editing the [config file](configs/project_vars.yaml)
-1. Create a `${game}_rom_data_path` parameter in the [configs](configs) (either as a new file or in an existing one)
-2. Obtain the ROM and place it in the desired path under the ROM data folder. Remember, the `${game}_rom_data_path` folder is rooted at the `storage_dir` from the [configs](configs/private_vars.yaml). 
-3. Go to the [parsers](src/poke_worlds/emulation/pokemon/parsers.py) and add the required ROM hack. See the `PokemonBrownGameStateParser` as an example. 
-4. Go to the [registry](src/poke_worlds/emulation/registry.py) and add the ROM name to `GAME_TO_GB_NAME`. Add the parser to `_STRONGEST_PARSERS`. Add the game to `AVAILABLE_STATE_TRACKERS` (give it a `default` value of `StateTracker`). Finally, add the game to `AVAILABLE_EMULATORS` (give it a `default` value of `Emulator`).
+1. Create a `<game>_rom_data_path` parameter in the [configs](configs) (either as a new file or in an existing one)
+2. Obtain the ROM and place it in the desired path under the ROM data folder. Remember, the `<game>_rom_data_path` folder is rooted at the `storage_dir` from the [configs](configs/private_vars.yaml). 
+4. Go to the [registry](src/poke_worlds/emulation/registry.py) and add the ROM name to :
+    - `GAME_TO_GB_NAME`: This will be the name the system expects to find in `<storage>/<game>_rom_data_path/` 
+    - `_STRONGEST_PARSERS`: with `DummyParser` as the value. 
+    - `AVAILABLE_STATE_TRACKERS`: give it a `default` value of `StateTracker`. 
+    - `AVAILABLE_EMULATORS`: give it a `default` value of `Emulator`.
 5. Run `python dev/create_first_state.py --game <game>`. This will create a default state. You will not be able to run the `Emulator` on this ROM before doing this. 
 6. Run `python dev/dev_play.py --game <game>` (with the [`gameboy_dev_play_stop` parameter](configs/gameboy_vars.yaml) set to `false`) and proceed through the game until you reach a satisfactory default starting state. Then, open the [config file](configs/gameboy_vars.yaml) and set `gameboy_dev_play_stop` to `true` and save the config file. This will trigger a dev mode and ask you for a terminal input. Enter `s default` and you will set that as the new default state. Enter `s initial` as well to save it properly. 
 
 I have provided an [example](https://drive.google.com/file/d/1fsMjkOjpbyeLLNxP3JVaj6uVXycwSAVC/view?usp=sharing) video for this process.
 
-#### Capturing Screens:
-The above steps will let you play the game in `debug` mode, but to properly set it up, you need to sync the screen captures by capturing the game's frame at the right moment. <img src="assets/logo.png" width="70"> uses screen captures and comparison of screen renders to determine state (e.g. menu open, in battle). In Pokémon, the screen markers occur in regular places, and the ROM hacks don't change this much either, making it a reliable way to check for events / flags. 
+#### State Parser Set Up:
+The above steps will let you play the game on the emulator, but the real power of this framework is only realized when you get involved and create a proper `StateParser`. As mentioned in the [section above](#i-want-to-track-fine-grained-details), this is done either by reading from gameboy memory states or by setting up screen captures to track events. Here, I detail the screen capture method. 
 
-For the basic regions, run in dev play mode, stop the game at the flag and run `c <region_name>` to save the screen region at that point. The exact screens vary with the base game. The [base classes](src/poke_worlds/emulation/pokemon/parsers.py) make it clearer what to capture for each named region. 
+Simply put, this approach aims to capture a given region of the games frame at the right moment, hence saving what the screen "looks like" when a particular event occurs. For example, in Pokémon, the top right of the screen always has the edge of the player menu, and is hence a reliable signal as to whether or not the player is in the menu. The exact regions and events to capture will depend on the game, but the most important components are:
+- `NamedScreenRegion`: Every `StateParser` can define certain boxes within the game screen (e.g. the top right portion where the player menu identifier will pop up). These can linked to one or more reference targets, that you need to manually capture once and save. After you save the target, the `StateParser` allows you to take any game frame, select the region in question, and compare it to the reference image. Once you've designated the named regions in the state parser, run the game in dev play mode, stop the game at the moment you want to capture. Then, run `c <region_name>` to save the screen region at that point. The [Pokémon parsers](src/poke_worlds/emulation/pokemon/parsers.py) show a clear example of this, and I have provided an [example](https://drive.google.com/file/d/1EEpoxHAnNwdSMSYcc93xrQCcLzbtVCyX/view?usp=sharing) video of the frames being captured. 
 
-I have provided an [example](https://drive.google.com/file/d/1EEpoxHAnNwdSMSYcc93xrQCcLzbtVCyX/view?usp=sharing) video for this too. 
-
-If the capture doesn't look right and needs to be shifted, you can use `override_regions`. Follow the example of `battle_enemy_hp_text` for [StarBeasts](src/poke_worlds/emulation/pokemon/parsers.py). 
-
-You will know that you have filled out all required regions when you can run `python demos/emulator.py --game <variant>` without debug mode. 
+You will know that you have filled out all required regions when you can run `python demos/emulator.py --game <game>` without debug mode. 
 
 **Setup Speedrun Guide:**
-I've documented the fastest workflow I have found to capturing all the screens for a ROM properly. 
+I've documented the fastest workflow I have found to capturing all the screens for a Pokémon ROM hack properly. This may come in handy for someone. 
 
 Start by just playing through the game (super high `gameboy_headed_emulation_speed`) and establishing save states for the following:
 1. `initial`: Right out of the intro screen with options set to fastest / least animation
@@ -110,7 +110,7 @@ You can tick off the following captures:
 Then, switch out to the start choice state with `l starter`. Use this state to capture:
 * `dialogue_choice_bottom_right`: confirmation message for starter
 * `name_entity_top_left`: give the starter a nickname
-* `battle_enemy_hp_text`: either a rival battle or just your first pokemon battle
+* `battle_enemy_hp_text`: either a rival battle or just your first Pokémon battle
 * `battle_player_hp_text`: same
 * `pokemon_list_hp_text`: can do once you've got the starter
 
@@ -124,8 +124,8 @@ Using this process I'm able to set up all but one capture in [under 10 minutes](
 
 ### I want to engineer my own reward functions
 
-<img src="assets/logo.png" width="70"> avoids most domain-knowledge specific reward design, with a motivation of having the agent discover the best policy with minimal guidance. But it's absolutely possible to use your knowledge of the game to create sophisticated reward systems, like [the initial creators of this framework](https://www.youtube.com/watch?v=DcYLT37ImBY&feature=youtu.be) did. 
+<img src="assets/logo.png" width="70"> avoids most domain-knowledge specific reward design, with a motivation of having the agent discover the best policy with minimal guidance. But it's absolutely possible to use your knowledge of the game to create sophisticated reward systems, like [other people](https://www.youtube.com/watch?v=DcYLT37ImBY&feature=youtu.be) have. 
 
 You'll likely want to gather as much state and trajectory information as possible, for which you should see the [section above](#I-want-to-create-my-own-starting-states).
 
-{NOTE ON WHERE THE REWARD GOES}
+Then, you'll want to create your own `Environment` subclass, and configure the reward return. 
