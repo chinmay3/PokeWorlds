@@ -17,7 +17,7 @@ from poke_worlds.emulation.pokemon.trackers import PokemonOCRTracker, PokemonRed
 from poke_worlds.emulation.emulator import Emulator
 from poke_worlds.emulation.pokemon.emulators import PokemonEmulator
 
-project_parameters = load_parameters()
+_project_parameters = load_parameters()
 GAME_TO_GB_NAME = {
     "pokemon_red": "PokemonRed.gb",
     "pokemon_brown": "PokemonBrown.gb",
@@ -92,31 +92,31 @@ AVAILABLE_EMULATORS: Dict[str, Dict[str, Type[Emulator]]] = {
 
 for game in AVAILABLE_STATE_TRACKERS:
     if "default" not in AVAILABLE_STATE_TRACKERS[game]:
-        log_error(f"Game '{game}' is missing a default StateTracker mapping in the registry.", project_parameters)
+        log_error(f"Game '{game}' is missing a default StateTracker mapping in the registry.", _project_parameters)
 
 for game in AVAILABLE_EMULATORS:
     if "default" not in AVAILABLE_EMULATORS[game]:
-        log_error(f"Game '{game}' is missing a default Emulator mapping in the registry.", project_parameters)
+        log_error(f"Game '{game}' is missing a default Emulator mapping in the registry.", _project_parameters)
 
 AVAILABLE_GAMES = list(GAME_TO_GB_NAME.keys())
 """ List of available games. """
 
 for game in AVAILABLE_GAMES:
     if game not in _STRONGEST_PARSERS:
-        if project_parameters["debug_mode"]:
-            log_warn(f"Warning: Game '{game}' is missing a strongest StateParser mapping in the registry.", project_parameters)
+        if _project_parameters["debug_mode"]:
+            log_warn(f"Warning: Game '{game}' is missing a strongest StateParser mapping in the registry.", _project_parameters)
         else:
-            log_error(f"Game '{game}' is missing a strongest StateParser mapping in the registry.", project_parameters)
+            log_error(f"Game '{game}' is missing a strongest StateParser mapping in the registry.", _project_parameters)
     if game not in AVAILABLE_STATE_TRACKERS:
-        if project_parameters["debug_mode"]:
-            log_warn(f"Warning: Game '{game}' is missing a StateTracker mapping in the registry.", project_parameters)
+        if _project_parameters["debug_mode"]:
+            log_warn(f"Warning: Game '{game}' is missing a StateTracker mapping in the registry.", _project_parameters)
         else:
-            log_error(f"Game '{game}' is missing a StateTracker mapping in the registry.", project_parameters)
+            log_error(f"Game '{game}' is missing a StateTracker mapping in the registry.", _project_parameters)
     if game not in AVAILABLE_EMULATORS:
-        if project_parameters["debug_mode"]:
-            log_warn(f"Warning: Game '{game}' is missing an Emulator mapping in the registry.", project_parameters)
+        if _project_parameters["debug_mode"]:
+            log_warn(f"Warning: Game '{game}' is missing an Emulator mapping in the registry.", _project_parameters)
         else:
-            log_error(f"Game '{game}' is missing an Emulator mapping in the registry.", project_parameters)
+            log_error(f"Game '{game}' is missing an Emulator mapping in the registry.", _project_parameters)
 
 def infer_game(game: str, parameters: dict = None) -> str:
     """ 

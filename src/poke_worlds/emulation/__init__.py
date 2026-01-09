@@ -1,7 +1,7 @@
 """
 This submodule handles the emulation of Gameboy games. The core classes here are:
 1. `StateParser`: Responsible for parsing the game state from the screen, and the memory states of the gameboy. Can be used to extract relevant information from the game state at each step (e.g. player location, current party, inventory items, etc).
-2. `StateTracker`: Uses the `StateParser` and pre-registers specific state tracking logic that is called at after every step in the game. This class is primarily responsible for maintaining the game state information at each step, which is represented by a nested dictionary of string keys and subkeys. It also tracks relevant metrics over playthroughs (e.g. number of battles won) and aggregates metrics over multiple playthroughs (across resets) if required. 
+2. `StateTracker`: Uses the `StateParser` and pre-registers specific state tracking logic that is called after every button press in the game. This class is responsible for maintaining the game state information at each step. It also tracks relevant metrics over playthroughs (e.g. number of battles won) and aggregates metrics over multiple playthroughs (across resets) if required. 
 3. `Emulator`: The core class that handles the emulation of the game. It carries a `StateParser` and `StateTracker`. Every step runs a single button press, and ensures that the state tracker is properly updated.
 
 Briefly skim the documentation for each of these classes to understand their roles, the fundamental structure they impose and how they interact with each other.

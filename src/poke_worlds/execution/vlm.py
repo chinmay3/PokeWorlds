@@ -5,15 +5,15 @@ import numpy as np
 from PIL import Image
 import torch
 
-project_parameters = load_parameters()
-if project_parameters["full_importable"]:
+_project_parameters = load_parameters()
+if _project_parameters["full_importable"]:
     # Import anything related to full here. 
     import torch
     from transformers import AutoModelForImageTextToText, AutoProcessor
 else:
     pass
 
-project_parameters["warned_debug_lm"] = False
+_project_parameters["warned_debug_lm"] = False
 class ExecutorVLM:
     """A class that holds the Executor VLM that is potentially the same as HuggingFaceVLM"""
     _MODEL = None
@@ -26,23 +26,23 @@ class ExecutorVLM:
         """
         if ExecutorVLM._MODEL is not None:
             return
-        if not project_parameters["full_importable"] or project_parameters["debug_skip_lm"]:
-            if not project_parameters["debug_mode"]:
-                log_error(f"Tried to instantiate an Executor VLM, but the required packages are not installed. Run `uv pip install -e \".[full]\"` to install required packages.", project_parameters)
+        if not _project_parameters["full_importable"] or _project_parameters["debug_skip_lm"]:
+            if not _project_parameters["debug_mode"]:
+                log_error(f"Tried to instantiate an Executor VLM, but the required packages are not installed. Run `uv pip install -e \".[full]\"` to install required packages.", _project_parameters)
             else:
-                if not project_parameters["warned_debug_lm"]:
-                    log_warn(f"Tried to instantiate an Executor VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", project_parameters)
-                    project_parameters["warned_debug_lm"] = True
+                if not _project_parameters["warned_debug_lm"]:
+                    log_warn(f"Tried to instantiate an Executor VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", _project_parameters)
+                    _project_parameters["warned_debug_lm"] = True
         else:
-            model_name = project_parameters["executor_vlm_model"]
-            backbone_name = project_parameters["backbone_vlm_model"]
+            model_name = _project_parameters["executor_vlm_model"]
+            backbone_name = _project_parameters["backbone_vlm_model"]
             if model_name == backbone_name:
-                log_info(f"ExecutorVLM using shared model with BackboneVLM: {model_name}", project_parameters)
+                log_info(f"ExecutorVLM using shared model with BackboneVLM: {model_name}", _project_parameters)
                 HuggingFaceVLM.start()
                 ExecutorVLM._MODEL = HuggingFaceVLM._MODEL
                 ExecutorVLM._PROCESSOR = HuggingFaceVLM._PROCESSOR
             else:
-                log_info(f"Starting ExecutorVLM with model: {model_name}", project_parameters)
+                log_info(f"Starting ExecutorVLM with model: {model_name}", _project_parameters)
                 ExecutorVLM._PROCESSOR = AutoProcessor.from_pretrained(model_name, padding_side="left")
                 ExecutorVLM._MODEL = AutoModelForImageTextToText.from_pretrained(model_name, dtype=torch.bfloat16, device_map="auto")
 
@@ -62,7 +62,7 @@ class ExecutorVLM:
         if ExecutorVLM._MODEL is None: # it is only still None in debug mode
             return "LM Output"
         if max_new_tokens is None:
-            log_error(f"Can't set max_new_tokens to None", project_parameters)
+            log_error(f"Can't set max_new_tokens to None", _project_parameters)
         return HuggingFaceVLM.do_infer(ExecutorVLM._MODEL, ExecutorVLM._PROCESSOR, [text], [image], max_new_tokens, 1)[0]
     
     @staticmethod
@@ -81,5 +81,5 @@ class ExecutorVLM:
         if ExecutorVLM._MODEL is None: # it is only still None in debug mode
             return "LM Output"
         if max_new_tokens is None:
-            log_error(f"Can't set max_new_tokens to None", project_parameters)
+            log_error(f"Can't set max_new_tokens to None", _project_parameters)
         return HuggingFaceVLM.do_multi_infer(ExecutorVLM._MODEL, ExecutorVLM._PROCESSOR, [text], [images], max_new_tokens, 1)[0]

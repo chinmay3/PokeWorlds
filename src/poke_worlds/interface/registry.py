@@ -13,7 +13,7 @@ from poke_worlds.interface.environment import Environment
 from poke_worlds.interface.pokemon.environments import PokemonEnvironment, PokemonRedChooseCharmanderFastEnv, PokemonOCREnvironment
 from poke_worlds.interface.pokemon.controllers import PokemonStateWiseController
 
-project_parameters = load_parameters()
+_project_parameters = load_parameters()
 
 AVAILABLE_ENVIRONMENTS: Dict[str, Dict[str, Type[Environment]]] = {
     "pokemon_red": {
@@ -73,13 +73,13 @@ AVAILABLE_CONTROLLERS: Dict[str, Dict[str, Type[Controller]]] = {
 
 for game in AVAILABLE_GAMES:
     if game not in AVAILABLE_ENVIRONMENTS:
-        log_warn(f"No environments registered for game variant '{game}'. Will error out if you try to get an environment for this game variant." , project_parameters)
+        log_warn(f"No environments registered for game variant '{game}'. Will error out if you try to get an environment for this game variant." , _project_parameters)
     if game not in AVAILABLE_CONTROLLERS:
-        log_warn(f"No controllers registered for game variant '{game}'. Will error out if you try to get a controller for this game variant." , project_parameters)
+        log_warn(f"No controllers registered for game variant '{game}'. Will error out if you try to get a controller for this game variant." , _project_parameters)
     else:
         for valid_controller_key in _ALWAYS_VALID_CONTROLLERS:
             if valid_controller_key in AVAILABLE_CONTROLLERS[game]:
-                log_error(f"Controller key '{valid_controller_key}' for game variant '{game}' is reserved for always valid controllers. Do not add a controller with this key in the registry.", project_parameters)
+                log_error(f"Controller key '{valid_controller_key}' for game variant '{game}' is reserved for always valid controllers. Do not add a controller with this key in the registry.", _project_parameters)
             AVAILABLE_CONTROLLERS[game][valid_controller_key] = _ALWAYS_VALID_CONTROLLERS[valid_controller_key]
 
 

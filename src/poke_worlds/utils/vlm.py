@@ -22,26 +22,26 @@ def convert_numpy_greyscale_to_pillow(arr: np.ndarray) -> Image:
     rgb = np.stack([arr[:, :, 0], arr[:, :, 0], arr[:, :, 0]], axis=2)
     return Image.fromarray(rgb)
 
-project_parameters = load_parameters()
-if project_parameters["full_importable"]:
+_project_parameters = load_parameters()
+if _project_parameters["full_importable"]:
     # Import anything related to full here. 
     import torch
     from transformers import AutoModelForImageTextToText, AutoProcessor
 else:
     pass
 
-if project_parameters["use_vllm"]:
+if _project_parameters["use_vllm"]:
     raise NotImplementedError(f"vLLM just doesn't work. Need to sort out installation issues.")
-    if project_parameters["vllm_importable"]:
+    if _project_parameters["vllm_importable"]:
         from vllm import LLM, SamplingParams, EngineArgs
         
-    elif project_parameters["full_importable"]:
-        log_warn("Project parameters has `use_vllm` set to True, but vllm is not installed. Run `uv pip install -e \".[full, vllm]\"` to install required packages.", project_parameters)
-        project_parameters["use_vllm"] = False
+    elif _project_parameters["full_importable"]:
+        log_warn("Project parameters has `use_vllm` set to True, but vllm is not installed. Run `uv pip install -e \".[full, vllm]\"` to install required packages.", _project_parameters)
+        _project_parameters["use_vllm"] = False
     else:
         pass # Do not warn if neither is installed. 
 
-project_parameters["warned_debug_llm"] = False
+_project_parameters["warned_debug_llm"] = False
 class HuggingFaceVLM:
     """A class that holds the HuggingFace VLM that is shared across the project"""
     _BATCH_SIZE=8
@@ -52,17 +52,17 @@ class HuggingFaceVLM:
     def start():
         if HuggingFaceVLM._MODEL is not None:
             return
-        if not project_parameters[f"full_importable"] or project_parameters["debug_skip_lm"]:
-            if not project_parameters["debug_mode"]:
-                log_error(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Run `uv pip install -e \".[full]\"` to install required packages.", project_parameters)
+        if not _project_parameters[f"full_importable"] or _project_parameters["debug_skip_lm"]:
+            if not _project_parameters["debug_mode"]:
+                log_error(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Run `uv pip install -e \".[full]\"` to install required packages.", _project_parameters)
             else:
-                if not project_parameters["warned_debug_llm"]:
-                    log_warn(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", project_parameters)
-                    project_parameters["warned_debug_llm"] = True
+                if not _project_parameters["warned_debug_llm"]:
+                    log_warn(f"Tried to instantiate a HuggingFace VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", _project_parameters)
+                    _project_parameters["warned_debug_llm"] = True
         else:
-            log_info(f"Loading Backbone HuggingFace VLM model: {project_parameters['backbone_vlm_model']}", project_parameters)
-            HuggingFaceVLM._MODEL = AutoModelForImageTextToText.from_pretrained(project_parameters["backbone_vlm_model"], dtype=torch.bfloat16, device_map="auto")
-            HuggingFaceVLM._PROCESSOR = AutoProcessor.from_pretrained(project_parameters["backbone_vlm_model"], padding_side="left")
+            log_info(f"Loading Backbone HuggingFace VLM model: {_project_parameters['backbone_vlm_model']}", _project_parameters)
+            HuggingFaceVLM._MODEL = AutoModelForImageTextToText.from_pretrained(_project_parameters["backbone_vlm_model"], dtype=torch.bfloat16, device_map="auto")
+            HuggingFaceVLM._PROCESSOR = AutoProcessor.from_pretrained(_project_parameters["backbone_vlm_model"], padding_side="left")
 
     
     @staticmethod
@@ -94,7 +94,7 @@ class HuggingFaceVLM:
         if HuggingFaceVLM._MODEL is None: # it is only still None in debug mode
             return ["LM Output" for text in texts]
         if max_new_tokens is None:
-            log_error(f"Can't set max_new_tokens to None", project_parameters)
+            log_error(f"Can't set max_new_tokens to None", _project_parameters)
         return HuggingFaceVLM.do_infer(HuggingFaceVLM._MODEL, HuggingFaceVLM._PROCESSOR, texts, images, max_new_tokens, batch_size)
 
     @staticmethod
@@ -133,13 +133,13 @@ class HuggingFaceVLM:
         Performs inference with the a single text and multiple images
         """
         if len(texts) != len(images):
-            log_error(f"Texts and images must have the same length. Got {len(texts)} texts and {len(images)} image lists.", project_parameters)
+            log_error(f"Texts and images must have the same length. Got {len(texts)} texts and {len(images)} image lists.", _project_parameters)
         if HuggingFaceVLM._MODEL is None:
             HuggingFaceVLM.start()
         if HuggingFaceVLM._MODEL is None: # it is only still None in debug mode
             return ["LM Output" for _ in images]
         if max_new_tokens is None:
-            log_error(f"Can't set max_new_tokens to None", project_parameters)
+            log_error(f"Can't set max_new_tokens to None", _project_parameters)
         if batch_size is None:
             batch_size = HuggingFaceVLM._BATCH_SIZE
         return HuggingFaceVLM.do_multi_infer(HuggingFaceVLM._MODEL, HuggingFaceVLM._PROCESSOR, texts, images, max_new_tokens, batch_size)
@@ -152,10 +152,10 @@ class vLLMVLM:
 
     @staticmethod
     def start():
-        if "qwen3" not in project_parameters["backbone_vlm_model"]:
-            log_warn(f"You are using a non Qwen3 model with the vLLM VLM class. This has not been tested.", project_parameters)
+        if "qwen3" not in _project_parameters["backbone_vlm_model"]:
+            log_warn(f"You are using a non Qwen3 model with the vLLM VLM class. This has not been tested.", _project_parameters)
         engine_args = EngineArgs(
-            model=project_parameters["backbone_vlm_model"],
+            model=_project_parameters["backbone_vlm_model"],
             max_model_len=4096,
             max_num_seqs=5,
             mm_processor_kwargs={
@@ -244,7 +244,7 @@ def perform_vlm_inference(texts: List[str], images: List[np.array], max_new_toke
     :return: List of output strings from the VLM
     :rtype: List[str]
     """
-    parameters = project_parameters
+    parameters = _project_parameters
     if parameters["use_vllm"]:
         return vLLMVLM.infer(texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size)    
     else:
@@ -287,7 +287,7 @@ def ocr(images: List[np.ndarray], *, text_prompt=None, do_merge: bool=True) -> L
     """
     if text_prompt is None:
         text_prompt = "If there is no text in the image, just say NONE. Otherwise, perform OCR and state the text in this image:"
-    parameters = project_parameters
+    parameters = _project_parameters
     batch_size = parameters["ocr_batch_size"]
     max_new_tokens = parameters["ocr_max_new_tokens"]
     use_images = []
@@ -300,7 +300,7 @@ def ocr(images: List[np.ndarray], *, text_prompt=None, do_merge: bool=True) -> L
     ocred = perform_vlm_inference(texts=texts, images=use_images, max_new_tokens=max_new_tokens, batch_size=batch_size)
     for i, res in enumerate(ocred):
         if res.strip().lower() == "none":
-            log_warn(f"Got NONE as output from OCR. Could this have been avoided?\nimages statistics: {images[i].max(), images[i].min(), images[i].mean(), (images[i] > 0).mean()}", project_parameters)
+            log_warn(f"Got NONE as output from OCR. Could this have been avoided?\nimages statistics: {images[i].max(), images[i].min(), images[i].mean(), (images[i] > 0).mean()}", _project_parameters)
     ocred = [text.strip() for text in ocred if text.strip().lower() != "none"]
     if do_merge:
         ocred = _ocr_merge(ocred)
