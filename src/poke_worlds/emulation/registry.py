@@ -27,7 +27,7 @@ GAME_TO_GB_NAME = {
     "pokemon_fools_gold": "PokemonFoolsGold.gbc",
     "pokemon_prism": "PokemonPrism.gbc",
 
-    "zelda_links_awakening": "ZeldaLinksAwakening.gb",
+    #"zelda_links_awakening": "ZeldaLinksAwakening.gb",
 }
 """ Expected save name for each game. Save the file to <storage_dir_from_config_file>/<game_name>_rom_data/<gb_name>"""
 
