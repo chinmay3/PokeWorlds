@@ -1,6 +1,6 @@
 from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 import torch
-from poke_worlds import AVAILABLE_POKEMON_VARIANTS, get_pokemon_environment, PokemonStateWiseController
+from poke_worlds import AVAILABLE_GAMES, get_environment
 from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, MoveGridAction, BattleMenuAction, PickAttackAction, CheckInteractionAction, LocateAction, SeekAction
 from poke_worlds.utils import load_parameters
 from poke_worlds.utils.vlm import HuggingFaceVLM
@@ -275,14 +275,13 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
 @click.command()
 @click.option("--model_name", default="Qwen/Qwen3-VL-8B-Instruct", type=str)
 @click.option("--init_state", default="starter", type=str)
-@click.option("--game_variant", default="pokemon_red", type=click.Choice(AVAILABLE_POKEMON_VARIANTS))
+@click.option("--game_variant", default="pokemon_red", type=click.Choice(AVAILABLE_GAMES))
 @click.option("--mission", default="Seek and select any one pokeball with a starter from the bench to your right, and then leave the building from the entrance below. HINT: You should typically try seek before relying on manual movement.", type=str)
 @click.option("--visual_context", default=None, type=str)
 @click.option("--max_steps", default=1000, type=int)
 def do(model_name, init_state, game_variant, mission, visual_context, max_steps):
     short_model = model_name.split("/")[-1]
-    environment = get_pokemon_environment(game_variant=game_variant, controller=PokemonStateWiseController(), 
-                                        environment_variant="high_level",                                        
+    environment = get_environment(game=game_variant, controller="state_wise", 
                                         save_video=True, max_steps=max_steps,
                                             init_state=init_state, session_name=f"vlm_demo_{short_model}", headless=True)
     vl = VL(environment, model_name=model_name)
