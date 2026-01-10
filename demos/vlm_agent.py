@@ -281,7 +281,7 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
 @click.option("--max_steps", default=1000, type=int)
 def do(model_name, init_state, game_variant, mission, visual_context, max_steps):
     short_model = model_name.split("/")[-1]
-    environment = get_environment(game=game_variant, controller="state_wise", 
+    environment = get_environment(game=game_variant, environment_variant="default", controller_variant="state_wise", 
                                         save_video=True, max_steps=max_steps,
                                             init_state=init_state, session_name=f"vlm_demo_{short_model}", headless=True)
     vl = VL(environment, model_name=model_name)
