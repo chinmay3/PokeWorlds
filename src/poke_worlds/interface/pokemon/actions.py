@@ -374,6 +374,12 @@ class MoveGridAction(BaseMovementAction):
         if y_steps != 0:
             more_transition_states, status = self.move(direction=y_direction, steps=abs(y_steps))
             transition_states.extend(more_transition_states)
+        try:
+            status is not None
+        except NameError:
+            log_warn(f"Weird case where both x_steps and y_steps are 0 in MoveGridAction or something. {x_steps}, {y_steps}", self._parameters)
+            transition_states = [self._state_tracker.report()]
+            status = -1
         return transition_states, status
     
     def is_valid(self, x_steps: int=None, y_steps: int=None):
