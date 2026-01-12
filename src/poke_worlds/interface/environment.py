@@ -558,7 +558,10 @@ class Environment(gym.Env, ABC):
             self.render_info()
         self.render_obs()
         while not done and steps < max_steps:
-            action_input_str = self._controller.get_action_strings()
+            action_input = self._controller.get_action_strings()
+            action_input_str = ""
+            for action_class, action_str in action_input.items():
+                action_input_str += f"- {action_str}\n"
             log_info(f"Allowed Actions: \n{action_input_str}", self._parameters)
             input_str = input("Enter Action: ").strip()
             possible_obs, possible_reward, possible_terminated, possible_truncated, possible_info = self.step_str(input_str)
