@@ -2,7 +2,6 @@
 from poke_worlds.utils.parameter_handling import load_parameters
 from poke_worlds.utils.log_handling import log_error, log_info, log_warn, log_dict
 from poke_worlds.utils.fundamental import file_makedir, check_optional_installs
-from poke_worlds.utils.vlm import convert_numpy_greyscale_to_pillow, ocr, perform_vlm_inference, identify_matches, perform_object_detection
 from pandas import isna
 from typing import Type, List
 import numpy as np

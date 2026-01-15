@@ -2,7 +2,7 @@ from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 import torch
 from poke_worlds import AVAILABLE_GAMES, get_environment
 from poke_worlds.utils import load_parameters
-from poke_worlds.utils.vlm import ExecutorVLM
+from poke_worlds.execution.vlm import ExecutorVLM
 from tqdm import tqdm
 from PIL import Image
 import numpy as np

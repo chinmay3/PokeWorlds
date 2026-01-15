@@ -1,11 +1,15 @@
 from poke_worlds.utils import load_parameters, log_warn, log_error, log_info
-from poke_worlds.utils.vlm import convert_numpy_greyscale_to_pillow, ExecutorVLM
+from poke_worlds.utils.fundamental import check_optional_installs
 from typing import List, Union
 import numpy as np
 from PIL import Image
 import torch
 
 _project_parameters = load_parameters()
+configs = check_optional_installs(warn=True)
+for config in configs:
+    _project_parameters[f"{config}_importable"] = configs[config]
+
 if _project_parameters["transformers_importable"]:
     # Import anything related to transformers here. 
     import torch

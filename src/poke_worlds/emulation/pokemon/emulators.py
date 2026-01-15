@@ -13,7 +13,7 @@ class PokemonEmulator(Emulator):
     REQUIRED_STATE_PARSER = PokemonStateParser
     REQUIRED_STATE_TRACKER = CorePokemonTracker
     _MAXIMUM_DIALOGUE_PRESSES = 2000 # For now set a crazy high value
-    """ Maximum number of times the agent will click B to get through a dialogue. This isn't used rn, we don't skip dialouge"""
+    """ Maximum number of times the agent will click B to get through a dialogue. """
 
     def step(self, action=None) -> Tuple[np.ndarray, bool]:
         frames, done = super().step(action)
@@ -31,7 +31,7 @@ class PokemonEmulator(Emulator):
             all_next_frames.append(next_frames)
             next_frames = self.run_action_on_emulator(LowLevelActions.PRESS_BUTTON_A)
             all_next_frames.append(next_frames)
-        if False: # Make this True to auto skip dialogue and accumilate it into the frames returned.
+        if True: # Make this True to auto skip dialogue and accumilate it into the frames returned.
             current_state = self.state_parser.get_agent_state(current_frame)
             n_clicks = 0
             # Clicks through any dialogue popups. 
@@ -42,7 +42,7 @@ class PokemonEmulator(Emulator):
                 n_clicks += 1
         if len(all_next_frames) > 1:
             frames = np.concatenate(all_next_frames)
-            self._update_listeners_after_actions(frames)
+            self._update_listeners_after_actions(frames[1:]) # Skip the first frame as that is already counted
         return frames, done
     
     def _open_to_first_state(self):

@@ -41,9 +41,6 @@ def compute_secondary_parameters(params: dict):
             params["log_file"] = log_file
     logger = get_logger(filename=params["log_file"])
     params["logger"] = logger
-    configs = check_optional_installs()
-    for config in configs:
-        params[f"{config}_importable"] = configs[config]
     # convert all rom_data_paths to absolute paths
     for key in params:
         if key.endswith("_rom_data_path"):

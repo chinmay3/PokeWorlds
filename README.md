@@ -78,7 +78,7 @@ Then, clone the <img src="assets/logo.png" width="70"> repo and install it as a 
 ```
 git clone https://github.com/DhananjayAshok/PokeWorlds
 cd PokeWorlds
-uv pip install -e ".[full]"
+uv pip install -e ".[transformers]"
 ```
 
 You can also do a minimal installation with `uv pip install -e .` 

@@ -4,7 +4,6 @@ from copy import deepcopy
 from poke_worlds.interface import Controller
 from poke_worlds.execution.report import ExecutionReport
 from poke_worlds.execution.vlm import ExecutorVLM
-from poke_worlds.utils.vlm import ExecutorVLM
 from poke_worlds.utils import load_parameters, log_error, log_warn, log_info
 from poke_worlds.interface import Environment, HighLevelAction
 from typing import List, Tuple, Type, Dict, Any

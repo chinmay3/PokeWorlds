@@ -1,5 +1,5 @@
 from poke_worlds.utils import log_error, log_info
-from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, BattleMenuAction, PickAttackAction, MoveGridAction
+from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, BattleMenuAction, PickAttackAction, MoveGridAction
 from poke_worlds.interface.controller import Controller
 from poke_worlds.interface.action import HighLevelAction
 from poke_worlds.emulation.pokemon.parsers import AgentState
@@ -7,7 +7,7 @@ from typing import Dict, Any
 
 
 class PokemonStateWiseController(Controller):
-    ACTIONS = [MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, TestAction, BattleMenuAction, PickAttackAction, MoveGridAction]
+    ACTIONS = [MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, BattleMenuAction, PickAttackAction, MoveGridAction]
 
     def string_to_high_level_action(self, input_str):
         input_str = input_str.lower().strip()

@@ -1,4 +1,4 @@
-from poke_worlds.utils import log_error, perform_vlm_inference, perform_object_detection, log_warn
+from poke_worlds.utils import log_error, log_warn
 from poke_worlds.interface.action import HighLevelAction, SingleHighLevelAction
 from poke_worlds.emulation.pokemon.parsers import AgentState, PokemonStateParser
 from poke_worlds.emulation.pokemon.trackers import CorePokemonTracker
@@ -6,7 +6,6 @@ from poke_worlds.emulation import LowLevelActions
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Dict
 from poke_worlds.utils import show_frames
-from poke_worlds.utils import identify_matches
 import numpy as np
 
 from gymnasium.spaces import Box, Discrete, Text
@@ -648,47 +647,3 @@ class PickAttackAction(HighLevelAction):
 
 class PokemonCrystalBagActions:
     pass
-
-
-class TestAction(HighLevelAction):
-    REQUIRED_STATE_PARSER = PokemonStateParser
-    REQUIRED_STATE_TRACKER = CorePokemonTracker
-    prompt = """
-    You are playing Pokemon and are trying to identify whether you have found the target `[TARGET]` in the current screen. 
-    Output YES if the image provided has the target, and NO otherwise. Only output YES if the full target occupies most of the image. If only a small part of it or a corner is visible, output NO.
-    Give a one sentence reasoning for your decision before you do so.
-    Output format:
-    Reasoning: extremely brief reasoning here
-    Final Answer: YES or NO
-    [STOP]
-    """
-
-    def is_valid(self, **kwargs):
-        return True
-    
-    def get_action_space(self):
-        return Discrete(1) # Dummy
-    
-    def parameters_to_space(self):
-        return 0
-    
-    def space_to_parameters(self, space_action):
-        return {"context": "You playin pokemon"} # Dummy
-    
-    def _execute(self, context="A single Pokeball"):
-        # Do the percieve action in the free roam state:
-        percieve_prompt = self.prompt.replace("[TARGET]", context)
-        cells = self._emulator.state_parser.capture_grid_cells(self._emulator.get_current_frame())
-        keys = list(cells.keys())
-        images = [cells[key] for key in keys]
-        texts = [percieve_prompt] * len(images)
-        output = perform_vlm_inference(texts=texts, images=images, max_new_tokens=256, batch_size=len(texts))
-        hits = []
-        for i, out in enumerate(output):
-            if "final answer: yes" in out.lower():
-                hits.append(keys[i])
-        self._emulator.step() # just to ensure state tracker is populated. THIS FAILS IN DIALOGUE STATES. 
-        ret_dict = self._state_tracker.report()
-        return [ret_dict], 0
-    
-    # TODO: Add the action to break down the grid into pieces and check if the target is in each piece and return the grid coordinates where it is found. 

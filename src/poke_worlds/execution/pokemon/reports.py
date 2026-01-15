@@ -1,4 +1,4 @@
-from poke_worlds.utils.vlm import _ocr_merge
+from poke_worlds.execution.vlm import _ocr_merge
 from poke_worlds.execution.report import ExecutionReport
 from poke_worlds.emulation.pokemon.trackers import PokemonOCRTracker
 from typing import Dict, Any
