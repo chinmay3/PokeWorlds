@@ -65,7 +65,7 @@ class Executor(ABC):
         pass
 
     
-    def _execute_next_action(self) -> Tuple[str, str, Tuple[str, Type[HighLevelAction], dict, int, dict, str], dict]:
+    def _execute_next_action(self) -> Tuple[str, str, Tuple[str, Type[HighLevelAction], dict, int, dict, str], dict, bool, bool]:
         n_tries = 0
         previous_invalid_action_strings = []
         while n_tries < self._max_retries_per_action:
@@ -85,7 +85,7 @@ class Executor(ABC):
                 previous_invalid_action_strings.append(action_str)
                 continue
         # If we reach here, then we have exceeded max retries
-        return None, None, None, None, False, True
+        return None, None, False, True
 
     @abstractmethod
     def _decide_exit(self) -> bool:
@@ -170,12 +170,14 @@ class Executor(ABC):
             if show_progress:
                 pbar.update(1)
             if error_out:
-                self._execution_report._close("Executor could not produce a valid action output in the allotted retries.", environment_done=environment_done)
+                exit_kwargs = self._get_exit_kwargs()
+                self._execution_report._close(exit_code=-1, **exit_kwargs)
                 if show_progress:
                     pbar.close()
                 return self.get_execution_report()
             if environment_done:
-                self._execution_report._close("Environment signaled done.", environment_done=environment_done)
+                exit_kwargs = self._get_exit_kwargs()
+                self._execution_report._close(exit_code=1, **exit_kwargs)
                 if show_progress:
                     pbar.close()
                 return self.get_execution_report()
@@ -185,7 +187,7 @@ class Executor(ABC):
                 if show_progress:
                     pbar.close()
                 return self.get_execution_report()
-            action_details, environment_done, error_out = self._execute_next_action()
+            action_details, _ , environment_done, error_out = self._execute_next_action()
             if error_out:
                 continue
             next_action_str, next_high_level_action, next_high_level_action_kwargs, transition_states, action_success, action_return = action_details
@@ -196,7 +198,7 @@ class Executor(ABC):
             exit_decision = self._decide_exit()
             if exit_decision:
                 exit_kwargs = self._get_exit_kwargs()
-                self._execution_report._close(environment_done=environment_done, **exit_kwargs)
+                self._execution_report._close(exit_code=0, **exit_kwargs)
                 if show_progress:
                     pbar.close()
                 return self.get_execution_report()
@@ -322,6 +324,7 @@ Response:
         self._parameters = load_parameters(parameters)
         if not issubclass(execution_report_class, ExecutionReport):
             log_error(f"Provided execution_report_class is not a subclass of ExecutionReport", self._parameters)
+        self._game = game
         self._high_level_goal = high_level_goal
         self._task = task
         self._initial_plan = initial_plan
@@ -347,6 +350,7 @@ Response:
             "visual_context": self._visual_context,
             "exit_conditions": self._exit_conditions
         }
+        self._most_recent_decision_reasoning = None
         super().__init__(game=game, environment=environment, execution_report_class=execution_report_class, report_init_kwargs=report_kwargs, action_buffer_size=action_buffer_size, parameters=parameters)
         
     
@@ -395,7 +399,7 @@ Response:
         action_str = f"Action Taken: {next_action_str} | Status Message: {action_message}"
         prompt = prompt.replace("[ACTION_AND_STATUS]", action_str)
         images = [self._previous_screen, next_frame]
-        response = self._vlm.multi_infer(prompt, images, max_new_tokens=250)
+        response = self._vlm.multi_infer(prompt, images, max_new_tokens=250)[0]
         if response.count("Visual Context:") != 1:
             log_warn(f"Unable to parse screen change description response: {response}", self._parameters)
             return self._default_str, self._default_str
@@ -482,7 +486,7 @@ Response:
         while n_retries < max_internal_retries:
             n_retries += 1
             final_prompt = prompt.replace("[SYSTEM]", system_prompt)
-            response = self._vlm.infer(final_prompt, self._previous_screen, max_new_tokens=500)
+            response = self._vlm.infer(final_prompt, self._previous_screen, max_new_tokens=500)[0]
             if "Action:" not in response or "Next Action Reasoning:" not in response:
                 system_prompt += "\n[IMPORTANT SYSTEM MESSAGE] Your previous response could not be parsed correctly, it did not contain Action: or Next Action Reasoning:. Remember to follow the specified format exactly. Try again. Make sure your output is not too long, so that it fits within the token limit."
                 continue
@@ -503,14 +507,14 @@ Response:
         actions_and_changes = self.get_actions_and_changes(last_action_hint=False)
         actions_and_changes = "\n".join(actions_and_changes)
         prompt = prompt.replace("[ACTIONS_AND_CHANGES]", actions_and_changes)
-        response = self._vlm.infer(prompt, self._previous_screen, max_new_tokens=250)
+        response = self._vlm.infer(prompt, self._previous_screen, max_new_tokens=250)[0]
         if "Decision:" not in response:
             log_warn(f"Unable to parse exit condition response: {response}", self._parameters)
             return self._default_str, False
         reasoning_part, decision_part = response.split("Decision:")
         reasoning_part = reasoning_part.replace("Reasoning:", "").strip()
         decision_part = decision_part.strip().upper()
-        self.most_recent_decision_reasoning = reasoning_part
+        self._most_recent_decision_reasoning = reasoning_part
         if "YES" in decision_part and "NO" not in decision_part:
             return True
         elif "NO" in decision_part and "YES" not in decision_part:
@@ -520,7 +524,7 @@ Response:
             return False
         
     def _get_exit_kwargs(self):
-        return {"exit_reasoning": self.most_recent_decision_reasoning}
+        return {"exit_reasoning": self._most_recent_decision_reasoning}
         
     def _decide_exit(self):
         return self._check_exit_conditions()

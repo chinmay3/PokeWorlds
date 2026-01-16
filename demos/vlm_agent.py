@@ -237,7 +237,7 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
             executor = PokemonExecutor(game="Pokemon", environment=self.env, 
                                     execution_report_class=PokemonExecutionReport, 
                                     high_level_goal=self.mission,
-                                    immediate_task=immediate_task, initial_plan=initial_plan, 
+                                    task=immediate_task, initial_plan=initial_plan, 
                                     visual_context=visual_context, 
                                     exit_conditions=[])
             execution_report = executor.execute(step_limit=self.max_steps_per_executor, show_progress=True)
@@ -254,7 +254,7 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
             print(f"Executor Analysis: {analysis}")
             print(f"Updated Lessons Learned: {lessons_learned}")
             print(f"Updated Visual Context: {visual_context}")
-            if execution_report.environment_done:
+            if execution_report.exit_status == 1:
                 print("Environment Steps Done")
                 break
             prompt = self.executor_information_construction_prompt.replace("[LESSONS_LEARNED]", lessons_learned).replace("[VISUAL_CONTEXT]", visual_context)

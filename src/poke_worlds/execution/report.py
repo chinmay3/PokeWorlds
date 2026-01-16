@@ -38,8 +38,8 @@ class ExecutionReport(ABC):
         """ List of action strings used during the execution. """
         self._action_messages: List[str] = []
         """ List of action messages received during the execution. """
-        self.environment_done: bool = None
-        """ Whether or not the environment is terminated / truncated. """
+        self.exit_code: bool = None
+        """ 0 if execution was terminated by the executor, 1 if environment steps were exceeded, -1 if the executor could not produce a valid action. """
 
     def _add_step(self, *, action_string: str, action_messages: str, **kwargs):
         """ 
@@ -118,15 +118,15 @@ class ExecutionReport(ABC):
             use_action_details.append((action_string, action_class, action_kwargs, transition_states, success_code, action_return_info, action_message))
         return use_action_details
 
-    def _close(self, environment_done: bool, **kwargs):
+    def _close(self, exit_code: bool, **kwargs):
         """ 
         Closes the execution report.
 
-        :param environment_done: Whether or not the environment is done (terminated / truncated).
-        :type environment_done: bool
+        :param exit_code: The exit code of the execution. -1 if the executor could not produce a valid action, 0 if execution was terminated by the executor, 1 if environment steps were exceeded.
+        :type exit_code: bool
         :param kwargs: Additional keyword arguments for the _on_exit hook.
         """
-        self.environment_done = environment_done
+        self.exit_code = exit_code
         if self._history is not None:
             log_error("ExecutionReport is already closed.", self._parameters)
         self._history = self.get_history()
@@ -183,20 +183,6 @@ class ExecutionReport(ABC):
         :type state_info: dict
         :return: The string representation of the state info.
         :rtype: str 
-        """
-        pass
-
-    @abstractmethod
-    def _construct_execution_summary(self) -> List[str]:
-        """
-        Hook for constructing the execution summary lines.
-
-        Is called by get_execution_summary to get the main body of the summary.
-
-        Make it return an empty list if no summary lines are needed.
-        
-        :return: List of strings summarizing each step of the execution.
-        :rtype: List[str]
         """
         pass
 
