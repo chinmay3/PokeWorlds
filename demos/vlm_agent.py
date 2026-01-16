@@ -73,8 +73,8 @@ Format your response as:
 IMMEDIATE TASK: <THE IMMEDIATE TASK TO ACHIEVE FOR THE MISSION> Must be a short, directly actionable task from the visual context and available actions. 
 Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
 """
-    def __init__(self, env, model_name = f"Qwen/Qwen3-VL-32B-Instruct", max_steps_per_executor=15):
-        backbone_model_name = load_parameters()['backbone_vlm_model']
+    def __init__(self, env, model_name = f"Qwen/Qwen3-VL-8B-Instruct", max_steps_per_executor=15):
+        backbone_model_name = load_parameters()['executor_vlm_model']
         ExecutorVLM.start()
         if backbone_model_name == model_name: # then load just one model
             self.model = ExecutorVLM._MODEL
