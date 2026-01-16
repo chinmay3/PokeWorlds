@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from poke_worlds.interface import Controller
 from poke_worlds.execution.report import ExecutionReport
-from poke_worlds.execution.vlm import ExecutorVLM
+from poke_worlds.execution.vlm import ExecutorVLM, ocr
 from poke_worlds.utils import load_parameters, log_error, log_warn, log_info
 from poke_worlds.interface import Environment, HighLevelAction
 from typing import List, Tuple, Type, Dict, Any
@@ -289,7 +289,6 @@ Response:
 You are playing [GAME]. The overall goal in mind is [HIGH_LEVEL_GOAL], and the immediate task you are trying to accomplish is [IMMEDIATE_TASK].
 You have the following plan to accomplish the immediate task: [PLAN].
 You are given the Picture and context: [VISUAL_CONTEXT].
-Your current state in the game is: [CURRENT_STATE].
 The allowed actions you can take are: [HIGH_LEVEL_ACTIONS]. Under no circumstances should you attempt to take any action that is not in this list and you must always follow the specified format. 
 Based on all of this information, revise your plan and then decide on the best next high level action to take to accomplish the immediate task. Provide a very brief reasoning for why this action is the best choice given the current situation and then state the action to take in the correct syntax.
 Structure your response as follows:
@@ -307,7 +306,6 @@ You took the following actions and observed the following changes: [ACTIONS_AND_
 Finally, your thoughts about the next action to take were: [NEXT_ACTION_THOUGHTS].
 You then took the action (with status message) : [LAST_ACTION].
 This left you with the following screen capture and context: [VISUAL_CONTEXT].
-Your current state in the game is: [CURRENT_STATE].
 The allowed actions you can take are: [HIGH_LEVEL_ACTIONS]. Under no circumstances should you attempt to take any action that is not in this list and you must always follow the specified format. 
 Based on all of this information, revise your plan and then decide on the best next high level action to take to accomplish the immediate task. Provide a very brief reasoning for why this action is the best choice given the current situation and then state the action to take in the correct syntax.
 Structure your response as follows:
@@ -413,9 +411,37 @@ Response:
         next_frame = state_info["core"]["current_frame"]
         additional_context = self.get_additional_context(state_info)
         changes_description, new_visual_context = self._describe_screen_change(next_frame=next_frame, action_details=action_details[:-1], additional_context=additional_context)
-        self._visual_context = new_visual_context
         self._previous_screen = next_frame
+        action_str, action_class, action_kwargs, transition_states, success_code, action_return, action_message = action_details
+        # get the ocr text from the last transition_state
+        last_state = transition_states[-1]
+        #state_info["ocr"] = {"transition_ocr_regions": all_ocr_regions}
+        all_ocr_regions = last_state["ocr"]["transition_ocr_regions"]
+        ocr_texts = {}
+        for transition_state_ocr_regions in all_ocr_regions:
+            for region_name, region_captures in transition_state_ocr_regions.items():
+                if region_name not in ocr_texts:
+                    ocr_texts[region_name] = []
+                # region_captures is a stack of numpy arrays
+                ocr_text = ocr(region_captures)
+                ocr_text = "\n".join(ocr_text)
+                ocr_texts[region_name].append(ocr_text)
+        if len(ocr_texts) > 0:
+            changes_description += "\nOCR Texts from relevant regions:\n"
+            for key, texts in ocr_texts.items():
+                ocr_texts[key] = "\n".join(texts)
+                changes_description += f"{key}:\n{ocr_texts[key]}\n"
         self._changes_description = changes_description
+        if "ocr_regions" in state_info["ocr"]:
+            ocr_text = ""
+            for region_name, region_captures in state_info["ocr"]["ocr_regions"].items():
+                ocr_result = ocr(region_captures)
+                ocr_result = "\n".join(ocr_result)
+                ocr_text += f"{region_name}:\n{ocr_result}\n"
+            if ocr_text != "":
+                new_visual_context += f"\nOCR Texts from relevant regions:\n{ocr_text}"
+        self._visual_context = new_visual_context
+
 
     def _get_update_kwargs(self, action_details):
         kwargs = {
@@ -431,8 +457,6 @@ Response:
         else:
             prompt = self._execution_prompt
         prompt = prompt.replace("[PLAN]", self._plan)
-        current_state_str = self._environment.get_agent_state()
-        prompt = prompt.replace("[CURRENT_STATE]", str(current_state_str))
         allowed_actions = self._environment.get_action_strings()
         allowed_actions_str = "Allowed Actions:\n"
         for action_class, action_desc in allowed_actions.items():
