@@ -322,15 +322,6 @@ class Environment(gym.Env, ABC):
             bool: Whether the episode is terminated.
         """
         pass
-                   
-    def get_agent_state(self) -> Any:
-        """
-        Returns a string-like identifier of the current agent state in the environment.
-        Is useful for VLM prompts to describe what the agent is currently doing.
-        Returns:
-            Any: The current agent state identifier.
-        """
-        raise NotImplementedError()
     
     def before_step(self, action: Type[HighLevelAction], action_kwargs: dict):
         """

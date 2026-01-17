@@ -3,6 +3,7 @@ from copy import deepcopy
 
 from poke_worlds.interface import Controller
 from poke_worlds.execution.report import ExecutionReport
+from poke_worlds.execution.executor_action import ExecutorAction
 from poke_worlds.execution.vlm import ExecutorVLM, ocr
 from poke_worlds.utils import load_parameters, log_error, log_warn, log_info
 from poke_worlds.interface import Environment, HighLevelAction
@@ -28,8 +29,16 @@ class Executor(ABC):
     REQUIRED_CONTROLLER = Controller
     """ The required controller class for this executor (needed to guarantee safety of get_action_message). """
 
-    def __init__(self, *, game: str, environment: Environment, execution_report_class: Type[ExecutionReport], report_init_kwargs: dict = None, action_buffer_size: int = None, parameters: dict=None):
+    REQUIRED_ENVIRONMENT = Environment
+    """ The required environment class for this executor. """
+
+    EXECUTOR_ACTIONS: ExecutorAction = []
+    """ The list of available ExecutorAction types for this executor. """
+
+    def __init__(self, *, game: str, environment: Environment, execution_report_class: Type[ExecutionReport], report_init_kwargs: dict = None, action_buffer_size: int = None, seed: int = None, parameters: dict=None):
         self._parameters = load_parameters(parameters)
+        if not issubclass(type(environment), self.REQUIRED_ENVIRONMENT):
+            log_error(f"Provided environment {type(environment)} is not compatible with required {self.REQUIRED_ENVIRONMENT} for this Executor.", self._parameters)
         if not issubclass(type(environment._controller), self.REQUIRED_CONTROLLER):
             log_error(f"Environment's controller {type(environment._controller)} is not compatible with required {self.REQUIRED_CONTROLLER} for this Executor.", self._parameters)
         self._action_buffer_size = action_buffer_size if action_buffer_size is not None else self._parameters["executor_action_buffer_size"]
@@ -42,6 +51,10 @@ class Executor(ABC):
         self._execution_report = execution_report_class(environment=environment, **report_init_kwargs)
         self._vlm = ExecutorVLM # Should not be an instance, but the class itself.
         self._vlm.start()
+        self.actions: Dict[Type[ExecutorAction], ExecutorAction] = {action_class: action_class(parameters=self._parameters, seed=seed) for action_class in self.EXECUTOR_ACTIONS}
+        """ Instances of the available ExecutorAction types for this executor. Can be access with the class as the key."""
+        for action_class, action in self.actions.items():
+            action.assign_emulator(environment._emulator)
             
     def get_execution_report(self) -> ExecutionReport:
         """ 
@@ -51,19 +64,6 @@ class Executor(ABC):
         :rtype: ExecutionReport
         """
         return deepcopy(self._execution_report)
-            
-    
-    @abstractmethod
-    def _decide_next_action_str(self, prev_action_strings: List[str] = []) -> str:
-        """
-        Decides the next high level action to take as a string.
-
-        :param prev_action_strings: A list of invalid action strings were attempted this turn. 
-        :return: The string representation of the next high level action.
-        :rtype: str
-        """
-        pass
-
     
     def _execute_next_action(self) -> Tuple[str, str, Tuple[str, Type[HighLevelAction], dict, int, dict, str], dict, bool, bool]:
         n_tries = 0
@@ -86,6 +86,50 @@ class Executor(ABC):
                 continue
         # If we reach here, then we have exceeded max retries
         return None, None, False, True
+
+    def run_executor_action(self, action_str) -> Tuple[dict, int, str]:
+        """
+        Infers and runs and executor action.
+
+        :param action_str: The string representation of the executor action to run.
+        :type action_str: str
+        :return: A tuple containing the return information from the action, its success code and the action message.
+        :rtype: Tuple[dict, int, str]
+        """
+        action_class, action_kwargs = self._string_to_executor_action(action_str)
+        if action_class is None:
+            return None, None, None
+        action_instance = self.actions[action_class]
+        action_return_info, success_code = action_instance.execute(**action_kwargs)
+        action_message = None
+        if action_return_info is not None:
+            action_message = self.get_action_message(action=action_class, action_kwargs=action_kwargs, action_success=success_code, action_return=action_return_info, last_action_hint=True)
+            self._execution_report._add_executor_action(executor_action_str=action_str, executor_action=action_class, action_kwargs=action_kwargs, action_return=action_return_info, action_success_code=success_code, action_message=action_message)
+        return action_return_info, success_code, action_message
+
+    @abstractmethod
+    def _string_to_executor_action(self, action_str: str) -> Tuple[Type[ExecutorAction], dict]:
+        """
+        Converts an action string to the corresponding ExecutorAction class and its execution arguments.
+        Essentially does Controller.string_to_high_level_action but for ExecutorActions.
+
+        :param action_str: The string representation of the action.
+        :type action_str: str
+        :return: A tuple containing the ExecutorAction class and its execution arguments.
+        :rtype: Tuple[Type[ExecutorAction], dict]
+        """
+        pass
+
+    @abstractmethod
+    def _decide_next_action_str(self, prev_action_strings: List[str] = []) -> str:
+        """
+        Decides the next high level action to take as a string.
+
+        :param prev_action_strings: A list of invalid action strings were attempted this turn. 
+        :return: The string representation of the next high level action.
+        :rtype: str
+        """
+        pass
 
     @abstractmethod
     def _decide_exit(self) -> bool:
@@ -320,7 +364,7 @@ Response:
 
     _default_str = "Unable to parse. You'll have to figure it out yourself."
 
-    def __init__(self, *, game: str, environment: Environment, execution_report_class: Type[ExecutionReport], high_level_goal: str, task: str, initial_plan: str, visual_context: str, exit_conditions: List[str] = [], action_buffer_size: int = None, parameters: dict=None):
+    def __init__(self, *, game: str, environment: Environment, execution_report_class: Type[ExecutionReport], high_level_goal: str, task: str, initial_plan: str, visual_context: str, exit_conditions: List[str] = [], action_buffer_size: int = None, seed: int = None, parameters: dict=None):
         self._parameters = load_parameters(parameters)
         if not issubclass(execution_report_class, ExecutionReport):
             log_error(f"Provided execution_report_class is not a subclass of ExecutionReport", self._parameters)
@@ -351,7 +395,7 @@ Response:
             "exit_conditions": self._exit_conditions
         }
         self._most_recent_decision_reasoning = None
-        super().__init__(game=game, environment=environment, execution_report_class=execution_report_class, report_init_kwargs=report_kwargs, action_buffer_size=action_buffer_size, parameters=parameters)
+        super().__init__(game=game, environment=environment, execution_report_class=execution_report_class, report_init_kwargs=report_kwargs, action_buffer_size=action_buffer_size, seed=seed, parameters=parameters)
         
     
     def get_additional_context(self, state_info: dict) -> str:

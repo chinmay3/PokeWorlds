@@ -254,7 +254,7 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
             print(f"Executor Analysis: {analysis}")
             print(f"Updated Lessons Learned: {lessons_learned}")
             print(f"Updated Visual Context: {visual_context}")
-            if execution_report.exit_status == 1:
+            if execution_report.exit_code == 1:
                 print("Environment Steps Done")
                 break
             prompt = self.executor_information_construction_prompt.replace("[LESSONS_LEARNED]", lessons_learned).replace("[VISUAL_CONTEXT]", visual_context)
@@ -275,7 +275,7 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
 @click.option("--model_name", default="Qwen/Qwen3-VL-8B-Instruct", type=str)
 @click.option("--init_state", default="starter", type=str)
 @click.option("--game_variant", default="pokemon_red", type=click.Choice(AVAILABLE_GAMES))
-@click.option("--mission", default="Seek and select any one pokeball with a starter from the bench to your right, and then leave the building from the entrance below. HINT: You should typically try seek before relying on manual movement.", type=str)
+@click.option("--mission", default="Professor oak has invited you into his lab and offered you a choice of starter pokemon from the bench. You are to select a starter, leave the building from the bottom, and keep playing until you get the first gym badge.", type=str)
 @click.option("--visual_context", default=None, type=str)
 @click.option("--max_steps", default=1000, type=int)
 def do(model_name, init_state, game_variant, mission, visual_context, max_steps):

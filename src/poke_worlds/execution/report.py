@@ -1,6 +1,7 @@
 from poke_worlds.utils import verify_parameters, log_error
 from poke_worlds.emulation import StateTracker
 from poke_worlds.interface import HighLevelAction, Environment, History
+from poke_worlds.execution.executor_action import ExecutorAction
 
 
 import numpy as np
@@ -38,6 +39,17 @@ class ExecutionReport(ABC):
         """ List of action strings used during the execution. """
         self._action_messages: List[str] = []
         """ List of action messages received during the execution. """
+
+        self.executor_actions_taken: Dict[int, List[Tuple[ExecutorAction, dict, dict, int, str]]] = []
+        """ 
+        Dict storing lists of details for the ExecutorActions taken before each step of execution. 
+        Contains: 
+        - Key: step index (int)
+        - Value: List of tuples of (ExecutorAction, action_kwargs, action_return, action_success_code, action_message)
+        
+        Note: A step is taken only if a HighLevelAction is executed on the environment.  
+        """
+
         self.exit_code: bool = None
         """ 0 if execution was terminated by the executor, 1 if environment steps were exceeded, -1 if the executor could not produce a valid action. """
 
@@ -49,6 +61,27 @@ class ExecutionReport(ABC):
         self._action_strings.append(action_string)
         self._action_messages.append(action_messages)
         self._add_step_additional(**kwargs)
+
+    def _add_executor_action(self, *, executor_action_str: str, executor_action: ExecutorAction, action_kwargs: dict, action_return: dict, action_success_code: int, action_message: str):
+        """ 
+        Adds an executor action taken before a step to the execution report.
+
+        :param executor_action_str: The string representation of the executor action taken.
+        :type executor_action_str: str
+        :param executor_action: The executor action taken.
+        :type executor_action: ExecutorAction
+        :param action_kwargs: The kwargs used for the executor action.
+        :type action_kwargs: dict
+        :param action_return: The return info from the executor action.
+        :type action_return: dict
+        :param action_success_code: The success code from the executor action.
+        :type action_success_code: int
+        :param action_message: The message returned from the executor action.
+        :type action_message: str
+        """
+        if self.steps_taken not in self.executor_actions_taken:
+            self.executor_actions_taken = []
+        self.executor_actions_taken.append((executor_action_str, executor_action, action_kwargs, action_return, action_success_code, action_message))
 
     def get_history(self) -> History:
         """
@@ -276,6 +309,11 @@ class SimpleReport(ExecutionReport, ABC):
             state_info = state_infos[i + 1]
             plan = self.plans[i + 1]
             summary_line = f"Step {i + 1}:\n"
+            if i in self.executor_actions_taken:
+                summary_line += "Before Step, took some actions:\n"
+                for executor_action_str, executor_action, ea_kwargs, ea_return, ea_success, ea_message in self.executor_actions_taken[i]:
+                    summary_line += f"  - Preliminary Action: {executor_action_str}, Message: {ea_message}\n"
+
             summary_line += f"Action Taken: {action_string}\n"
             summary_line += f"Action Message: {action_message}\n"
             summary_line += f"Change in Game Frame: {frame_difference}\n"

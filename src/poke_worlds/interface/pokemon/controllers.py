@@ -41,8 +41,31 @@ class PokemonStateWiseController(Controller):
             else:
                 return None, None
         if action_name == "move":
-            if action_args_str.count(",") != 1:
+            if action_args_str.count(",") > 1:
                 return None, None
+            if action_args_str.count(",") == 0:
+                # then assume its a single direction move
+                if "right" not in action_args_str and "left" not in action_args_str and "up" not in action_args_str and "down" not in action_args_str:
+                    return None, None
+                direction_steps = action_args_str.strip().split(" ")
+                if len(direction_steps) != 2:
+                    return None, None
+                direction, steps = direction_steps
+                direction = direction.strip()
+                steps = steps.strip()
+                if direction not in ["right", "left", "up", "down"]:
+                    return None, None
+                if not steps.isnumeric():
+                    return None, None
+                if direction == "right":
+                    return MoveGridAction, {"x_steps": int(steps), "y_steps": 0}
+                elif direction == "left":
+                    return MoveGridAction, {"x_steps": -int(steps), "y_steps": 0}
+                elif direction == "up":
+                    return MoveGridAction, {"x_steps": 0, "y_steps": int(steps)}
+                elif direction == "down":
+                    return MoveGridAction, {"x_steps": 0, "y_steps": -int(steps)}
+            # Now handle the two direction move
             x_move, y_move = action_args_str.split(",")
             x_move = x_move.strip()
             y_move = y_move.strip()

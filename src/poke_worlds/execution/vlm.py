@@ -309,18 +309,12 @@ def ocr(images: List[np.ndarray], *, text_prompt=None, do_merge: bool=True) -> L
     parameters = _project_parameters
     batch_size = parameters["ocr_batch_size"]
     max_new_tokens = parameters["ocr_max_new_tokens"]
-    use_images = []
-    for image in images:
-        if image.mean() < 234: # Generally if the image is mostly white, there is no text to be read. This may need to be removed if it causes issues in some games. Seems fine for Pokemon.
-            use_images.append(image)
-    if len(use_images) == 0:
-        return []
-    texts = [text_prompt] * len(use_images)    
-    ocred = ExecutorVLM.infer(texts=texts, images=use_images, max_new_tokens=max_new_tokens, batch_size=batch_size)
+    texts = [text_prompt] * len(images)    
+    ocred = ExecutorVLM.infer(texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size)
     for i, res in enumerate(ocred):
         if res.strip().lower() == "none":
             log_warn(f"Got NONE as output from OCR. Could this have been avoided?\nimages statistics: {images[i].max(), images[i].min(), images[i].mean(), (images[i] > 0).mean()}", _project_parameters)
     ocred = [text.strip() for text in ocred if text.strip().lower() != "none"]
     if do_merge:
-        ocred = _ocr_merge(ocred)
+        ocred = merge_ocr_strings(ocred)
     return ocred

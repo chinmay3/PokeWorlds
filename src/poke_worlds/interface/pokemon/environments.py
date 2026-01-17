@@ -4,7 +4,7 @@ from gymnasium import spaces
 
 from poke_worlds.utils import load_parameters, log_dict, log_info
 from poke_worlds.emulation.pokemon.emulators import PokemonEmulator
-from poke_worlds.emulation.pokemon.trackers import PokemonRedStarterTracker, PokemonOCRTracker
+from poke_worlds.emulation.pokemon.trackers import PokemonRedStarterTracker, PokemonOCRTracker, CorePokemonMetrics
 from poke_worlds.interface.environment import DummyEnvironment, Environment
 from poke_worlds.interface.controller import Controller
 
@@ -12,14 +12,14 @@ import gymnasium as gym
 import numpy as np
 
 
-
 class PokemonEnvironment(DummyEnvironment):
     """
     A basic Pokemon Environment.
     """
     REQUIRED_EMULATOR = PokemonEmulator
+    REQUIRED_STATE_TRACKER = CorePokemonMetrics
     
-class PokemonOCREnvironment(DummyEnvironment):
+class PokemonOCREnvironment(PokemonEnvironment):
     """ 
     A Pokemon Environment that includes OCR region captures and agent state.
     """
@@ -43,15 +43,6 @@ class PokemonOCREnvironment(DummyEnvironment):
         required_tracker = PokemonOCRTracker
         Environment.override_state_tracker_class(emulator_kwargs, required_tracker)
         return emulator_kwargs
-
-    def get_agent_state(self) -> Any:
-        """
-        Returns a string-like identifier of the current agent state in the environment.
-        Is useful for VLM prompts to describe what the agent is currently doing.
-        Returns:
-            Any: The current agent state identifier.
-        """
-        return self._emulator.state_parser.get_agent_state(self._emulator.get_current_frame())
     
     def get_observation(self, *, action=None, action_kwargs=None, transition_states=None, action_success=None):
         if transition_states is None:

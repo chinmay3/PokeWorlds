@@ -156,7 +156,7 @@ class LocateAction(ExecutorAction):
             target = target.lower().strip()
             if target not in self.image_references.keys():
                 if target not in self.pre_described_options.keys():
-                    pass # most permissive case. Return False here if you want to restrict to known options.
+                    return False # most permissive case. Return False here if you want to restrict to known options.
                 else:
                     pass # known pre-described option. Return False here if you want to restrict to only image references.
             else:
@@ -288,8 +288,8 @@ class LocateAction(ExecutorAction):
     
     def _execute(self, target: str):
         if target in self.image_references:
-            return self.do_location(target=self.pre_described_options[target], image_reference=self.image_references[target])
+            return self.do_location(description=self.pre_described_options[target], image_reference=self.image_references[target])
         elif target in self.pre_described_options:
-            return self.do_location(target=self.pre_described_options[target])
+            return self.do_location(description=self.pre_described_options[target])
         else:
-            return self.do_location(target=target)
+            return self.do_location(description=target)

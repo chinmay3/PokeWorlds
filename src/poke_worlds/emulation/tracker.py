@@ -7,7 +7,7 @@ from typing import Optional, Type, Dict, Any, Tuple, List
 
 from abc import ABC, abstractmethod
 
-EPSILON = 0.0001
+EPSILON = 0.001
 """ Default epsilon for frame change detection. """
 
 class MetricGroup(ABC):
