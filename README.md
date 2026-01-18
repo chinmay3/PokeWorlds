@@ -102,12 +102,7 @@ bash sync_all.sh
 ```
 If you do not have `bash` (e.g. on Windows), run:
 ```python
-python -m poke_worlds.setup_data pull --game pokemon_red
-python -m poke_worlds.setup_data pull --game pokemon_brown
-python -m poke_worlds.setup_data pull --game pokemon_starbeasts
-python -m poke_worlds.setup_data pull --game pokemon_crystal
-python -m poke_worlds.setup_data pull --game pokemon_prism
-python -m poke_worlds.setup_data pull --game pokemon_fools_gold
+python -m poke_worlds.setup_data pull --game all
 ```
 
 
