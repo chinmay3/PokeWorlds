@@ -2,7 +2,7 @@
 from copy import deepcopy
 
 from poke_worlds.interface import Controller
-from poke_worlds.execution.report import ExecutionReport
+from poke_worlds.execution.report import ExecutionReport, SimpleReport
 from poke_worlds.execution.executor_action import ExecutorAction
 from poke_worlds.execution.vlm import ExecutorVLM, ocr
 from poke_worlds.utils import load_parameters, log_error, log_warn, log_info
@@ -32,10 +32,13 @@ class Executor(ABC):
     REQUIRED_ENVIRONMENT = Environment
     """ The required environment class for this executor. """
 
+    REQUIRED_REPORT = ExecutionReport
+    """ The type of Report produced by this Executor."""
+
     EXECUTOR_ACTIONS: ExecutorAction = []
     """ The list of available ExecutorAction types for this executor. """
 
-    def __init__(self, *, game: str, environment: Environment, execution_report_class: Type[ExecutionReport], report_init_kwargs: dict = None, action_buffer_size: int = None, seed: int = None, parameters: dict=None):
+    def __init__(self, *, game: str, environment: Environment, execution_report_class: Type[ExecutionReport] = None, report_init_kwargs: dict = None, action_buffer_size: int = None, seed: int = None, parameters: dict=None):
         self._parameters = load_parameters(parameters)
         if not issubclass(type(environment), self.REQUIRED_ENVIRONMENT):
             log_error(f"Provided environment {type(environment)} is not compatible with required {self.REQUIRED_ENVIRONMENT} for this Executor.", self._parameters)
@@ -45,8 +48,10 @@ class Executor(ABC):
         self._max_retries_per_action = self._parameters["executor_retries_per_action"]
         self._game = game
         self._environment = environment
-        if not issubclass(execution_report_class, ExecutionReport):
-            log_error(f"Provided execution_report_class is not a subclass of ExecutionReport", self._parameters)
+        if execution_report_class is None:
+            execution_report_class = self.REQUIRED_REPORT
+        if not issubclass(execution_report_class, self.REQUIRED_REPORT):
+            log_error(f"Provided execution_report_class is not a subclass of {self.REQUIRED_REPORT}", self._parameters)
         report_init_kwargs["parameters"] = self._parameters
         self._execution_report = execution_report_class(environment=environment, **report_init_kwargs)
         self._vlm = ExecutorVLM # Should not be an instance, but the class itself.
@@ -300,6 +305,9 @@ class SimpleExecutor(Executor, ABC):
 
     The Executor loops through these stages until either an exit condition is met, the environment signals done, or the step limit is reached.
     """
+
+    REQUIRED_REPORT = SimpleReport
+    """ The type of Report produced by this Executor."""
 
     REQUIRED_CONTROLLER = Controller
     """ The required controller class for this executor (needed to guarantee safety of get_action_message). """

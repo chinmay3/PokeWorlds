@@ -220,6 +220,40 @@ class ExecutionReport(ABC):
         pass
 
 
+class SupervisorReport:
+    """ 
+    A barebones SupervisorReport class to log Executor calls and their reports.
+    
+    You will likely want to extend this class to add more specific logging functionality.
+
+    """
+    def __init__(self, parameters):
+        """
+        Initializes the SupervisorReport. If you want to customize the report, override this method and ensure:
+
+        1. The Supervisor._create_report method is also overridden to create your custom report.
+        2. You call super().__init__(parameters) in your overridden method, after any custom initialization.
+        """
+        verify_parameters(parameters)
+        self._parameters = parameters
+        self.n_executor_calls = 0
+        """ Number of times an Executor was called during the run."""
+        self.execution_reports: List[Tuple[Dict[str, Any], ExecutionReport]] = []
+        """ List of Execution call arguments and returned ExecutionReports from each Executor call.""" 
+
+    def log_executor_call(self, call_args: Dict[str, Any], report: ExecutionReport):
+        """
+        Logs an Executor call and its report.
+        
+        :param call_args: The arguments used in the Executor call
+        :type call_args: Dict[str, Any]
+        :param report: The ExecutionReport returned by the Executor
+        :type report: ExecutionReport
+        """
+        self.n_executor_calls += 1
+        self.execution_reports.append((call_args, report))
+
+
 class SimpleReport(ExecutionReport, ABC):
     """ 
     Holds the report of a SimpleExecutor run.
@@ -324,3 +358,20 @@ class SimpleReport(ExecutionReport, ABC):
         if self.exit_reasoning is not None:
             summary_lines.append(f"Execution ended because: {self.exit_reasoning}")
         return summary_lines
+    
+
+class SimpleSupervisorReport(SupervisorReport):
+    def __init__(self, mission, initial_visual_context, parameters):
+        self.mission = mission
+        self.executor_analyses: List[str] = []
+        self.lessons_learned: List[str] = []
+        self.visual_contexts = [initial_visual_context]
+        self.high_level_plan: List[str] = None # set when supervisor creates the plan
+        super().__init__(parameters)
+        
+    def update_before_loop(self, executor_analysis: str, lessons_learned: str, visual_context: str):
+        self.executor_analyses.append(executor_analysis)
+        self.lessons_learned.append(lessons_learned)
+        self.visual_contexts.append(visual_context)
+
+    

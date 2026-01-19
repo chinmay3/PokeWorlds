@@ -43,6 +43,20 @@ class ExecutorVLM:
     _MODEL_KIND = None
 
     @staticmethod
+    def _do_start(vlm_kind: str, model_name: str):
+        # this way, we can add more model kinds w different engines (e.g. OpenAI API) later
+        if vlm_kind not in ["qwen3vl"]:
+            log_error(f"Unsupported executor_vlm_kind: {vlm_kind}", _project_parameters)
+        if vlm_kind in ["qwen3vl"]:
+            model = AutoModelForImageTextToText.from_pretrained(model_name, dtype=torch.bfloat16, device_map="auto")
+            processor = AutoProcessor.from_pretrained(model_name, padding_side="left")
+            return model, processor
+        else:
+            log_error(f"Unsupported HuggingFace VLM kind: {vlm_kind}", _project_parameters)
+
+
+
+    @staticmethod
     def start():
         if ExecutorVLM._MODEL is not None:
             return
@@ -53,18 +67,13 @@ class ExecutorVLM:
             return
         elif not _project_parameters["transformers_importable"]:
             if not _project_parameters["warned_debug_llm"]:
-                log_warn(f"Tried to instantiate a Executor VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", _project_parameters)
+                log_warn(f"Tried to instantiate a VLM, but the required packages are not installed. Running in dev mode, so all LM calls will return a placeholder string.", _project_parameters)
                 _project_parameters["warned_debug_llm"] = True
             return
         else:
             log_info(f"Loading Backbone Executor VLM model: {_project_parameters['executor_vlm_model']}", _project_parameters)
             ExecutorVLM._MODEL_KIND = _project_parameters["executor_vlm_kind"]
-            if ExecutorVLM._MODEL_KIND not in ["qwen3vl"]:
-                log_error(f"Unsupported executor_vlm_kind: {ExecutorVLM._MODEL_KIND}", _project_parameters)
-            if ExecutorVLM._MODEL_KIND in ["qwen3vl"]:
-                ExecutorVLM._MODEL = AutoModelForImageTextToText.from_pretrained(_project_parameters["executor_vlm_model"], dtype=torch.bfloat16, device_map="auto")
-                ExecutorVLM._PROCESSOR = AutoProcessor.from_pretrained(_project_parameters["executor_vlm_model"], padding_side="left")
-            # this way, we can add more model kinds w different engines (e.g. OpenAI API) later
+            ExecutorVLM._MODEL, ExecutorVLM._PROCESSOR = ExecutorVLM._do_start(ExecutorVLM._MODEL_KIND, _project_parameters["executor_vlm_model"])
 
 
     
@@ -201,11 +210,46 @@ class ExecutorVLM:
             batch_size = ExecutorVLM._BATCH_SIZE
         return ExecutorVLM.do_multi_infer(ExecutorVLM._MODEL_KIND, ExecutorVLM._MODEL, ExecutorVLM._PROCESSOR, texts, images, max_new_tokens, batch_size)
     
+
+class SupervisorVLM:
+    """
+    Basically the same as ExecutorVLM, except we instantiate it. Allows for sharing of the model if they are the same.
+    """
+    def __init__(self, model_name=None, vlm_kind=None):
+        executor_vlm_name = _project_parameters["executor_vlm_model"]
+        if model_name is None:
+            log_warn(f"No model_name specified for SupervisorVLM, defaulting to ExecutorVLM model: {executor_vlm_name}", _project_parameters)
+            model_name = executor_vlm_name
+            vlm_kind = ExecutorVLM._MODEL_KIND
+        if model_name != executor_vlm_name and vlm_kind is None:
+            log_error(f"When specifying a different model name for the SupervisorVLM than the ExecutorVLM, you must also specify the vlm_kind.", _project_parameters)
+        self._MODEL_KIND = vlm_kind if vlm_kind is not None else ExecutorVLM._MODEL_KIND
+        if model_name == executor_vlm_name:
+            ExecutorVLM.start()
+            self._MODEL = ExecutorVLM._MODEL
+            self._PROCESSOR = ExecutorVLM._PROCESSOR
+        else:
+            self._MODEL, self._PROCESSOR = ExecutorVLM._do_start(self._MODEL_KIND, model_name)
+        
+    def infer(self, texts: Union[List[str], str], images: Union[np.ndarray, List[np.ndarray]], max_new_tokens: int, batch_size: int = None) -> List[str]:
+        """
+        See ExecutorVLM.infer for docstring.
+        """
+        return ExecutorVLM.do_infer(self._MODEL_KIND, self._MODEL, self._PROCESSOR, texts, images, max_new_tokens, batch_size)
+    
+    def multi_infer(self, texts: Union[List[str], str], images: Union[List[List[Union[np.ndarray, Image.Image]]], List[Union[np.ndarray, Image.Image]]], max_new_tokens: int, batch_size: int = None) -> List[str]:
+        """
+        See ExecutorVLM.multi_infer for docstring.
+        """
+        return ExecutorVLM.do_multi_infer(self._MODEL_KIND, self._MODEL, self._PROCESSOR, texts, images, max_new_tokens, batch_size)
+        
+
+
 def merge_ocr_strings(strings, min_overlap=3):
     """
     Merges a list of strings by removing subsets and combining overlapping fragments.
     
-    Written by Gemini3 Pro, and I have not tested it yet. 
+    Written by Gemini3 Pro, but it seems to work. 
     
     Args:
         strings (list): List of strings from OCR.
