@@ -374,8 +374,6 @@ Response:
 
     def __init__(self, *, game: str, environment: Environment, execution_report_class: Type[ExecutionReport], high_level_goal: str, task: str, initial_plan: str, visual_context: str, exit_conditions: List[str] = [], action_buffer_size: int = None, seed: int = None, parameters: dict=None):
         self._parameters = load_parameters(parameters)
-        if not issubclass(execution_report_class, ExecutionReport):
-            log_error(f"Provided execution_report_class is not a subclass of ExecutionReport", self._parameters)
         self._game = game
         self._high_level_goal = high_level_goal
         self._task = task
@@ -580,3 +578,26 @@ Response:
         
     def _decide_exit(self):
         return self._check_exit_conditions()
+
+
+
+class EQAExecutor(Executor, ABC):
+    """
+    An abstract Executor class specifically for Embodied QA tasks.
+    """
+    def __init__(self, *, game: str, environment: Environment, execution_report_class: Type[ExecutionReport], test_question: str, track_items: str, task: str, visual_context: str, action_buffer_size: int = None, seed: int = None, parameters: dict=None):
+        self._parameters = load_parameters(parameters)
+        self._game = game
+        self._test_question = test_question
+        self._track_items = track_items
+        self._task = task
+        self._visual_context = visual_context
+        report_kwargs = {
+            "test_question": self._test_question,
+            "track_items": self._track_items,
+            "task": self._task,
+            "visual_context": self._visual_context,
+        }
+        self.planned_sequence = []
+
+        super().__init__(game=game, environment=environment, execution_report_class=execution_report_class, report_init_kwargs=report_kwargs, action_buffer_size=action_buffer_size, seed=seed, parameters=parameters)
