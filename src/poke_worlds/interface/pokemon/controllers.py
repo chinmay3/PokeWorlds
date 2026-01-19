@@ -109,7 +109,7 @@ class PokemonStateWiseController(Controller):
             PickAttackAction: "pickattack(<1-4>): Select an attack option in the battle fight menu.",
         }
         menu_action_strings = {
-            MenuAction: "menu(<up, down or confirm>): Navigate the game menu.", # don't let it go back. 
+            MenuAction: "menu(<up, down, confirm or back>): Navigate the game menu.",
         }
         if return_all:
             actions = {**free_roam_action_strings, **dialogue_action_strings, **battle_action_strings, **pick_attack_action_strings, **menu_action_strings}

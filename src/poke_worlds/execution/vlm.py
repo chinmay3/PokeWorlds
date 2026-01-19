@@ -313,7 +313,7 @@ def ocr(images: List[np.ndarray], *, text_prompt=None, do_merge: bool=True) -> L
     ocred = ExecutorVLM.infer(texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size)
     for i, res in enumerate(ocred):
         if res.strip().lower() == "none":
-            log_warn(f"Got NONE as output from OCR. Could this have been avoided?\nimages statistics: {images[i].max(), images[i].min(), images[i].mean(), (images[i] > 0).mean()}", _project_parameters)
+            log_warn(f"Got NONE as output from OCR. Could this have been avoided?\nimages statistics: Max: {images[i].max()}, Min: {images[i].min()}, Mean: {images[i].mean()}, percentage of non zero cells {(images[i] > 0).mean()}, percentage of non 255 cells {(images[i] < 255).mean()}", _project_parameters)
     ocred = [text.strip() for text in ocred if text.strip().lower() != "none"]
     if do_merge:
         ocred = merge_ocr_strings(ocred)
