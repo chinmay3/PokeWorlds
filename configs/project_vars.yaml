@@ -6,3 +6,4 @@ executor_vlm_model: Qwen/Qwen3-VL-8B-Instruct # The VLM that handles simple goal
 executor_vlm_kind: qwen3vl
 executor_action_buffer_size: 5
 executor_retries_per_action: 3
+executor_max_steps: 15
