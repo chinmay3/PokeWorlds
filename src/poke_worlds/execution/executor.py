@@ -253,7 +253,34 @@ class Executor(ABC):
                 return self.get_execution_report()
             else:
                 continue
-            
+
+    def get_actions_and_changes(self, new_action_details: Tuple[str, Type[HighLevelAction], Dict[str, Any], Dict[str, Dict[str, Any]], int, dict, str] = None, last_action_hint: bool = False) -> List[str]:
+        """
+        Returns a string summarizing the past self.action_buffer_size actions taken and their resulting changes.
+
+        Args:
+            new_action_details: If provided, includes this action and its resulting change as the latest entry in the summary.
+            last_action_hint: If True, formats the last action message as if it is for the previous action taken. This can include a hint to guide the next action.
+        Returns:
+            A list of strings summarizing the past actions and their resulting changes. Will be of length self.action_buffer_size
+        """
+        actions_and_changes = []
+        max_actions = self._action_buffer_size - 1 if new_action_details is not None else self._action_buffer_size
+        all_actions = self._execution_report.get_actions_taken()[-max_actions:]
+        all_frame_differences = [item[0] for item in self._execution_report.step_contexts[1:][-max_actions:]] # Skip the first
+        if len(all_actions) == 0:
+            log_error(f"This shouldn't be happening: trying to get actions and changes but no actions taken yet.", self._parameters)
+        if len(all_frame_differences) != len(all_actions):
+            log_error(f"Mismatch in actions and frame differences lengths when getting actions and changes.", self._parameters)
+        total_actions = len(all_actions) - 1
+        for i, (action_str, action, action_kwargs, transition_states, action_success, action_return, action_message) in enumerate(all_actions):
+            actions_and_changes.append(f"{total_actions - 1*(new_action_details is not None) - i} Actions ago: {action_str} | Status Message: {action_message} | Change in screen: {all_frame_differences[i]}\n")
+        if new_action_details is not None:
+            new_action_str, new_high_level_action, new_high_level_action_kwargs, new_actions_transition_states, new_action_success, new_action_return, _ = new_action_details
+            new_action_message = self.get_action_message(new_high_level_action, new_high_level_action_kwargs, new_action_success, new_action_return, last_action_hint=last_action_hint)
+            actions_and_changes.append(f"Previous Action: {new_action_str} | Status Message: {new_action_message}")
+        return actions_and_changes
+
     @abstractmethod
     def get_action_message(self, *, action: Type[HighLevelAction], action_kwargs: dict, action_success: int, action_return: dict, last_action_hint: bool=False) -> str:
         """
@@ -415,33 +442,6 @@ Response:
         """
         return ""
     
-    def get_actions_and_changes(self, new_action_details: Tuple[str, Type[HighLevelAction], Dict[str, Any], Dict[str, Dict[str, Any]], int, dict, str] = None, last_action_hint: bool = False) -> List[str]:
-        """
-        Returns a string summarizing the past self.action_buffer_size actions taken and their resulting changes.
-
-        Args:
-            new_action_details: If provided, includes this action and its resulting change as the latest entry in the summary.
-            last_action_hint: If True, formats the last action message as if it is for the previous action taken. This can include a hint to guide the next action.
-        Returns:
-            A list of strings summarizing the past actions and their resulting changes. Will be of length self.action_buffer_size
-        """
-        actions_and_changes = []
-        max_actions = self._action_buffer_size - 1 if new_action_details is not None else self._action_buffer_size
-        all_actions = self._execution_report.get_actions_taken()[-max_actions:]
-        all_frame_differences = [item[0] for item in self._execution_report.step_contexts[1:][-max_actions:]] # Skip the first
-        if len(all_actions) == 0:
-            log_error(f"This shouldn't be happening: trying to get actions and changes but no actions taken yet.", self._parameters)
-        if len(all_frame_differences) != len(all_actions):
-            log_error(f"Mismatch in actions and frame differences lengths when getting actions and changes.", self._parameters)
-        total_actions = len(all_actions) - 1
-        for i, (action_str, action, action_kwargs, transition_states, action_success, action_return, action_message) in enumerate(all_actions):
-            actions_and_changes.append(f"{total_actions - 1*(new_action_details is not None) - i} Actions ago: {action_str} | Status Message: {action_message} | Change in screen: {all_frame_differences[i]}\n")
-        if new_action_details is not None:
-            new_action_str, new_high_level_action, new_high_level_action_kwargs, new_actions_transition_states, new_action_success, new_action_return, _ = new_action_details
-            new_action_message = self.get_action_message(new_high_level_action, new_high_level_action_kwargs, new_action_success, new_action_return, last_action_hint=last_action_hint)
-            actions_and_changes.append(f"Previous Action: {new_action_str} | Status Message: {new_action_message}")
-        return actions_and_changes
-    
     def _describe_screen_change(self, *, next_frame: np.ndarray, action_details: Tuple[str, Type[HighLevelAction], dict, Dict[str, Dict[str, Any]], int, dict], additional_context: str) -> Tuple[str, str]:
         prompt = self._screen_description_prompt.replace("[PICTURE_1_VISUAL_CONTEXT]", self._visual_context).replace("[ADDITIONAL_CONTEXT]", additional_context)
         next_action_str, next_high_level_action, next_high_level_action_kwargs, transition_states, action_success, action_return = action_details
@@ -582,9 +582,98 @@ Response:
 
 
 class EQAExecutor(Executor, ABC):
-    """
-    An abstract Executor class specifically for Embodied QA tasks.
-    """
+    header_prompt = """
+    You are playing [GAME] and you want to eventually be able to answer the question [TEST_QUESTION], specifically tracking [TO_TRACK]. You are currently focused on the task [TASK]."""
+
+    action_prediction_prompt = """
+    [HEADER]
+    Over the course of the game, you can use the following actions: [ALL_ALLOWED_ACTIONS].
+    However, in the current situation, you can only use the following actions: [CURRENT_ALLOWED_ACTIONS].
+    You have the following visual context from the game: [VISUAL_CONTEXT].
+    Based on this, decide on a sequence of high level actions to take to accomplish the task [TASK]. First, provide a very brief reasoning for why this sequence of actions is appropriate given the current situation and then state the action sequence to take in the correct syntax.
+    Structure your response as follows:
+    Reasoning: A very brief explanation of why the chosen action sequence is appropriate.
+    Action Sequence:
+    - Action 1: The first high level action to take, in the correct format as given in the allowed actions list.
+    - Action 2: The second high level action to take, in the correct format as given in the allowed actions list.
+    - ...
+    [STOP]
+    Do not make a sequence of more than 3 actions. 
+    [SYSTEM]
+    Continue the response in the required format:
+    Reasoning: I will"""
+
+    change_prediction_prompt = """
+    [HEADER]
+    You current are in the visual context: [VISUAL_CONTEXT].
+    You are going to execute the following action: [ACTION].
+    Based on this, describe the expected changes in the visual context after executing the action. Provide a very brief summary of the most salient changes that are likely to occur in the game state as a result of this action.
+    Structure your response as follows:
+    Changes: A very brief summary of the most salient changes expected after executing the action.
+    [STOP]
+    Continue the response in the required format:
+    Changes: After executing the action, I expect that"""
+
+    after_action_reflection = """
+    [HEADER]
+    You had an initial visual context of : [INITIAL_VISUAL_CONTEXT]. This may have changed slightly over time, but not too much. 
+    The previous frame had a context of : [PREVIOUS_VISUAL_CONTEXT].
+    You then ran an action and got the following message: [ACTION_AND_MESSAGE]
+    The OCR text from the relevant regions are: [OCR_TEXTS]
+    Answer the following questions: 1. What are the most significant changes that have occurred in the visual context as a result of this action? 2. What is the new visual context after taking this action? 3. Have you observed or recieved or can you infer any information that is relevant to the things you need to track or the test question? Provide your answers in a short and concise manner.
+    Answer in the following format:
+    Changes: A very brief summary of the most salient changes observed after executing the action.
+    New Visual Context: A concise description of the new visual context after taking the action.
+    Relevant Information: Any relevant information observed or inferred that is pertinent to the test question or things being tracked. If there is none, state "None".
+    [STOP]
+    Continue the response in the required format:
+    Changes: After executing the action, I observed that"""
+
+    change_evaluation = """
+    [HEADER]
+    You were in a visual context of : [VISUAL_CONTEXT]. You were about to execute the action: [ACTION] and you predicted the change would be: ``[PREDICTED_CHANGE]``.
+    After executing the action, you observed the following change: ``[OBSERVED_CHANGE]``.
+    Overall, did the observed result have a significant difference from the predicted change? Answer YES or NO and provide a very brief reasoning for your answer.
+    Structure your response as follows:
+    Reasoning: A very brief explanation of whether there was a significant difference between the predicted and observed changes.
+    Decision: YES (if there was a significant difference), NO (otherwise).
+    [STOP]
+"""
+
+    action_sequence_revisit = """
+    [HEADER]
+    You had previously planned the following action sequence: [PREVIOUS_ACTION_SEQUENCE] with reasoning: [PREVIOUS_REASONING].
+    You were in the visual context: [VISUAL_CONTEXT] and then you performed the following action: [ACTION].
+    Your description of the change is as follows: [CHANGE_DESCRIPTION].
+    You are next planning on executing the following action: [NEXT_ACTION].
+    In this current state, your allowed actions are: [CURRENT_ALLOWED_ACTIONS]. If the next action is not in this, you must replan. 
+    Based on this, do you need to revise your planned action sequence? If so, provide a very brief reasoning for why you need to revise it and then state the new action sequence to take in the correct syntax.
+    Structure your response as follows:
+    Reasoning: A very brief explanation of why the chosen action sequence is appropriate or why it needs to be revised.
+    (If not revising, just say [STOP]) 
+    (If revising only) Action Sequence: 
+    - Action 1: The first high level action to take, in the correct format as given in the allowed actions list.
+    - Action 2: The second high level action to take, in the correct format as
+    - ...
+    [STOP]
+    Continue the response in the required format:
+    Reasoning: The current situation information tells me that """
+
+    exit_decision_prompt = """
+[HEADER]
+
+You performed the action : [ACTION] in the visual context: [VISUAL_CONTEXT] and observed the following change: [CHANGE_DESCRIPTION].
+Based on this, do you think you have accomplished the task [TASK] and are ready to stop? Provide a very brief reasoning for your answer and then state your decision.
+Structure your response as follows:
+Reasoning: A very brief explanation of why you think you have or have not accomplished the task.
+Decision: YES (if you have accomplished the task), NO (otherwise).
+[STOP]
+Continue the response in the required format:
+Reasoning: I believe"""
+
+
+
+
     def __init__(self, *, game: str, environment: Environment, execution_report_class: Type[ExecutionReport], test_question: str, track_items: str, task: str, visual_context: str, action_buffer_size: int = None, seed: int = None, parameters: dict=None):
         self._parameters = load_parameters(parameters)
         self._game = game
@@ -592,12 +681,67 @@ class EQAExecutor(Executor, ABC):
         self._track_items = track_items
         self._task = task
         self._visual_context = visual_context
+        self._initial_visual_context = visual_context
         report_kwargs = {
             "test_question": self._test_question,
             "track_items": self._track_items,
             "task": self._task,
             "visual_context": self._visual_context,
         }
-        self.planned_sequence = []
-
+        self.header_prompt = self.header_prompt.replace("[GAME]", self._game).replace("[TEST_QUESTION]", self._test_question).replace("[TASK]", self._task).replace("[TO_TRACK]", self._track_items)
+        self.planned_sequence_reasoning: str = None
+        """ Reasoning for the planned action sequence. """
+        self.planned_sequence: List[str] = []
+        """ List of planned action strings to execute in sequence. """
+        self.expected_changes: str = None
+        """ Expected changes from executing the next action in the planned sequence. """
+        self.planned_sequence_reasoning, self.planned_sequence = self.create_next_action_sequence(visual_context=self._visual_context)
         super().__init__(game=game, environment=environment, execution_report_class=execution_report_class, report_init_kwargs=report_kwargs, action_buffer_size=action_buffer_size, seed=seed, parameters=parameters)
+
+    def create_next_action_sequence(self, visual_context, prev_action_strings = []):
+        # TODO:
+        # get all allowed actions and current allowed actions from environment.get_action_strings()
+        # Format the action prediction prompt by replacing the placeholders. replace system with nothing. 
+        # Use the VLM to infer the action sequence
+        # Parse the response to extract the action sequence
+        # return the action sequence as a list of action strings
+        # if prev_action_strings is not empty, include a system prompt that tells the model that those previous action strings were invalid and to try again.
+        # if self.planned_sequence is not empty, then add the prev_sequence_reasoning to the system prompt as well, to help guide the model to create a better other sequence.
+        pass
+
+    def _decide_next_action_str(self, prev_action_strings = []):
+        # if prev_action_strings is not empty or planned sequence is empty then we need to re-plan the action sequence
+        # otherwise, or after replanning. 
+        # pop and store the next action string in a variable
+        # generate the expected changes from executing that action string using the change prediction prompt using the VLM
+        # return the action string
+        pass
+
+    def _after_action(self, action_details):
+        # do the after action reflection using the after action reflection prompt and 
+        # parse out the results and 
+        # save them to appropriate variables
+        # do the change eval
+        # do the action sequence revisit
+        # over this process make sure to update, save and track variables properly. 
+        # Specifically, make sure the OCR text is manually added to the new visual context.
+        pass
+
+    def _decide_exit(self):
+        # use the exit decision prompt to decide whether to exit or not
+        pass
+
+    def _get_update_kwargs(self, action_details):
+        # Write this, and make sure it matches the _update_additional args in the report.
+        pass
+
+    
+
+
+
+
+
+
+
+
+

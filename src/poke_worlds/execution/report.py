@@ -217,7 +217,7 @@ class ExecutionReport(ABC):
         :return: The string representation of the state info.
         :rtype: str 
         """
-        pass
+        pass    
 
 
 class SupervisorReport:
@@ -360,6 +360,13 @@ class SimpleReport(ExecutionReport, ABC):
         return summary_lines
     
 
+class EQAReport(ExecutionReport):
+    # TODO: implement EQAReport specifics
+    pass
+
+
+
+
 class SimpleSupervisorReport(SupervisorReport):
     def __init__(self, mission, initial_visual_context, parameters):
         self.mission = mission
@@ -375,3 +382,6 @@ class SimpleSupervisorReport(SupervisorReport):
         self.visual_contexts.append(visual_context)
 
     
+
+class EQASupervisorReport(SupervisorReport):
+    pass

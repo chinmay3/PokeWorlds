@@ -2,7 +2,7 @@ from poke_worlds.utils import load_parameters, log_error, log_info, verify_param
 from poke_worlds.interface import Environment
 from poke_worlds.execution.vlm import SupervisorVLM
 from poke_worlds.execution.report import ExecutionReport, SupervisorReport, SimpleSupervisorReport
-from poke_worlds.execution.executor import Executor, SimpleExecutor
+from poke_worlds.execution.executor import Executor, SimpleExecutor, EQAExecutor
 from abc import ABC, abstractmethod
 from typing import Type, List, Dict, Tuple, Any
 from tqdm import tqdm
@@ -279,3 +279,38 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
                 break
             pbar.update(1)
         log_info("Finished playing VLM agent.")
+
+
+class EQASupervisor(Supervisor):
+    REQUIRED_EXECUTOR = EQAExecutor
+    REQUIRED_REPORT = SupervisorReport
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def _play(self, question=str, initial_visual_context=str):
+        """
+        Step 1: Describe the scene and understand where you are. What do you know (e.g. location), what do you not know. 
+Step 2: Make a plan for answering the question. Declare what it should track over time. 
+Then start loop. 
+Step 3: Given the plan and the state of the screen. Plan a simple task that can be achieved by composing just a few actions together. It should be not more than like 5. 
+Step 4: Executor call
+Step 5: Look through the executor report to understand what actually happened. 
+	Given:
+		Task:
+		Initial Visual Context:
+			Step: Action taken, change description, 
+		Final Screen:
+		Notes from just the executor: 
+	Describe:
+		Summary of final state of the screen: 
+		Summary of what happened in actions: 
+		Whether the task was achieved: 
+		Next Immediate Task: 			
+Step 6: Collect the executor notes into its own. Then:
+	Summarize existing notes for the answer: 
+	Decide whether to terminate
+If not terminating, go back to step 3 loop. 
+        """
+        # TODO: implement EQASupervisor play loop
+        pass

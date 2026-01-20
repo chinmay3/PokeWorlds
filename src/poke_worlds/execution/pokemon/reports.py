@@ -1,5 +1,5 @@
 from poke_worlds.execution.vlm import _ocr_merge
-from poke_worlds.execution.report import ExecutionReport, SimpleReport
+from poke_worlds.execution.report import ExecutionReport, SimpleReport, EQAReport
 from poke_worlds.emulation.pokemon.trackers import PokemonOCRTracker
 from typing import Dict, Any
 
@@ -21,3 +21,8 @@ class SimplePokemonExecutionReport(SimpleReport):
             return "OCR Results: " + "\n".join([f"{k}: {v}" for k, v in all_ocrs.items()])
         else:
             return ""
+        
+class EQAPokemonExecutionReport(EQAReport):
+    REQUIRED_STATE_TRACKER = PokemonOCRTracker
+    def state_info_to_str(self, state_info):
+        return SimplePokemonExecutionReport.state_info_to_str(self, state_info)

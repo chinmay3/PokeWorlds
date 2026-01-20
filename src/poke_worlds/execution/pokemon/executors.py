@@ -1,7 +1,7 @@
 from poke_worlds.interface.pokemon.controllers import PokemonStateWiseController
 from poke_worlds.interface.pokemon.environments import PokemonEnvironment
 from poke_worlds.interface import HighLevelAction
-from poke_worlds.execution.executor import SimpleExecutor, Executor
+from poke_worlds.execution.executor import SimpleExecutor, Executor, EQAExecutor
 from poke_worlds.interface.pokemon.actions import MoveStepsAction, MenuAction, InteractAction, PassDialogueAction, MoveGridAction, BattleMenuAction, PickAttackAction
 from poke_worlds.execution.pokemon.executor_actions import PokemonLocateAction, CheckInteractionAction
 from poke_worlds.emulation.pokemon.parsers import AgentState
@@ -153,21 +153,6 @@ class PokemonExecutor(SimpleExecutor):
                 allowed_actions_str += f"- {action_desc}\n"
             action_str = self.get_action_str(allowed_actions_str=allowed_actions_str, prev_action_strings=prev_action_strings, system_prompt=system_message)
         return action_str
-
-
-        
-
-    #def _decide_exit(self):
-    #    pass
-
-    #def _after_action(self, action_details):
-    #    pass
-
-    #def _get_update_kwargs(self, action_details):
-    #    pass
-
-    #def _get_exit_kwargs(self):
-    #    pass
     
     
     def get_action_message(self, *, action, action_kwargs: dict, action_success: int, action_return: dict, last_action_hint: bool=False):
@@ -235,3 +220,10 @@ class PokemonExecutor(SimpleExecutor):
         else:
             action_success_message = f"UNHANDLED CASE: action={action}, args={action_kwargs}, action_success={action_success}"
         return action_success_message        
+
+
+class EQAPokemonExecutor(EQAExecutor):
+    REQUIRED_CONTROLLER = PokemonStateWiseController
+    REQUIRED_ENVIRONMENT = PokemonEnvironment
+    EXECUTOR_ACTIONS = [PokemonLocateAction, CheckInteractionAction]
+    pass
