@@ -226,4 +226,12 @@ class EQAPokemonExecutor(EQAExecutor):
     REQUIRED_CONTROLLER = PokemonStateWiseController
     REQUIRED_ENVIRONMENT = PokemonEnvironment
     EXECUTOR_ACTIONS = [PokemonLocateAction, CheckInteractionAction]
-    pass
+
+    def get_action_str(self, *, allowed_actions_str, prev_action_strings = [], system_prompt = ""):
+        return PokemonExecutor.get_action_str(self, allowed_actions_str=allowed_actions_str, prev_action_strings=prev_action_strings, system_prompt=system_prompt)
+    
+    def _string_to_executor_action(self, action_str):
+        return PokemonExecutor._string_to_executor_action(self, action_str)
+    
+    def get_action_message(self, *, action, action_kwargs, action_success, action_return, last_action_hint = False):
+        return PokemonExecutor.get_action_message(self, action=action, action_kwargs=action_kwargs, action_success=action_success, action_return=action_return, last_action_hint=last_action_hint)
