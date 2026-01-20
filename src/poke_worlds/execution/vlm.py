@@ -1,6 +1,6 @@
 from poke_worlds.utils import load_parameters, log_warn, log_error, log_info
 from poke_worlds.utils.fundamental import check_optional_installs
-from typing import List, Union
+from typing import List, Union, Tuple
 import numpy as np
 from PIL import Image
 import torch
@@ -29,6 +29,8 @@ def convert_numpy_greyscale_to_pillow(arr: np.ndarray) -> Image:
     """
     rgb = np.stack([arr[:, :, 0], arr[:, :, 0], arr[:, :, 0]], axis=2)
     return Image.fromarray(rgb)
+
+
 
 
 class ExecutorVLM:
@@ -75,6 +77,25 @@ class ExecutorVLM:
             ExecutorVLM._MODEL_KIND = _project_parameters["executor_vlm_kind"]
             ExecutorVLM._MODEL, ExecutorVLM._PROCESSOR = ExecutorVLM._do_start(ExecutorVLM._MODEL_KIND, _project_parameters["executor_vlm_model"])
 
+
+    @staticmethod
+    def _prepare_infer_inputs(texts: Union[List[str], str], images: Union[np.ndarray, List[np.ndarray]]) -> Tuple[List[str], List[np.ndarray]]:
+        if isinstance(texts, str):
+            texts = [texts]
+            # then images must either be a single image in a list, or an array of shape (H, W, C), or a stack of shape (1, H, W, C)
+            if isinstance(images, list):
+                if len(images) != 1:
+                    log_error(f"When passing a single text string, images must be a single image in a list. Got {len(images)} images.", _project_parameters)
+            elif isinstance(images, np.ndarray):
+                if images.ndim == 3:
+                    images = [images]
+                elif images.ndim == 4 and images.shape[0] == 1:
+                    images = [images[0]]
+                else:
+                    log_error(f"When passing a single text string, images must be a single image in a list or an array of shape (H, W, C) or (1, H, W, C). Got array of shape {images.shape}.", _project_parameters)
+            else:
+                log_error(f"When passing a single text string, images must be a single image in a list or an array of shape (H, W, C) or (1, H, W, C). Got type {type(images)}.", _project_parameters)        
+        return texts, images
 
     
     @staticmethod
@@ -124,23 +145,23 @@ class ExecutorVLM:
             return ["LM Output" for text in texts]
         if max_new_tokens is None:
             log_error(f"Can't set max_new_tokens to None", _project_parameters)
-        if isinstance(texts, str):
-            texts = [texts]
-            # then images must either be a single image in a list, or an array of shape (H, W, C), or a stack of shape (1, H, W, C)
-            if isinstance(images, list):
-                if len(images) != 1:
-                    log_error(f"When passing a single text string, images must be a single image in a list. Got {len(images)} images.", _project_parameters)
-            elif isinstance(images, np.ndarray):
-                if images.ndim == 3:
-                    images = [images]
-                elif images.ndim == 4 and images.shape[0] == 1:
-                    images = [images[0]]
-                else:
-                    log_error(f"When passing a single text string, images must be a single image in a list or an array of shape (H, W, C) or (1, H, W, C). Got array of shape {images.shape}.", _project_parameters)
-            else:
-                log_error(f"When passing a single text string, images must be a single image in a list or an array of shape (H, W, C) or (1, H, W, C). Got type {type(images)}.", _project_parameters)
+        texts, images = ExecutorVLM._prepare_infer_inputs(texts, images)
         return ExecutorVLM.do_infer(ExecutorVLM._MODEL_KIND, ExecutorVLM._MODEL, ExecutorVLM._PROCESSOR, texts, images, max_new_tokens, batch_size)
 
+    
+    @staticmethod
+    def _prepare_multi_infer_inputs(texts: Union[List[str], str], images: Union[List[List[Union[np.ndarray, Image.Image]]], List[Union[np.ndarray, Image.Image]]]) -> Tuple[List[str], List[List[Union[np.ndarray, Image.Image]]]]:
+        if isinstance(texts, str):
+            texts = [texts]
+            # then images must be a single list of images in numpy array or Pillow Image format
+            if not isinstance(images, list) or len(images) == 0:
+                log_error(f"When passing a single text string, images must be a nonempty list of images. Got type {type(images)}.", _project_parameters)
+            if isinstance(images[0], list):
+                log_error(f"When passing a single text string, images must be a single list of images, not a list of lists. Got list of lists with length {len(images)}.", _project_parameters)
+            images = [images]  # wrap in another list to make it a list of lists
+            
+        return texts, images
+    
     @staticmethod
     def do_multi_infer(vlm_kind: str, model, processor, texts, images, max_new_tokens, batch_size):
         if vlm_kind == "qwen3vl":
@@ -189,15 +210,7 @@ class ExecutorVLM:
         :return: List of generated text outputs
         :rtype: List[str]
         """
-        if isinstance(texts, str):
-            texts = [texts]
-            # then images must be a list whose element is NOT a list
-            if not isinstance(images, list) or len(images) == 0:
-                log_error(f"When passing a single text string, images must be a nonempty list of images. Got type {type(images)}.", _project_parameters)
-            if isinstance(images[0], list):
-                log_error(f"When passing a single text string, images must be a single list of images, not a list of lists. Got list of lists with length {len(images)}.", _project_parameters)
-            images = [images]  # wrap in another list to make it a list of lists
-            
+        texts, images = ExecutorVLM._prepare_multi_infer_inputs(texts, images)            
         if len(texts) != len(images):
             log_error(f"Texts and images must have the same length. Got {len(texts)} texts and {len(images)} image lists.", _project_parameters)
         if ExecutorVLM._MODEL is None:
@@ -223,24 +236,26 @@ class SupervisorVLM:
             vlm_kind = ExecutorVLM._MODEL_KIND
         if model_name != executor_vlm_name and vlm_kind is None:
             log_error(f"When specifying a different model name for the SupervisorVLM than the ExecutorVLM, you must also specify the vlm_kind.", _project_parameters)
-        self._MODEL_KIND = vlm_kind if vlm_kind is not None else ExecutorVLM._MODEL_KIND
         if model_name == executor_vlm_name:
             ExecutorVLM.start()
             self._MODEL = ExecutorVLM._MODEL
             self._PROCESSOR = ExecutorVLM._PROCESSOR
         else:
-            self._MODEL, self._PROCESSOR = ExecutorVLM._do_start(self._MODEL_KIND, model_name)
+            self._MODEL, self._PROCESSOR = ExecutorVLM._do_start(vlm_kind, model_name)
+        self._MODEL_KIND = vlm_kind if vlm_kind is not None else ExecutorVLM._MODEL_KIND
         
     def infer(self, texts: Union[List[str], str], images: Union[np.ndarray, List[np.ndarray]], max_new_tokens: int, batch_size: int = None) -> List[str]:
         """
         See ExecutorVLM.infer for docstring.
         """
+        texts, images = ExecutorVLM._prepare_infer_inputs(texts, images)
         return ExecutorVLM.do_infer(self._MODEL_KIND, self._MODEL, self._PROCESSOR, texts, images, max_new_tokens, batch_size)
     
     def multi_infer(self, texts: Union[List[str], str], images: Union[List[List[Union[np.ndarray, Image.Image]]], List[Union[np.ndarray, Image.Image]]], max_new_tokens: int, batch_size: int = None) -> List[str]:
         """
         See ExecutorVLM.multi_infer for docstring.
         """
+        texts, images = ExecutorVLM._prepare_multi_infer_inputs(texts, images)
         return ExecutorVLM.do_multi_infer(self._MODEL_KIND, self._MODEL, self._PROCESSOR, texts, images, max_new_tokens, batch_size)
         
 

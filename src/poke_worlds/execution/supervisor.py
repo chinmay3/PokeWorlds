@@ -1,4 +1,4 @@
-from poke_worlds.utils import load_parameters, log_error, log_info, verify_parameters
+from poke_worlds.utils import load_parameters, log_error, log_info, verify_parameters, log_warn
 from poke_worlds.interface import Environment
 from poke_worlds.execution.vlm import SupervisorVLM
 from poke_worlds.execution.report import ExecutionReport, SupervisorReport, SimpleSupervisorReport
@@ -26,7 +26,6 @@ class Supervisor(ABC):
         self._EXECUTION_REPORT_CLASS = execution_report_class
         self._vlm = SupervisorVLM(model_name=model_name, vlm_kind=vlm_kind)
         self._game = game
-        self._report = self._create_report()
         if executor_max_steps is None:
             self.executor_max_steps = self._parameters["executor_max_steps"]
         else:
@@ -171,6 +170,13 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
         initial_visual_context = play_kwargs["initial_visual_context"]
         return SimpleSupervisorReport(mission=mission, initial_visual_context=initial_visual_context, parameters=self._parameters)
     
+    def parse_plan_steps(self, plan_text):
+        steps = []
+        for line in plan_text.lower().replace("high level plan:", "").split("[sep]"):
+            line = line.strip()
+            if line != "":
+                steps.append(line.strip())
+        return steps    
     
     def parse_supervisor_start(self, output_text: str) -> Tuple[List[str], str]:
         if "note:" in output_text.lower():
@@ -178,18 +184,18 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
             steps = self.parse_plan_steps(high_level_plan)
             return steps, note.strip()
         else:
-            print("Failed to parse supervisor start output: ", output_text)
+            log_warn(f"Failed to parse supervisor start output: {output_text}")
             return None, None
         
     
     def do_supervisor_start(self, visual_context: str):
-        allowed_actions = self.environment.get_action_strings(return_all=True)
+        allowed_actions = self._environment.get_action_strings(return_all=True)
         allowed_actions_str = ""
         for class_name, action_str in allowed_actions.items():
             allowed_actions_str += f"{action_str}\n"
         prompt = self.supervisor_start_prompt.replace("[MISSION]", self.mission).replace("[ALLOWED_ACTIONS]", allowed_actions_str).replace("[VISUAL_CONTEXT]", visual_context)
-        current_frame = self.environment.get_info()["core"]["current_frame"]
-        output_text = self._vlm.infer(prompt, current_frame)[0]
+        current_frame = self._environment.get_info()["core"]["current_frame"]
+        output_text = self._vlm.infer(prompt, current_frame, max_new_tokens=300)[0]
         steps, note = self.parse_supervisor_start(output_text)
         self.high_level_plan = steps
         self._report.high_level_plan = steps
@@ -204,17 +210,17 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
         mission_complete = False
         output_text = output_text.lower()
         if output_text.count("lessons learned:") != 1:
-            print("Failed to parse executor return analysis output: ", output_text)
+            log_warn(f"Failed to parse executor return analysis output: {output_text}")
             return None, None, None, False
         analysis_part, rest = output_text.split("lessons learned:")
         analysis = analysis_part.replace("analysis of execution:", "").strip()
         if rest.count("current visual context:") != 1:
-            print("Failed to parse executor return analysis output: ", output_text)
+            log_warn(f"Failed to parse executor return analysis output: {output_text}")
             return analysis, None, None, False
         lessons_part, rest2 = rest.split("current visual context:")
         lessons_learned = lessons_part.strip()
         if rest2.count("mission complete:") != 1:
-            print("Failed to parse executor return analysis output: ", output_text)
+            log_warn(f"Failed to parse executor return analysis output: {output_text}")
             return analysis, lessons_learned, None, False
         context_part, mission_part = rest2.split("mission complete:")
         current_visual_context = context_part.strip()
@@ -224,7 +230,7 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
     def parse_executor_information_construction(self, output_text):
         output_text = output_text.lower()
         if output_text.count("plan:") != 1:
-            print("Failed to parse executor information construction output: ", output_text)
+            log_warn(f"Failed to parse executor information construction output: {output_text}")
             return None, None
         task_part, plan_part = output_text.split("plan:")
         immediate_task = task_part.replace("immediate task:", "").strip()
@@ -238,15 +244,13 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
         visual_context = initial_visual_context
         note = self.do_supervisor_start(visual_context)
         high_level_plan_str = "\n".join(self.high_level_plan)
-        print(f"Starting high level plan: {high_level_plan_str}")
-        print(f"Starting note for first step: {note}")
         initial_plan = note
         lessons_learned = "No Lessons Learned Yet."
         immediate_task = self.high_level_plan[0]
         mission_accomplished = False
-        pbar = tqdm(total=self.env._emulator.max_steps, desc="Overall VLM Agent Progress")
+        pbar = tqdm(total=self._environment._emulator.max_steps, desc="Overall VLM Agent Progress")
         while not mission_accomplished:
-            print(f"Starting execution of immediate task: {immediate_task} with initial_plan: {initial_plan}")
+            log_info(f"Starting execution of immediate task: {immediate_task} with initial_plan: {initial_plan}")
             execution_report = self.call_executor(high_level_goal=self.mission,
                                                   task=immediate_task,
                                                   initial_plan=initial_plan,
@@ -255,25 +259,23 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
             actions_and_observations = "\n".join(execution_report.get_execution_summary())
             prompt = self.executor_return_analysis_prompt.replace("[LESSONS_LEARNED]", lessons_learned).replace("[IMMEDIATE_TASK]", immediate_task).replace("[ACTION_AND_OBSERVATIONS_LOG]", actions_and_observations)
             current_frame = self._environment.get_info()["core"]["current_frame"]
-            output_text = self._vlm.infer(prompt, current_frame)[0]
+            output_text = self._vlm.infer(prompt, current_frame, max_new_tokens=400)[0]
             analysis, lessons_learned, visual_context, mission_accomplished = self.parse_executor_return_analysis(output_text)
             self._report.update_before_loop(executor_analysis=analysis, lessons_learned=lessons_learned, visual_context=visual_context)
             if visual_context is None:
                 break
             if mission_accomplished:
-                print("Mission accomplished!")
+                log_info("Mission accomplished!")
                 break
-            print(f"Executor Analysis: {analysis}")
-            print(f"Updated Lessons Learned: {lessons_learned}")
-            print(f"Updated Visual Context: {visual_context}")
+            log_info(f"Executor Analysis: {analysis}")
             if execution_report.exit_code == 1:
-                print("Environment Steps Done")
+                log_warn("Environment Steps Done")
                 break
             prompt = self.executor_information_construction_prompt.replace("[LESSONS_LEARNED]", lessons_learned).replace("[VISUAL_CONTEXT]", visual_context)
             current_frame = self._environment.get_info()["core"]["current_frame"]
-            output_text = self._vlm.infer(prompt, current_frame)[0]
+            output_text = self._vlm.infer(prompt, current_frame, max_new_tokens=300)[0]
             immediate_task, initial_plan = self.parse_executor_information_construction(output_text)
             if immediate_task is None or initial_plan is None:
                 break
             pbar.update(1)
-        print("Finished playing VLM agent.")
+        log_info("Finished playing VLM agent.")
