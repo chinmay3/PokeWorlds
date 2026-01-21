@@ -378,7 +378,8 @@ class EQASupervisor(Supervisor):
     Answer in the following format:
     Known Information: What you can observe or infer from the current screen.
     Unknown Information: What you still need to discover to answer the question.
-    """
+    [STOP]
+    Output:"""
 
     planning_prompt = """
     You are playing [GAME] and need to answer the question: [QUESTION].
@@ -390,7 +391,8 @@ class EQASupervisor(Supervisor):
     Answer in the following format:
     To Track: What specific items, information, or changes you need to track to answer the question.
     High Level Plan: A multi-step plan for gathering the needed information.
-    """
+    [STOP]
+    Output:"""
 
     task_planning_prompt = """
     You are playing [GAME] and need to answer the question: [QUESTION].
@@ -399,15 +401,18 @@ class EQASupervisor(Supervisor):
     You have collected these notes so far: [COLLECTED_NOTES]
     Current visual context: [VISUAL_CONTEXT]
     
+    The actions you can take are: [ALLOWED_ACTIONS]
     Based on this, plan a simple immediate task that can be achieved with 3-5 actions to gather more relevant information.
     Answer in the following format:
     Immediate Task: A short, directly actionable task to gather specific information.
     Plan: Brief plan for achieving this immediate task.
-    """
+    [STOP]
+    Output:"""
 
     executor_analysis_prompt = """
-    You are playing [GAME] and need to answer the question: [QUESTION].
-    The executor was given the task: [TASK]
+    You are playing [GAME] and need to answer the question: [QUESTION]. 
+    You were going ahead with the plan [PLAN]. 
+    You followed this plan and gave the executor the task: [TASK]
     Initial visual context was: [INITIAL_VISUAL_CONTEXT]
     
     Execution steps:
@@ -415,17 +420,21 @@ class EQASupervisor(Supervisor):
     
     Final visual context: [FINAL_VISUAL_CONTEXT]
     Notes from executor: [EXECUTOR_NOTES]
+
+    You believe there is still some information to gather. In particular [REMAINING_INFO]
     
     Analyze what happened and provide:
     Summary of Final State: Brief description of what the screen shows now.
     Summary of Actions: What happened during the execution.
     Task Achieved: Yes/No - whether the immediate task was accomplished.
-    Next Immediate Task: What should be done next, or "DONE" if the question can be answered.
-    """
+    Next Immediate Task: What should be done next, write a task that can be achieved with 3-5 actions.
+    [STOP]
+    Output:"""
 
     termination_prompt = """
     You are playing [GAME] and need to answer the question: [QUESTION].
     You have been tracking: [TO_TRACK]
+    You were going ahead with the plan [PLAN].     
     You have collected these notes during your exploration: [COLLECTED_NOTES]
     
     Based on all the information gathered, decide if you can answer the question now.
@@ -433,7 +442,8 @@ class EQASupervisor(Supervisor):
     Can Answer: Yes/No
     Answer: [If Yes, provide the answer to the question. If No, "Still need more information"]
     Reasoning: Brief explanation of your decision.
-    """
+    [STOP]
+    Output:"""
 
     def __init__(self, **kwargs):
         game = kwargs.get("game", "")
@@ -513,6 +523,11 @@ class EQASupervisor(Supervisor):
             prompt = prompt.replace("[HIGH_LEVEL_PLAN]", self.high_level_plan)
             prompt = prompt.replace("[COLLECTED_NOTES]", collected_notes_str)
             prompt = prompt.replace("[VISUAL_CONTEXT]", self.current_visual_context)
+            allowed_actions = self._environment.get_action_strings(return_all=True)
+            allowed_actions_str = ""
+            for class_name, action_str in allowed_actions.items():
+                allowed_actions_str += f"{action_str}\n"
+            prompt = prompt.replace("[ALLOWED_ACTIONS]", allowed_actions_str)
 
             current_frame = self._environment.get_info()["core"]["current_frame"]
             response = self._vlm.infer(prompt, current_frame, max_new_tokens=200)[0]
@@ -534,7 +549,7 @@ class EQASupervisor(Supervisor):
                 visual_context=self.current_visual_context,
             )
 
-            # Step 5: Analyze executor results
+            # Step 5: Analyze executor results and decide termination
             execution_summary = "\n".join(execution_report.get_execution_summary())
             final_visual_context = (
                 execution_report.visual_contexts[-1]
@@ -558,7 +573,29 @@ class EQASupervisor(Supervisor):
                 else "No relevant information collected"
             )
 
+            # Check termination condition
+            prompt = self.termination_prompt.replace("[QUESTION]", question)
+            prompt = prompt.replace("[TO_TRACK]", self.to_track)
+            prompt = prompt.replace(
+                "[COLLECTED_NOTES]", "\n".join(self.collected_notes)
+            )
+
+            current_frame = self._environment.get_info()["core"]["current_frame"]
+            response = self._vlm.infer(prompt, current_frame, max_new_tokens=200)[0]
+            log_info(f"EQA Supervisor termination VLM response: {response}")
+
+            if "Can Answer:" in response and "Yes" in response:
+                # We can answer the question
+                answer_part = (
+                    response.split("Answer:")[1].split("Reasoning:")[0].strip()
+                )
+                self.final_answer = answer_part
+                break
+
+            # if we don't exit, analyze executor results and plan next task
+
             prompt = self.executor_analysis_prompt.replace("[QUESTION]", question)
+            prompt = prompt.replace("[PLAN]", self.high_level_plan)
             prompt = prompt.replace("[TASK]", immediate_task)
             prompt = prompt.replace(
                 "[INITIAL_VISUAL_CONTEXT]", self.current_visual_context
@@ -566,6 +603,8 @@ class EQASupervisor(Supervisor):
             prompt = prompt.replace("[EXECUTION_SUMMARY]", execution_summary)
             prompt = prompt.replace("[FINAL_VISUAL_CONTEXT]", final_visual_context)
             prompt = prompt.replace("[EXECUTOR_NOTES]", executor_notes_str)
+            remaining_info = f"Still need to gather information about: {self.to_track}"
+            prompt = prompt.replace("[REMAINING_INFO]", remaining_info)
 
             current_frame = self._environment.get_info()["core"]["current_frame"]
             response = self._vlm.infer(prompt, current_frame, max_new_tokens=300)[0]
@@ -574,7 +613,7 @@ class EQASupervisor(Supervisor):
             # Parse analysis response
             final_state_summary = "No summary available"
             actions_summary = "No actions summary"
-            task_achieved = "No"
+            task_achieved = False
             next_immediate_task = "Explore more"
 
             if "Summary of Final State:" in response:
@@ -588,6 +627,8 @@ class EQASupervisor(Supervisor):
                     if len(actions_parts) > 1:
                         task_parts = actions_parts[1].split("Next Immediate Task:")
                         task_achieved = task_parts[0].strip()
+                        if "yes" in task_achieved.lower():
+                            task_achieved = True
                         if len(task_parts) > 1:
                             next_immediate_task = task_parts[1].strip()
 
@@ -597,24 +638,6 @@ class EQASupervisor(Supervisor):
 
             # Check if we should continue
             if next_immediate_task == "DONE" or "DONE" in next_immediate_task.upper():
-                break
-
-            # Also check termination condition
-            prompt = self.termination_prompt.replace("[QUESTION]", question)
-            prompt = prompt.replace("[TO_TRACK]", self.to_track)
-            prompt = prompt.replace(
-                "[COLLECTED_NOTES]", "\n".join(self.collected_notes)
-            )
-
-            response = self._vlm.infer(prompt, current_frame, max_new_tokens=200)[0]
-            log_info(f"EQA Supervisor termination VLM response: {response}")
-
-            if "Can Answer:" in response and "Yes" in response:
-                # We can answer the question
-                answer_part = (
-                    response.split("Answer:")[1].split("Reasoning:")[0].strip()
-                )
-                self.final_answer = answer_part
                 break
 
         # Log final state

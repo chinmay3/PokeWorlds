@@ -1068,7 +1068,7 @@ Reasoning: I believe"""
             )
 
         if len(self.planned_sequence) == 0:
-            return None
+            return "no_action()"
 
         # pop and store the next action string in a variable
         next_action = self.planned_sequence.pop(0)
@@ -1147,6 +1147,7 @@ Reasoning: I believe"""
         )
 
         response = self._vlm.infer(prompt, current_frame, max_new_tokens=250)[0]
+        log_info(f"EQA Executor after action reflection VLM response: {response}")
 
         # Parse the response
         changes = "No changes observed"
@@ -1179,6 +1180,7 @@ Reasoning: I believe"""
             eval_response = self._vlm.infer(
                 eval_prompt, current_frame, max_new_tokens=150
             )[0]
+            log_info(f"EQA Executor change evaluation VLM response: {eval_response}")
 
             # Parse evaluation response (but we may not need to use it directly)
 
@@ -1216,6 +1218,9 @@ Reasoning: I believe"""
         revisit_response = self._vlm.infer(
             revisit_prompt, current_frame, max_new_tokens=250
         )[0]
+        log_info(
+            f"EQA Executor action sequence revisit VLM response: {revisit_response}"
+        )
 
         # Parse revisit response
         if "Action Sequence:" in revisit_response:
@@ -1267,6 +1272,7 @@ Reasoning: I believe"""
 
             current_frame = self._environment.get_info()["core"]["current_frame"]
             response = self._vlm.infer(prompt, current_frame, max_new_tokens=150)[0]
+            log_info(f"EQA Executor exit decision VLM response: {response}")
 
             if "Decision:" in response:
                 decision_part = response.split("Decision:")[1].strip()
