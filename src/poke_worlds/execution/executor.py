@@ -5,6 +5,7 @@ from poke_worlds.interface import Controller
 from poke_worlds.execution.report import ExecutionReport, SimpleReport
 from poke_worlds.execution.executor_action import ExecutorAction
 from poke_worlds.execution.vlm import ExecutorVLM, ocr
+from poke_worlds.execution.retrieval import DenseTextDatabase, DictDatabase
 from poke_worlds.utils import load_parameters, log_error, log_warn, log_info
 from poke_worlds.interface import Environment, HighLevelAction
 from typing import List, Tuple, Type, Dict, Any
@@ -262,7 +263,7 @@ class Executor(ABC):
     ) -> dict:
         """
         Returns additional keyword arguments for updating internal state after taking an action and receiving an observation.
-        Should match the arguments expected by `_update_additional`.
+        Should match the arguments expected by the execution_reports `_update_additional`.
 
         :param action_details: Details of the action that was executed. Is in the form:
 
@@ -287,6 +288,36 @@ class Executor(ABC):
 
         :return: Additional keyword arguments for closing out the execution report. Should match those expected by `self._execution_report._close_additional`.
         :rtype: dict
+        """
+        pass
+
+    @abstractmethod
+    def get_action_message(
+        self,
+        *,
+        action: Type[HighLevelAction],
+        action_kwargs: dict,
+        action_success: int,
+        action_return: dict,
+        last_action_hint: bool = False,
+    ) -> str:
+        """
+        Returns a string message describing the action taken and its status.
+
+        Should work for both HighLevelAction and the available ExecutorAction types.
+
+        :param action: The high level action taken.
+        :type action: Type[HighLevelAction]
+        :param action_kwargs: The execution arguments used for the action.
+        :type action_kwargs: dict
+        :param action_success: Success code of the action
+        :type action_success: int
+        :param action_return: Return information from the action
+        :type action_return: dict
+        :param last_action_hint: Whether to format the message as a hint for the next action. If True, includes guidance for the next action. This can include a hint to guide the next action.
+        :type last_action_hint: bool
+        :return: The action message string.
+        :rtype: str
         """
         pass
 
@@ -441,36 +472,6 @@ class Executor(ABC):
                 f"Previous Action: {new_action_str} | Status Message: {new_action_message}"
             )
         return actions_and_changes
-
-    @abstractmethod
-    def get_action_message(
-        self,
-        *,
-        action: Type[HighLevelAction],
-        action_kwargs: dict,
-        action_success: int,
-        action_return: dict,
-        last_action_hint: bool = False,
-    ) -> str:
-        """
-        Returns a string message describing the action taken and its status.
-
-        Should work for both HighLevelAction and the available ExecutorAction types.
-
-        :param action: The high level action taken.
-        :type action: Type[HighLevelAction]
-        :param action_kwargs: The execution arguments used for the action.
-        :type action_kwargs: dict
-        :param action_success: Success code of the action
-        :type action_success: int
-        :param action_return: Return information from the action
-        :type action_return: dict
-        :param last_action_hint: Whether to format the message as a hint for the next action. If True, includes guidance for the next action. This can include a hint to guide the next action.
-        :type last_action_hint: bool
-        :return: The action message string.
-        :rtype: str
-        """
-        pass
 
 
 class SimpleExecutor(Executor, ABC):
@@ -1301,3 +1302,111 @@ Reasoning: I believe"""
                 self, "_exit_decision_reasoning", "No exit reasoning provided"
             )
         }
+
+
+class RAGExecutor(Executor, ABC):
+    """
+    Takes in:
+    - test_question
+    - track_items
+    - task
+    - guidance (retrieved from memory based on similar task in supervisor)
+    - visual_context
+
+    Uses memory:
+    - action: map to documentation
+    - context: map to guidance
+
+    Process:
+    Loop:
+        2. Retrieve guidance for the allowed actions
+        3. Retrieve most similar visual context + action for each allowed action and gate it (is it relevant enough to the current visual context?). If it is, add it to the guidance.
+        4. Use these to form the action decision prompt and decide on the next action.
+        5. Given the guidance string for the selected action, predict the expected changes.
+        6. Execute action
+        7. After action, describe observed changes and new visual context.
+        8. Compare expected vs observed changes, if unexpected, update action guidance.
+        9. Update memory with (visual context + action) -> (observed changes)
+       10. Decide whether to exit based on task completion.
+    """
+
+    def __init__(
+        self,
+        *,
+        game: str,
+        environment: Environment,
+        execution_report_class: Type[ExecutionReport],
+        test_question: str,
+        track_items: str,
+        task: str,
+        visual_context: str,
+        action_database: DictDatabase,
+        context_database: DenseTextDatabase,
+        memory_enabled: bool = True,
+        action_buffer_size: int = None,
+        seed: int = None,
+        parameters: dict = None,
+    ):
+        self._parameters = load_parameters(parameters)
+        self._game = game
+        self._test_question = test_question
+        self._track_items = track_items
+        self._task = task
+        self._initial_visual_context = visual_context
+        self._action_database = action_database
+        self._context_database = context_database
+        self._memory_enabled = memory_enabled
+        report_init_kwargs = {}  # TODO
+        super().__init__(
+            game=game,
+            environment=environment,
+            execution_report_class=execution_report_class,
+            report_init_kwargs=report_init_kwargs,
+            action_buffer_size=action_buffer_size,
+            seed=seed,
+            parameters=parameters,
+        )
+
+    @abstractmethod
+    def _string_to_executor_action(
+        self, action_str: str
+    ) -> Tuple[Type[ExecutorAction], dict]:
+        return None, None  # Disable for now.
+
+    @abstractmethod
+    def _decide_next_action_str(self, prev_action_strings: List[str] = []) -> str:
+        pass
+
+    @abstractmethod
+    def _decide_exit(self) -> bool:
+        pass
+
+    @abstractmethod
+    def _after_action(
+        self,
+        action_details: Tuple[str, Type[HighLevelAction], dict, dict, int, dict, str],
+    ):
+        pass
+
+    @abstractmethod
+    def _get_update_kwargs(
+        self,
+        action_details: Tuple[str, Type[HighLevelAction], dict, dict, int, dict, str],
+    ) -> dict:
+        pass
+
+    @abstractmethod
+    def _get_exit_kwargs(self) -> dict:
+        pass
+
+    @abstractmethod
+    def get_action_message(
+        self,
+        *,
+        action: Type[HighLevelAction],
+        action_kwargs: dict,
+        action_success: int,
+        action_return: dict,
+        last_action_hint: bool = False,
+    ) -> str:
+        pass
