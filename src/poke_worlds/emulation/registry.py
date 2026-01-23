@@ -25,6 +25,7 @@ from poke_worlds.emulation.pokemon.trackers import (
     PokemonOCRTracker,
     PokemonRedStarterTracker,
     PokemonRedCenterTestTracker,
+    PokemonRedMtMoonTestTracker,
 )
 from poke_worlds.emulation.emulator import Emulator
 from poke_worlds.emulation.pokemon.emulators import PokemonEmulator
@@ -60,6 +61,7 @@ AVAILABLE_STATE_TRACKERS: Dict[str, Dict[str, Type[StateTracker]]] = {
         "default": PokemonOCRTracker,
         "starter_example": PokemonRedStarterTracker,
         "viridian_center_test": PokemonRedCenterTestTracker,
+        "mt_moon_test": PokemonRedMtMoonTestTracker,
     },
     "pokemon_brown": {
         "default": PokemonOCRTracker,

@@ -688,6 +688,7 @@ class PokemonRedStateParser(BasePokemonRedStateParser):
             ],
             "screen_bottom_half": [
                 "viridian_pokemon_center_entrance",
+                "mt_moon_entrance",
             ],
         }
         super().__init__(

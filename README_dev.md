@@ -157,13 +157,15 @@ First, create a starting state from which your task is achievable. See the [sect
 
 **2. Define termination and truncation conditions**
 - **Termination**: The goal has been achieved. This should be a reliably reproducible screen element that always appears when the goal is reached (e.g., unique dialogue when defeating a specific trainer). In this framework, termination always equals task success - we avoid failure termination signals to prevent agents from using them as learning feedback.
-- **Truncation**: Optional. Cut the episode short when the player can no longer achieve the task (e.g., walked too far away). Maximum steps are handled automatically.
+- **Truncation**: Optional. Cut the episode short when the player can no longer achieve the task (e.g., walked too far away). Maximum environment / emulator steps are handled automatically, so don't bother implementing that. 
 
 **3. Set up parser for screen capture (if needed)**
 If your termination condition relies on a specific screen capture not already available in the parser, you'll need to add it. See the [screen capture method](#state-parser-set-up) in the [section above](#i-want-to-track-fine-grained-details) for guidance on capturing named screen regions.
 
+Make sure to use `python -m poke_worlds.setup_data push --game <game>` to update the cloud database. 
+
 **4. Create the termination/truncation metric**
-Inherit from the appropriate base class in [`src/poke_worlds/emulation/tracker.py`](src/poke_worlds/emulation/tracker.py):
+Make a child or descendant of the [TerminationTruncationTracker](src/poke_worlds/emulation/tracker.py) :
 - For termination only: `TerminationMetric` ([line 466](src/poke_worlds/emulation/tracker.py:466))
 - For both termination and truncation: `TerminationTruncationMetric` ([line 368](src/poke_worlds/emulation/tracker.py:368))
 
@@ -193,5 +195,5 @@ python dev/test_play.py --game <game> --state_tracker_class <your_tracker_name> 
 
 The game should automatically stop when you reach the termination/truncation condition.
 
-*Example video: [Coming soon - placeholder for demonstration video]*
+*Example video: [here](https://drive.google.com/file/d/1j5u8N1OFm45pa6sf3aGnXxfFyYaDt8Ei/view?usp=sharing)*
 

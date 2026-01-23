@@ -4,7 +4,10 @@ from poke_worlds.emulation.pokemon.base_metrics import (
     PokemonRedLocation,
     PokemonRedStarter,
 )
-from poke_worlds.emulation.pokemon.test_metrics import PokemonCenterTerminateMetric
+from poke_worlds.emulation.pokemon.test_metrics import (
+    PokemonCenterTerminateMetric,
+    MtMoonTerminateMetric,
+)
 
 from poke_worlds.emulation.pokemon.base_metrics import (
     PokemonTestMetric,
@@ -75,3 +78,11 @@ class PokemonRedCenterTestTracker(PokemonTestTracker):
     """
 
     TERMINATION_TRUNCATION_METRIC = PokemonCenterTerminateMetric
+
+
+class PokemonRedMtMoonTestTracker(PokemonTestTracker):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent reaches the entrance to Mt. Moon.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = MtMoonTerminateMetric

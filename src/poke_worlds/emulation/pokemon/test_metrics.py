@@ -17,3 +17,10 @@ class PokemonCenterTerminateMetric(RegionMatchTerminationMetric, TerminationMetr
 
     _TERMINATION_NAMED_REGION = "screen_bottom_half"
     _TERMINATION_TARGET_NAME = "viridian_pokemon_center_entrance"
+
+
+class MtMoonTerminateMetric(RegionMatchTerminationMetric, TerminationMetric):
+    REQUIRED_PARSER = PokemonRedStateParser
+
+    _TERMINATION_NAMED_REGION = "screen_bottom_half"
+    _TERMINATION_TARGET_NAME = "mt_moon_entrance"
