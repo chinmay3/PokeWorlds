@@ -365,6 +365,71 @@ class OCRegionMetric(MetricGroup, ABC):
         pass
 
 
+class TerminationTruncationMetric(MetricGroup, ABC):
+    """
+    Tracks whether the environment was terminated or truncated.
+
+    Reports:
+    - `terminated`: Whether the environment was terminated.
+    - `truncated`: Whether the environment was truncated.
+
+    Final Reports:
+    - `episode_end_reason`: List of reasons for episode endings: "terminated", "truncated", or None (None will occur only if there is a bug that leads to a premature reset).
+    """
+
+    NAME = "termination_truncation"
+
+    def start(self):
+        super().start()
+        self.episode_end_reason = []
+        """ List of reasons for episode: termination or truncation or None (None will occur only if there is a bug that leads to a premature reset). """
+        self.terminated = False
+        """ Whether the environment was terminated. """
+        self.truncated = False
+        """ Whether the environment was truncated. """
+
+    def reset(self, first=False):
+        if not first:
+            if self.terminated:
+                self.episode_end_reason.append("terminated")
+            elif self.truncated:
+                self.episode_end_reason.append("truncated")
+            else:
+                self.episode_end_reason.append(None)
+        self.terminated = False
+        self.truncated = False
+
+    def close(self):
+        pass
+
+    @abstractmethod
+    def step(self, current_frame: np.ndarray, recent_frames: Optional[np.ndarray]):
+        """
+        Determines whether the environment was terminated or truncated.
+        Child classes must implement this method to set self.terminated and self.truncated appropriately.
+        """
+        pass
+
+    def report(self):
+        """
+        Reports whether the environment was terminated or truncated.
+        Returns:
+            dict: A dictionary containing the termination and truncation status.
+        """
+        return {
+            "terminated": self.terminated,
+            "truncated": self.truncated,
+        }
+
+    def report_final(self):
+        """
+        Reports the reasons for episode endings.
+        Returns:
+            dict: A dictionary containing the list of episode end reasons.
+        """
+        return {"episode_end_reason": self.episode_end_reason}
+
+
 class StateTracker:
     """
     Tracks and provides API access to the game state / metrics over time and across episodes.
@@ -427,6 +492,7 @@ class StateTracker:
         """ An instance of the StateParser to parse game state variables. """
         self._parameters = parameters
         self.start()
+        self.validate()
         if self.metric_classes[0] != CoreMetrics:
             log_error(
                 "First metric class must be CoreMetrics. Make sure to call `super().start()` first in child class overrides of `start()`.",
@@ -450,6 +516,12 @@ class StateTracker:
         Child classes must FIRST call super().start() and THEN set up their own metric classes.
         """
         self.metric_classes: List[Type[MetricGroup]] = [CoreMetrics]
+
+    def validate(self):
+        """
+        Is meant to be called once after initialization to ensure that the tracker is valid.
+        """
+        pass
 
     def reset(self):
         """
@@ -548,3 +620,32 @@ class StateTracker:
     def __repr__(self) -> str:
         metric_names = [mg.NAME for mg in self.metrics.values()]
         return f"<StateTracker(name={self.name}, session_name={self.session_name}, instance_id={self.instance_id}), metrics=({', '.join(metric_names)})>"
+
+
+class TestTrackerMixin:
+    """
+    Mixin class for testing trackers.
+    Ensures that exactly one of the tracked metrics is a TerminationTruncationMetric.
+    """
+
+    def validate(self):
+        if not hasattr(self, "_parameters"):
+            log_error("Parameters have not been set yet.")
+        if not hasattr(self, "metric_classes"):
+            log_error("Metrics have not been initialized yet.", self._parameters)
+        metrics: List[Type[MetricGroup]] = self.metric_classes
+        flag = False
+        for metric_class in metrics:
+            if issubclass(metric_class, TerminationTruncationMetric):
+                if flag:
+                    log_error(
+                        "Trackers using TestTrackerMixin can only have one TerminationTruncationMetric subclass in their metric_classes.",
+                        self._parameters,
+                    )
+                else:
+                    flag = True
+        if not flag:
+            log_error(
+                "Trackers using TestTrackerMixin must have one TerminationTruncationMetric subclass in their metric_classes.",
+                self._parameters,
+            )

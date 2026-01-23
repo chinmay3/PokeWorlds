@@ -12,7 +12,7 @@ from poke_worlds.utils import (
 )
 
 
-from poke_worlds.emulation import Emulator, StateTracker
+from poke_worlds.emulation import Emulator, StateTracker, TestTrackerMixin
 from poke_worlds.emulation.registry import get_state_tracker_class
 from poke_worlds.interface.controller import Controller
 from poke_worlds.interface.action import HighLevelAction
@@ -895,3 +895,44 @@ class DummyEnvironment(Environment):
         info["core"].pop("passed_frames")
         log_info("State: ", self._parameters)
         log_dict(info, self._parameters)
+
+
+class TestEnvironmentMixin:
+    """
+    Mixin class for testing environments.
+    Ensures the State Tracker used is a TestTrackerMixin and checks these for termination / truncation.
+    """
+
+    REQUIRED_STATE_TRACKER = TestTrackerMixin
+
+    def determine_truncated(
+        self,
+        start_state: Dict[str, Dict[str, Any]],
+        *,
+        action: Optional[HighLevelAction] = None,
+        action_kwargs: Optional[dict] = None,
+        transition_states: Optional[List[Dict[str, Dict[str, Any]]]] = None,
+        action_success: Optional[int] = None,
+    ) -> bool:
+        any_truncated = False
+        for state in transition_states:
+            if state["termination_truncation"]["truncated"]:
+                any_truncated = True
+                break
+        return any_truncated or self._emulator.check_if_done()
+
+    def determine_terminated(
+        self,
+        start_state: Dict[str, Dict[str, Any]],
+        *,
+        action: Optional[HighLevelAction] = None,
+        action_kwargs: Optional[dict] = None,
+        transition_states: Optional[List[Dict[str, Dict[str, Any]]]] = None,
+        action_success: Optional[int] = None,
+    ) -> bool:
+        any_terminated = False
+        for state in transition_states:
+            if state["termination_truncation"]["terminated"]:
+                any_terminated = True
+                break
+        return any_terminated

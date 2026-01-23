@@ -11,5 +11,5 @@ This is what you should familiarize yourself with most deeply if you wish to use
 """
 
 from poke_worlds.emulation.emulator import Emulator, LowLevelActions
-from poke_worlds.emulation.tracker import StateTracker
+from poke_worlds.emulation.tracker import StateTracker, TestTrackerMixin
 from poke_worlds.emulation.parser import StateParser
