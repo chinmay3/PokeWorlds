@@ -811,8 +811,16 @@ class Environment(gym.Env, ABC):
             else:
                 log_warn("That was not a valid input. did nothing", self._parameters)
             if terminated or truncated:
+                log_info(
+                    f"Episode finished! Terminated: {terminated}, Truncated: {truncated}",
+                    self._parameters,
+                )
                 break
             steps += 1
+            if steps >= max_steps:
+                log_info(
+                    f"Max steps {max_steps} reached. Ending episode.", self._parameters
+                )
 
 
 class DummyEnvironment(Environment):

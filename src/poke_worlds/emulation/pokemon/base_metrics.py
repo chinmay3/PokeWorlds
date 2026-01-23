@@ -15,8 +15,6 @@ from poke_worlds.emulation.tracker import (
 
 import numpy as np
 
-from poke_worlds.utils import log_error
-
 
 class CorePokemonMetrics(MetricGroup):
     """
@@ -140,56 +138,6 @@ class PokemonExitBattleTruncationMetric(TerminationTruncationMetric, ABC):
         if current_state == AgentState.FREE_ROAM:
             return True
         return False
-
-
-class PokemonRegionMatchTruncationMetric(TerminationTruncationMetric, ABC):
-    """
-    Truncates the episode if a specific region matches a target.
-    Can be used to truncate episodes when specific dialogue boxes appear, etc.
-    """
-
-    _TRUNCATION_NAMED_REGION = None
-    _TRUNCATION_TARGET_NAME = None
-
-    def determine_truncated(self, current_frame, recent_frames):
-        if (
-            self._TRUNCATION_NAMED_REGION is None
-            or self._TRUNCATION_TARGET_NAME is None
-        ):
-            log_error(
-                "Must set _TRUNCATION_NAMED_REGION and _TRUNCATION_TARGET_NAME.",
-                self._parameters,
-            )
-        self.state_parser: PokemonStateParser
-        matches = self.state_parser.named_region_matches_multi_target(
-            current_frame, self._TRUNCATION_NAMED_REGION, self._TRUNCATION_TARGET_NAME
-        )
-        return matches
-
-
-class PokemonRegionMatchTerminationMetric(TerminationTruncationMetric, ABC):
-    """
-    Terminates the episode if a specific region matches a target.
-    Can be used to terminate episodes when specific dialogue boxes appear, etc.
-    """
-
-    _TERMINATION_NAMED_REGION = None
-    _TERMINATION_TARGET_NAME = None
-
-    def determine_terminated(self, current_frame, recent_frames):
-        if (
-            self._TERMINATION_NAMED_REGION is None
-            or self._TERMINATION_TARGET_NAME is None
-        ):
-            log_error(
-                "Must set _TERMINATION_NAMED_REGION and _TERMINATION_TARGET_NAME.",
-                self._parameters,
-            )
-        self.state_parser: PokemonStateParser
-        matches = self.state_parser.named_region_matches_multi_target(
-            current_frame, self._TERMINATION_NAMED_REGION, self._TERMINATION_TARGET_NAME
-        )
-        return matches
 
 
 class PokemonRedStarter(MetricGroup):

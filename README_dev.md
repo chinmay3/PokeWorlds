@@ -23,6 +23,7 @@ See the [API documentation](https://dhananjayashok.github.io/PokeWorlds/) to und
   - [Descriptive State and Event Tracking](#I-want-to-track-fine-grained-details)
   - [Reward Engineering](#I-want-to-engineer-my-own-reward-functions)
   - [Adding New ROMs](#I-want-to-add-a-new-ROM-Hack)
+  - [Adding New Test Tasks]
 
 ### I want to create my own starting states
 Easy. The only question is whether you want to save an mGBA state (perhaps you use cheats to lazily put the agent in a very specific state) or save a PyBoy state directly (i.e. you start from an existing state and play to the new state).
@@ -146,3 +147,30 @@ python dev/dev_play.py --game <game> --init_state pokedex
 You'll get a message letting you know what's left. You can finish them all off now. If any of the captures weren't clean and good, you should leave them for the end and override their named screen regions. 
 
 Using this process I'm able to set up all but one capture in [under 10 minutes](https://drive.google.com/file/d/1KkZZe3ON-0EWiBs_EhrAHc9D7lsQmCxW/view?usp=sharing) (the video cuts off with only `pokedex_info_height_text` unassigned because it needs to be manually repositioned as an override region). 
+
+### I want to add a new test task
+
+#TODO: Clean this up - Add hyperlinks to the relevant .py file (with line number) in code if possible, add hyperlinks to relevant above sections when required. Reformat to make the language more clear, precise, but still conveys all the important information and easy to read. 
+
+
+Steps:
+1. Explain that the first step is to create an initial state from which the task is achievable. Link to the [above section](#i-want-to-create-my-own-starting-states) and tell them to see that for more on this. 
+2. Identify a termination and trunction condition:
+  - termination: the desired goal has been achieved. This should be a reliably reproducible part of the screen that always displays when the goal is achieved (e.g. when you defeat an enemy trainer in Pokemon, you get a unique dialogue from each one. You can use that to decide whether the agent has succeeded.) In this project, termination == task success. This is because if we give failure termination signals, an agent can use that to learn / implicitly recieve feedback from the environment and do things differently on the next loop. 
+  - truncation: sometimes, you want to cut the game short when a certain state boundary is exceeded, because it is certain the player cannot achieve the task anymore (walked too far away etc.). You do *not* have to implement any logic for truncating based on max_steps, that's already handled internally. 
+  i.e. you MUST implement termination logic, but truncation logic is optional.
+
+  3. Set up parser to read termination/truncation information
+  This may be needed if the existing parser information doesn't cut it. This is likely the case for termination/truncation conditions that rely on a particular screen capture that is specific to that event (e.g. defeated a particular enemy trainer). In that case, you need to add the multi_target and capture it.  Link to screen capture guide above. 
+
+  4. Set up metric to give a termination/truncation signal
+  If you only want to implement termination, inherit the metric from TerminationMetric, otherwise do it from TerminationTruncationMetric. If your metric exclusively uses region capture comparisons (which is likely the case), then instead inherit from (link out properly w hyperlinks) RegionMatchTerminationMetric and / or RegionMatchTruncationMetric. This class lets you just specify the name of the region and name of the capture target, and you dont need to write code for it. 
+
+  5. Set up tracker to register the metric. Most likely you can implement a pattern that just needs you to set the TERMINATION_TRUNCATION_METRIC class parameter and nothing else. See PokemonRedCenterTestTracker in pokemon/trackers.py (need to put full path and link out propelry w hyperlink). 
+
+  6. Finally, add the state_tracker_class to the emulator registry (link out). 
+
+  7. Verify that this works: run dev/test_play.py (need to look at the scripts arguments and add those to the python command here and make it neat) and you should be able to play. If all is well, game will stop running when you reach the termination / truncation state. 
+
+  Add a dummy link for a video showing an example of this. 
+
