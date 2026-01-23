@@ -497,6 +497,9 @@ class StateTracker:
     ```
     """
 
+    TERMINATION_TRUNCATION_METRIC: Type[TerminationTruncationMetric] = None
+    """ The TerminationTruncationMetric class to use for tracking termination and truncation. If None, no such metric will be tracked. """
+
     def __init__(
         self,
         name: str,
@@ -549,6 +552,15 @@ class StateTracker:
         Child classes must FIRST call super().start() and THEN set up their own metric classes.
         """
         self.metric_classes: List[Type[MetricGroup]] = [CoreMetrics]
+        if self.TERMINATION_TRUNCATION_METRIC is not None:
+            if not issubclass(
+                self.TERMINATION_TRUNCATION_METRIC, TerminationTruncationMetric
+            ):
+                log_error(
+                    "TERMINATION_TRUNCATION_METRIC must be a subclass of TerminationTruncationMetric.",
+                    self._parameters,
+                )
+            self.metric_classes.append(self.TERMINATION_TRUNCATION_METRIC)
 
     def validate(self):
         """
@@ -664,21 +676,8 @@ class TestTrackerMixin:
     def validate(self):
         if not hasattr(self, "_parameters"):
             log_error("Parameters have not been set yet.")
-        if not hasattr(self, "metric_classes"):
-            log_error("Metrics have not been initialized yet.", self._parameters)
-        metrics: List[Type[MetricGroup]] = self.metric_classes
-        flag = False
-        for metric_class in metrics:
-            if issubclass(metric_class, TerminationTruncationMetric):
-                if flag:
-                    log_error(
-                        "Trackers using TestTrackerMixin can only have one TerminationTruncationMetric subclass in their metric_classes.",
-                        self._parameters,
-                    )
-                else:
-                    flag = True
-        if not flag:
+        if self.TERMINATION_TRUNCATION_METRIC is None:
             log_error(
-                "Trackers using TestTrackerMixin must have one TerminationTruncationMetric subclass in their metric_classes.",
+                "TestTrackerMixin requires a TerminationTruncationMetric to be set as TERMINATION_TRUNCATION_METRIC.",
                 self._parameters,
             )
