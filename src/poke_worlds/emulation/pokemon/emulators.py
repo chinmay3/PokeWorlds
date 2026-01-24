@@ -54,8 +54,9 @@ class PokemonEmulator(Emulator):
         if len(all_next_frames) > 1:
             frames = np.concatenate(all_next_frames)
             self._update_listeners_after_actions(
-                frames[1:]
+                self._get_unique_frames(frames[1:])
             )  # Skip the first frame as that is already counted
+            frames = self._get_unique_frames(frames)
         return frames, done
 
     def _open_to_first_state(self):

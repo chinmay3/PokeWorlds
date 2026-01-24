@@ -376,6 +376,25 @@ class Emulator:
             self.add_video_frames(frames)
         self.state_tracker.step(frames)
 
+    def _get_unique_frames(self, frames: np.ndarray) -> np.ndarray:
+        """
+        Removes duplicate frames from a stack of frames.
+
+        Args:
+            frames (np.ndarray): Stack of frames of shape [n_frames, H, W, C].
+        Returns:
+            np.ndarray: Stack of frames with duplicates removed. Shape is [n_unique_frames, H, W, C].
+        """
+        unique_frames = []
+        for frame in frames:
+            if len(unique_frames) == 0:
+                unique_frames.append(frame)
+            else:
+                if not np.array_equal(frame, unique_frames[-1]):
+                    unique_frames.append(frame)
+        unique_frames = np.stack(unique_frames, axis=0)
+        return unique_frames
+
     def step(self, action: LowLevelActions = None) -> Tuple[Optional[np.ndarray], bool]:
         """
         Takes a step in the environment by performing the given action on the emulator. If saving video, starts the video recording on the first step.
@@ -402,6 +421,7 @@ class Emulator:
 
         frames = self.run_action_on_emulator(action)
         self.step_count += 1
+        frames = self._get_unique_frames(frames)
         self._update_listeners_after_actions(frames)
         return frames, self.check_if_done()
 
