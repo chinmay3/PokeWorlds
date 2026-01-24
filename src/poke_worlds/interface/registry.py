@@ -244,7 +244,7 @@ def get_test_environment(
     parameters = load_parameters(parameters)
     return get_environment(
         game=row["game"],
-        environment_variant=row["environment_variant"],
+        environment_variant="test",
         controller_variant=controller_variant,
         init_state=row["init_state"],
         state_tracker_class=row["state_tracker_class"],
