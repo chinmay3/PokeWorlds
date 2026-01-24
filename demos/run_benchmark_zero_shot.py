@@ -18,6 +18,9 @@ def run_task(row, max_resets, controller_variant, **emulator_kwargs):
     n_resets = 1
     n_steps = 0
     mission = row["task"]
+    task_str = mission.replace(" ", "_").lower()
+    emulator_kwargs = emulator_kwargs.copy()
+    emulator_kwargs["session_name"] += f"_{task_str}"
     environment = get_test_environment(
         row=row, controller_variant=controller_variant, **emulator_kwargs
     )
