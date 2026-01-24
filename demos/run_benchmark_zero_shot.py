@@ -34,11 +34,17 @@ def run_task(row, max_resets, controller_variant, **emulator_kwargs):
     while n_resets < max_resets + 1:
         supervisor_report = supervisor.play()
         if len(supervisor_report.execution_reports) > 0:
-            last_execution_report = supervisor_report.execution_reports[-1]
+            last_execution_states, last_execution_report = (
+                supervisor_report.execution_reports[-1]
+            )
             # updated n_steps
-            last_state = last_execution_report.get_state_infos()[
-                -1
-            ]  # TODO: could this be empty?
+            if len(last_execution_states) == 0:  # manually check for success
+                state_info = environment.get_info()
+                if "terminated_truncated" in state_info:
+                    if state_info["terminated_truncated"]["terminated"]:
+                        success = True
+                        break
+            last_state = last_execution_states[-1]
             step_count = last_state["core"]["n_steps"]
             n_steps += step_count
             # check the last execution report in the supervisor report. It is success only if exit code is 2
