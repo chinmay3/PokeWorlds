@@ -205,12 +205,17 @@ class ExecutionReport(ABC):
             )
         return use_action_details
 
-    def _close(self, exit_code: bool, **kwargs):
+    def _close(self, exit_code: int, **kwargs):
         """
         Closes the execution report.
 
-        :param exit_code: The exit code of the execution. -1 if the executor could not produce a valid action, 0 if execution was terminated by the executor, 1 if environment steps were exceeded.
-        :type exit_code: bool
+        :param exit_code: The exit code of the execution.
+
+            - -1 if the executor could not produce a valid action,
+            - 0 if execution was terminated by the executor,
+            - 1 if environment was truncated (steps exceeded or boundary crossed).
+            - 2 if environment was terminated (reached test goal).
+        :type exit_code: int
         :param kwargs: Additional keyword arguments for the _on_exit hook.
         """
         self.exit_code = exit_code

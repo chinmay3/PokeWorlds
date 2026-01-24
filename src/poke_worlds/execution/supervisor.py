@@ -54,13 +54,14 @@ class Supervisor(ABC):
             self.executor_max_steps = self._parameters["executor_max_steps"]
         else:
             self.executor_max_steps = executor_max_steps
+        self._report: SupervisorReport = None
 
-    def _create_report(self, **play_kwargs) -> SupervisorReport:
+    def _create_report(self, **setup_kwargs) -> SupervisorReport:
         """
         Creates the SupervisorReport instance. Override this method to customize report creation.
 
-        :param play_kwargs: All keyword arguments passed to the play method. May or may not be used.
-        :type play_kwargs: dict
+        :param setup_kwargs: All keyword arguments passed to the setup_play method. May or may not be used.
+        :type setup_kwargs: dict
         :return: The created SupervisorReport instance.
         :rtype: SupervisorReport
         """
@@ -93,31 +94,50 @@ class Supervisor(ABC):
         self._report.log_executor_call(call_args, report)
         return report
 
-    @abstractmethod
-    def _play(self, **kwargs):
+    def setup_play(self, **kwargs):
         """
-        The main loop of the Supervisor. Should take in a reset environment and implement the logic to interact with the environment using the Executor.
-        Always call executor with the call_executor method to ensure proper logging.
+        Setup method to prepare for the play loop. Override this method to customize setup behavior, but always call super(). BEFORE adding your own logic.
 
-
-        :param kwargs: Additional keyword arguments for customization.
+        :param kwargs: Supervisor specific keyword arguments for setup.
         :type kwargs: dict
+        """
+        self._report = self._create_report(**kwargs)
+
+    @abstractmethod
+    def _play(self, reset_counter: int = 0):
+        """
+        The main loop of the Supervisor. Should work in a reset environment and implement the logic to interact with the environment using the Executor.
+        Always call executor with the call_executor method to ensure proper logging.
+        :param reset_counter: The current count of environment resets that have occurred during play. Default is 0.
+        :type reset_counter: int
         """
         pass
 
-    def play(self, **kwargs) -> SupervisorReport:
+    def play(self, reset_counter: int = 0) -> SupervisorReport:
         """
         Public method to start the Supervisor's play loop. Initializes the environment and calls the internal _play method.
 
-        :param kwargs: Additional keyword arguments for customization.
-        :type kwargs: dict
+        :param reset_counter: The current count of environment resets that have occurred during play. Default is 0.
+        :type reset_counter: int
         :return: The final SupervisorReport after execution.
         :rtype: SupervisorReport
         """
+        if self._report is None:
+            log_error("Supervisor play called before setup_play.", self._parameters)
         self._environment.reset()
-        self._report = self._create_report(**kwargs)
-        self._play(**kwargs)
+        self._play(reset_counter=reset_counter)
+        if self._report is None:
+            log_error(
+                "Supervisor _play destroyed the report. Something is wrong.",
+                self._parameters,
+            )
         return self._report
+
+    def close(self):
+        """
+        Resets the report
+        """
+        self._report = None
 
 
 class SimpleSupervisor(Supervisor):
@@ -295,12 +315,20 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
         plan = plan_part.strip()
         return immediate_task, plan
 
-    def _play(self, mission: str, initial_visual_context: str):
-        assert mission is not None, "Mission must be provided to play()."
+    def setup_play(self, mission: str, initial_visual_context: str):
+        assert mission is not None, "Mission must be provided to setup_play()."
         assert (
             initial_visual_context is not None
-        ), "Initial visual context must be provided to play()."
+        ), "Initial visual context must be provided to setup_play()."
+        super().setup_play(
+            mission=mission, initial_visual_context=initial_visual_context
+        )
         self.mission = mission
+        self.initial_visual_context = initial_visual_context
+
+    def _play(self, reset_counter: int):
+        mission = self.mission
+        initial_visual_context = self.initial_visual_context
         visual_context = initial_visual_context
         note = self.do_supervisor_start(visual_context)
         high_level_plan_str = "\n".join(self.high_level_plan)
@@ -351,6 +379,9 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
             log_info(f"Executor Analysis: {analysis}")
             if execution_report.exit_code == 1:
                 log_warn("Environment Steps Done")
+                break
+            elif execution_report.exit_code == 2:
+                log_info("Environment Terminated Successfully")
                 break
             prompt = self.executor_information_construction_prompt.replace(
                 "[LESSONS_LEARNED]", lessons_learned
@@ -462,15 +493,25 @@ class EQASupervisor(Supervisor):
     def _create_report(self, **play_kwargs):
         return EQASupervisorReport(parameters=self._parameters)
 
-    def _play(self, **kwargs):
+    def setup_play(self, question: str, initial_visual_context: str):
+        assert question is not None, "Question must be provided to setup_play()."
+        assert (
+            initial_visual_context is not None
+        ), "Initial visual context must be provided to setup_play()."
+        super().setup_play(
+            mission=question, initial_visual_context=initial_visual_context
+        )
+        self.question = question
+        self.initial_visual_context = initial_visual_context
+
+    def _play(self, reset_counter: int = 0):
         """
         Implementation of EQASupervisor play loop following the outlined steps.
         """
-        question = kwargs.get("question", "")
-        initial_visual_context = kwargs.get("initial_visual_context", "")
-
-        self.question = question
-        self.current_visual_context = initial_visual_context
+        question = self.question
+        initial_visual_context = self.initial_visual_context
+        self.question = self.question
+        self.current_visual_context = self.initial_visual_context
         self.collected_notes = []
         self.to_track = ""
         self.high_level_plan = ""

@@ -6,9 +6,19 @@ Keeps a record of:
 Provides methods to access these.
 """
 
-from typing import Dict, Type, Optional, Union
-from poke_worlds.utils import log_error, load_parameters, log_warn
-from poke_worlds.emulation.registry import get_emulator, AVAILABLE_GAMES, infer_game
+from typing import Dict, Type, Optional, Union, Mapping, List
+from poke_worlds.utils import (
+    log_error,
+    load_parameters,
+    log_warn,
+    get_benchmark_tasks_df,
+)
+from poke_worlds.emulation.registry import (
+    get_emulator,
+    AVAILABLE_GAMES,
+    infer_game,
+    get_available_init_states,
+)
 from poke_worlds.interface.controller import Controller, _ALWAYS_VALID_CONTROLLERS
 from poke_worlds.interface.environment import Environment, DummyEnvironment
 from poke_worlds.interface.pokemon.environments import (
@@ -18,6 +28,8 @@ from poke_worlds.interface.pokemon.environments import (
     PokemonTestEnvironment,
 )
 from poke_worlds.interface.pokemon.controllers import PokemonStateWiseController
+
+import pandas as pd
 
 _project_parameters = load_parameters()
 
@@ -185,3 +197,157 @@ def get_environment(
     return environment_class(
         emulator=emulator, controller=controller, parameters=parameters
     )
+
+
+def get_benchmark_tasks(game: str, parameters: dict = None) -> pd.DataFrame:
+    """
+    Loads the benchmark tasks for the specified game from the benchmark_tests/tasks.csv file
+
+    Args:
+        game (str): The variant of the game to get benchmark tasks for.
+        parameters (dict, optional): Additional parameters for error logging.
+
+    Returns:
+        pd.DataFrame: DataFrame containing the benchmark tasks for the specified game.
+    """
+    parameters = load_parameters(parameters)
+    tasks_df = get_benchmark_tasks_df(parameters)
+    game_tasks_df = tasks_df[tasks_df["game"] == game]
+    if len(game_tasks_df) == 0:
+        log_error(
+            f"No benchmark tasks found for game variant '{game}'. Please ensure that the tasks.csv file contains tasks for this game.",
+            parameters,
+        )
+    return game_tasks_df
+
+
+def get_test_environment(
+    row: Mapping,
+    controller_variant: Union[str, Type[Controller], Controller],
+    parameters: dict = None,
+    **emulator_kwargs,
+) -> Environment:
+    """
+    Creates an Environment instance based on a row from the benchmark tasks / questions DataFrame.
+
+    :param row: A row from the benchmark tasks / questions DataFrame.
+    :type row: Mapping
+    :param controller_variant: The variant of the controller to create or the Controller class itself or an instance of Controller.
+    :type controller_variant: Union[str, Type[Controller], Controller]
+    :param parameters: Additional parameters for error logging.
+    :type parameters: dict, optional
+    :param emulator_kwargs: Additional keyword arguments passed to the `get_emulator` method (e.g. `save_video`).
+    :return: An instance of the requested Environment class.
+    :rtype: Environment
+
+    """
+    parameters = load_parameters(parameters)
+    return get_environment(
+        game=row["game"],
+        environment_variant=row["environment_variant"],
+        controller_variant=controller_variant,
+        init_state=row["init_state"],
+        state_tracker_class=row["state_tracker_class"],
+        parameters=parameters,
+        **emulator_kwargs,
+    )
+
+
+def get_training_environments_kwargs(
+    row: Mapping,
+    controller_variant: Union[str, Type[Controller], Controller],
+    parameters: dict = None,
+    **emulator_kwargs,
+) -> List[Dict[str, str]]:
+    """
+    Creates a list of keyword arguments that can be passed into `get_environment` to create same-game training environments for the given benchmark task.
+    This method does *not* return environments for the `shifted_environments` setting. For that, see `get_shifted_environments_kwargs`.
+
+    :param row: A row from the benchmark tasks / questions DataFrame.
+    :type row: Mapping
+    :param controller_variant: Description
+    :type controller_variant: Union[str, Type[Controller], Controller]
+    :param parameters: Additional parameters for error logging.
+    :type parameters: dict, optional
+    :param emulator_kwargs: Additional keyword arguments passed to the `get_emulator` method (e.g. `save_video`).
+    :return: A list of keyword argument dictionaries for creating training environments.
+    :rtype: List[Dict[str, str]]
+    """
+    parameters = load_parameters(parameters)
+    common_kwargs = {
+        "game": row["game"],
+        "controller_variant": controller_variant,
+        "environment_variant": "default",
+        "state_tracker_class": "default",
+        **emulator_kwargs,
+    }
+    disallowed_init_states = [
+        state.strip() for state in row["other_disallowed_states"].split(",")
+    ] + [
+        row["init_state"],
+        "starter",
+    ]  # TODO: I literally ONLY have this in here to avoid the agent going to options and messing up stuff. Fix properly later.
+    training_envs_kwargs = []
+    for init_state in get_available_init_states(row["game"]):
+        if init_state not in disallowed_init_states:
+            env_kwargs = common_kwargs.copy()
+            env_kwargs["init_state"] = init_state
+            training_envs_kwargs.append(env_kwargs)
+    if len(training_envs_kwargs) == 0:
+        log_error(
+            f"No available training environments found for benchmark task '{row['task_name']}' in game '{row['game']}'. Please ensure that there are available initial states for this game that are not in the disallowed states list.",
+            parameters,
+        )
+    return training_envs_kwargs
+
+
+def get_shifted_environments_kwargs(
+    row: Mapping,
+    controller_variant: Union[str, Type[Controller], Controller],
+    parameters: dict = None,
+    **emulator_kwargs,
+) -> List[Dict[str, str]]:
+    """
+    Creates a list of keyword arguments that can be passed into `get_environment` to create shifted environments for the given benchmark task.
+    For same-game training environments, see `get_training_environments_kwargs`.
+
+    :param row: A row from the benchmark tasks / questions DataFrame.
+    :type row: Mapping
+    :param controller_variant: Description
+    :type controller_variant: Union[str, Type[Controller], Controller]
+    :param parameters: Additional parameters for error logging.
+    :type parameters: dict, optional
+    :param emulator_kwargs: Additional keyword arguments passed to the `get_emulator` method (e.g. `save_video`).
+    :return: A list of keyword argument dictionaries for creating shifted environments.
+    :rtype: List[Dict[str, str]]
+    """
+    parameters = load_parameters(parameters)
+    common_kwargs = {
+        "controller_variant": controller_variant,
+        "environment_variant": "default",
+        "state_tracker_class": "default",
+        **emulator_kwargs,
+    }
+    allowed_games = [game.strip() for game in row["shifted_training_games"].split(",")]
+    if row["game"] in allowed_games:
+        allowed_games.remove(row["game"])
+    disallowed_init_states = [
+        state.strip() for state in row["other_disallowed_states"].split(",")
+    ] + [
+        row["init_state"],
+        "starter",
+    ]  # TODO: Same as above.
+    shifted_envs_kwargs = []
+    for game in allowed_games:
+        for init_state in get_available_init_states(game):
+            if init_state not in disallowed_init_states:
+                env_kwargs = common_kwargs.copy()
+                env_kwargs["game"] = game
+                env_kwargs["init_state"] = init_state
+                shifted_envs_kwargs.append(env_kwargs)
+    if len(shifted_envs_kwargs) == 0:
+        log_error(
+            f"No available shifted environments found for benchmark task '{row['task_name']}' in games '{allowed_games}'. Please ensure that there are available initial states for these games that are not in the disallowed states list.",
+            parameters,
+        )
+    return shifted_envs_kwargs

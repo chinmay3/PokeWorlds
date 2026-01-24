@@ -26,15 +26,30 @@ There are two ways to navigate the documentation:
 **Emulation Submodule:**
 * `AVAILABLE_GAMES`: List of available game variants supported by the package.
 * `get_emulator`: Factory function to get an emulator instance for a specified game variant.
+* `get_available_init_states`: Function to get a list of available initial states for a specified game variant.
 
 **Interface Submodule:**
 * `get_environment`: Factory function to get an environment instance for a specified game variant and environment variant.
+* `get_benchmark_tasks`: Function to get benchmark tasks for evaluating agents in different game variants.
+* `get_test_environment`: Function to create a test environment based on a benchmark task.
+* `get_training_environments_kwargs`: Function to get keyword arguments for creating training environments for a specified game variant.
+* `get_shifted_environments_kwargs`: Function to get keyword arguments for creating shifted environments for domain adaptation experiments.
 
 **Execution Submodule:**
 * `Executor`: Class that manages the execution of high-level tasks in the game environment using VLM agents.
 
 """
 
-from poke_worlds.emulation.registry import AVAILABLE_GAMES, get_emulator
-from poke_worlds.interface.registry import get_environment
+from poke_worlds.emulation.registry import (
+    AVAILABLE_GAMES,
+    get_emulator,
+    get_available_init_states,
+)
+from poke_worlds.interface.registry import (
+    get_environment,
+    get_benchmark_tasks,
+    get_test_environment,
+    get_training_environments_kwargs,
+    get_shifted_environments_kwargs,
+)
 from poke_worlds.execution.executor import Executor

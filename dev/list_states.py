@@ -1,7 +1,6 @@
 import click
-from poke_worlds import AVAILABLE_GAMES
-from poke_worlds.utils import load_parameters, log_info, log_warn, log_dict
-import os
+from poke_worlds import AVAILABLE_GAMES, get_available_init_states
+from poke_worlds.utils import log_info, log_error
 import pandas as pd
 
 
@@ -14,15 +13,9 @@ import pandas as pd
 )
 def list_states(game):
     """Lists all available states for a given game."""
-    params = load_parameters()
-    state_path = params[f"{game}_rom_data_path"] + "/states/"
-    if not os.path.exists(state_path):
-        log_warn(f"{state_path} does not exist.", params)
-        return
-    states = os.listdir(state_path)
+    states = get_available_init_states(game)
     if len(states) == 0:
-        log_warn(f"No states found in {state_path}.", params)
-        return
+        log_error(f"No available states found for game {game}.")
     state_dict = {"base": []}
     for state_file in states:
         if state_file.endswith(".state"):
@@ -41,7 +34,7 @@ def list_states(game):
         format_str += f"\n  {key}:\n"
         for state_name in state_dict[key]:
             format_str += f"    - {state_name}\n"
-    log_info(format_str, params)
+    log_info(format_str)
     save_path = "tmp_state_list.csv"
     columns = ["name"]
     data = []
@@ -50,7 +43,7 @@ def list_states(game):
             data.append([state_name])
     df = pd.DataFrame(data, columns=columns)
     df.to_csv(save_path, index=False)
-    log_info(f"Saved state list to {save_path}", params)
+    log_info(f"Saved state list to {save_path}")
 
 
 if __name__ == "__main__":

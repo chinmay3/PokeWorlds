@@ -10,6 +10,7 @@ Provides methods to access these.
 """
 
 from poke_worlds.utils import log_error, load_parameters, log_warn
+import os
 from typing import Optional, Union, Type, Dict
 from poke_worlds.emulation.parser import StateParser, DummyParser
 from poke_worlds.emulation.pokemon.parsers import (
@@ -369,3 +370,33 @@ def get_emulator(
         **emulator_kwargs,
     )
     return emulator
+
+
+def get_available_init_states(game: str, parameters: Optional[dict] = None) -> list:
+    """
+    Returns a list of available initial state names for the specified game.
+
+    Args:
+        game (str): The variant of the Pokemon game (e.g., `pokemon_red`, `pokemon_crystal`).
+        parameters (dict, optional): Additional parameters for configuration.
+
+    Returns:
+        list: A list of available initial state names (without .state extension).
+    """
+    parameters = load_parameters(parameters)
+    game = infer_game(game, parameters=parameters)
+    if f"{game}_rom_data_path" not in parameters:
+        log_error(
+            f"ROM data path for game '{game}' is not specified in the parameters under key '{game}_rom_data_path'.",
+            parameters,
+        )
+    states_dir = parameters[f"{game}_rom_data_path"] + "/states/"
+    if not os.path.exists(states_dir):
+        log_error(
+            f"States directory '{states_dir}' does not exist for game '{game}'.",
+            parameters,
+        )
+    state_names = [
+        f.replace(".state", "") for f in os.listdir(states_dir) if f.endswith(".state")
+    ]
+    return state_names

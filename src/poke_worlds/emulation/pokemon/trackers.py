@@ -163,7 +163,7 @@ class PokemonRedCaughtPikachuTestTracker(PokemonTestTracker):
     TERMINATION_TRUNCATION_METRIC = CaughtPikachuTerminateMetric
 
 
-class PokemonRedBoughtPotionAtPewterPokemartTestTracker(PokemonTestMetric):
+class PokemonRedBoughtPotionAtPewterPokemartTestTracker(PokemonTestTracker):
     """
     A TestTracker for Pokémon Red that ends an episode when the agent buys a Potion at the Pewter City Poké Mart.
     """
@@ -171,7 +171,7 @@ class PokemonRedBoughtPotionAtPewterPokemartTestTracker(PokemonTestMetric):
     TERMINATION_TRUNCATION_METRIC = BoughtPotionAtPewterPokemartTerminateMetric
 
 
-class PokemonRedUsedPotionOnCharmanderTestTracker(PokemonTestMetric):
+class PokemonRedUsedPotionOnCharmanderTestTracker(PokemonTestTracker):
     """
     A TestTracker for Pokémon Red that ends an episode when the agent uses a Potion on Charmander.
     """
@@ -179,7 +179,7 @@ class PokemonRedUsedPotionOnCharmanderTestTracker(PokemonTestMetric):
     TERMINATION_TRUNCATION_METRIC = UsedPotionOnCharmanderTerminateMetric
 
 
-class PokemonRedOpenMapTestTracker(PokemonTestMetric):
+class PokemonRedOpenMapTestTracker(PokemonTestTracker):
     """
     A TestTracker for Pokémon Red that ends an episode when the agent opens the map.
     """

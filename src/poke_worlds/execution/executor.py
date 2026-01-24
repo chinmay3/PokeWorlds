@@ -109,7 +109,28 @@ class Executor(ABC):
         dict,
         bool,
         bool,
+        bool,
     ]:
+        """
+        Decides and executes the next high level action in the environment.
+
+        :return: A tuple containing:
+
+            -  `action_details` (`Tuple[str, Type[HighLevelAction], dict, int, dict, str]`): Details of the action taken. Is in the form:
+                -  `action_string` (`str`): The string representation of the action taken.
+                -  `action_class` (`Type[HighLevelAction]`): The class of the high level action taken.
+                -  `action_kwargs` (`dict`): The execution arguments used for the action.
+                -  `transition_states` (`dict`): The state information before and after the action.
+                -  `success_code` (`int`): Success code of the action.
+                -  `action_return_info` (`dict`): Return information from the action.
+                -  `action_message` (`str`): The message describing the action taken and its status.
+            -  `info` (`dict`): The info dictionary returned by the environment after taking the action.
+            -  `terminated` (`bool`): Whether the environment signaled termination after the action.
+            -  `truncated` (`bool`): Whether the environment signaled truncation after the action.
+            -  `error_out` (`bool`): Whether an error occurred during action execution (e.g. exceeding max retries).
+
+        :rtype: Tuple[str, str, Tuple[str, type[HighLevelAction], dict, int, dict, str], dict, bool, bool, bool]
+        """
         n_tries = 0
         previous_invalid_action_strings = []
         while n_tries < self._max_retries_per_action:
@@ -145,7 +166,6 @@ class Executor(ABC):
                     action_success,
                     action_return,
                 ) = info["core"]["previous_action_details"]
-                environment_done = terminated or truncated
                 return (
                     (
                         action_str,
@@ -156,14 +176,15 @@ class Executor(ABC):
                         action_return,
                     ),
                     info,
-                    environment_done,
+                    terminated,
+                    truncated,
                     False,
                 )
             else:  # action was a valid option, but invalid in the current state.
                 previous_invalid_action_strings.append(action_str)
                 continue
         # If we reach here, then we have exceeded max retries
-        return None, None, False, True
+        return None, None, False, False, True
 
     def run_executor_action(self, action_str) -> Tuple[dict, int, str]:
         """
@@ -333,7 +354,8 @@ class Executor(ABC):
         :rtype: ExecutionReport
         """
         n_steps = -1
-        environment_done = False
+        truncated = False
+        terminated = False
         error_out = False
         if show_progress:
             pbar = tqdm(total=step_limit, desc=f"Executing")
@@ -347,21 +369,24 @@ class Executor(ABC):
                 if show_progress:
                     pbar.close()
                 return self.get_execution_report()
-            if environment_done:
+            if terminated or truncated:
                 exit_kwargs = self._get_exit_kwargs()
-                self._execution_report._close(exit_code=1, **exit_kwargs)
+                self._execution_report._close(
+                    exit_code=1 if truncated else 2, **exit_kwargs
+                )
                 if show_progress:
                     pbar.close()
                 return self.get_execution_report()
             if n_steps >= step_limit:
                 # need to close out
-                self._execution_report._close(
-                    "Reached step limit.", environment_done=environment_done
-                )
+                exit_kwargs = self._get_exit_kwargs()
+                self._execution_report._close(exit_code=1, **exit_kwargs)
                 if show_progress:
                     pbar.close()
                 return self.get_execution_report()
-            action_details, _, environment_done, error_out = self._execute_next_action()
+            action_details, _, terminated, truncated, error_out = (
+                self._execute_next_action()
+            )
             if error_out:
                 continue
             (

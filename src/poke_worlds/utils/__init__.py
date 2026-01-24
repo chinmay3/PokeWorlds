@@ -5,9 +5,9 @@ from poke_worlds.utils.fundamental import file_makedir, check_optional_installs
 from pandas import isna
 from typing import Type, List
 import numpy as np
-from PIL import Image
 import os
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 def is_none_str(s) -> bool:
@@ -125,3 +125,14 @@ def show_frames(
             plt.imsave(filename, frames[i][:, :, 0], cmap="gray")
         else:
             plt.show()
+
+
+def get_benchmark_tasks_df(parameters: dict = None) -> pd.DataFrame:
+    """
+    Loads the benchmark tasks from the benchmark_tests/tasks.csv file
+    """
+    parameters = load_parameters(parameters)
+    project_root = parameters["project_root"]
+    tasks_filepath = os.path.join(project_root, "benchmark_tests", "tasks.csv")
+    tasks_df = pd.read_csv(tasks_filepath)
+    return tasks_df
