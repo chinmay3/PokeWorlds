@@ -708,10 +708,18 @@ class RegionMatchTruncationMetric(TerminationTruncationMetric, ABC):
                 "Must set _TRUNCATION_NAMED_REGION and _TRUNCATION_TARGET_NAME.",
                 self._parameters,
             )
-        matches = self.state_parser.named_region_matches_multi_target(
-            current_frame, self._TRUNCATION_NAMED_REGION, self._TRUNCATION_TARGET_NAME
-        )
-        return matches
+        all_frames = [current_frame]
+        if recent_frames is not None:
+            all_frames = recent_frames
+        for frame in all_frames:
+            matches = self.state_parser.named_region_matches_multi_target(
+                frame,
+                self._TRUNCATION_NAMED_REGION,
+                self._TRUNCATION_TARGET_NAME,
+            )
+            if matches:
+                return True
+        return False
 
 
 class RegionMatchTerminationMetric(TerminationTruncationMetric, ABC):
@@ -732,7 +740,15 @@ class RegionMatchTerminationMetric(TerminationTruncationMetric, ABC):
                 "Must set _TERMINATION_NAMED_REGION and _TERMINATION_TARGET_NAME.",
                 self._parameters,
             )
-        matches = self.state_parser.named_region_matches_multi_target(
-            current_frame, self._TERMINATION_NAMED_REGION, self._TERMINATION_TARGET_NAME
-        )
-        return matches
+        all_frames = [current_frame]
+        if recent_frames is not None:
+            all_frames = recent_frames
+        for frame in all_frames:
+            matches = self.state_parser.named_region_matches_multi_target(
+                frame,
+                self._TERMINATION_NAMED_REGION,
+                self._TERMINATION_TARGET_NAME,
+            )
+            if matches:
+                return True
+        return False

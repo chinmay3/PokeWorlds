@@ -7,6 +7,17 @@ from poke_worlds.emulation.pokemon.base_metrics import (
 from poke_worlds.emulation.pokemon.test_metrics import (
     PokemonCenterTerminateMetric,
     MtMoonTerminateMetric,
+    SpeakToBillCompleteTerminateMetric,
+    PickupPokeballTerminateMetric,
+    ReadTrainersTipsSignTerminateMetric,
+    SpeakToCinnabarGymAideCompleteTerminateMetric,
+    DefeatedBrockTerminateMetric,
+    DefeatedLassTerminateMetric,
+    CaughtPidgeyTerminateMetric,
+    CaughtPikachuTerminateMetric,
+    BoughtPotionAtPewterPokemartTerminateMetric,
+    UsedPotionOnCharmanderTerminateMetric,
+    OpenMapTerminateMetric,
 )
 
 from poke_worlds.emulation.pokemon.base_metrics import (
@@ -86,3 +97,91 @@ class PokemonRedMtMoonTestTracker(PokemonTestTracker):
     """
 
     TERMINATION_TRUNCATION_METRIC = MtMoonTerminateMetric
+
+
+class PokemonRedSpeakToBillTestTracker(PokemonTestTracker):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent speaks to Bill.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = SpeakToBillCompleteTerminateMetric
+
+
+class PokemonRedPickupPokeballTestTracker(PokemonTestTracker):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent picks up the Pokéball in Professor Oak's Lab.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = PickupPokeballTerminateMetric
+
+
+class PokemonRedReadTrainersTipsSignTestTracker(PokemonTestTracker):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent reads the Trainer's Tips sign.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = ReadTrainersTipsSignTerminateMetric
+
+
+class PokemonRedSpeakToCinnabarGymAideCompleteTestTracker(PokemonTestTracker):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent speaks to the Cinnabar Gym aide.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = SpeakToCinnabarGymAideCompleteTerminateMetric
+
+
+class PokemonRedDefeatedBrockTestTracker(PokemonTestTracker):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent defeats Brock.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = DefeatedBrockTerminateMetric
+
+
+class PokemonRedDefeatedLassTestTracker(PokemonTestTracker):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent defeats the Lass trainer.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = DefeatedLassTerminateMetric
+
+
+class PokemonRedCaughtPidgeyTestTracker(PokemonTestTracker):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent catches a Pidgey.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = CaughtPidgeyTerminateMetric
+
+
+class PokemonRedCaughtPikachuTestTracker(PokemonTestTracker):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent catches a Pikachu.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = CaughtPikachuTerminateMetric
+
+
+class PokemonRedBoughtPotionAtPewterPokemartTestTracker(PokemonTestMetric):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent buys a Potion at the Pewter City Poké Mart.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = BoughtPotionAtPewterPokemartTerminateMetric
+
+
+class PokemonRedUsedPotionOnCharmanderTestTracker(PokemonTestMetric):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent uses a Potion on Charmander.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = UsedPotionOnCharmanderTerminateMetric
+
+
+class PokemonRedOpenMapTestTracker(PokemonTestMetric):
+    """
+    A TestTracker for Pokémon Red that ends an episode when the agent opens the map.
+    """
+
+    TERMINATION_TRUNCATION_METRIC = OpenMapTerminateMetric

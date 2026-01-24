@@ -685,10 +685,20 @@ class PokemonRedStateParser(BasePokemonRedStateParser):
                 "picked_charmander",
                 "picked_bulbasaur",
                 "picked_squirtle",
+                "talk_bill_complete",
+                "pick_up_pokeball_starting",  # is tied to player character name being You
+                "trainers_tips_sign",
+                "cinnabar_gym_aid_complete",
+                "defeated_brock",
+                "defeated_lass",
+                "caught_pidgey",
+                "caught_pikachu",
+                "used_potion_on_charmander",
             ],
             "screen_bottom_half": [
                 "viridian_pokemon_center_entrance",
                 "mt_moon_entrance",
+                "bought_potion_at_pewter_pokemart",
             ],
         }
         super().__init__(
