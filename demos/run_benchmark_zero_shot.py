@@ -16,6 +16,7 @@ import pandas as pd
 def run_task(row, max_resets, controller_variant, **emulator_kwargs):
     success = False
     n_resets = 1
+    n_steps_total = 0
     n_steps = 0
     mission = row["task"]
     task_str = mission.replace(" ", "_").lower()
@@ -37,9 +38,10 @@ def run_task(row, max_resets, controller_variant, **emulator_kwargs):
     while n_resets < max_resets + 1:
         supervisor_report = supervisor.play()
         if len(supervisor_report.execution_reports) > 0:
-            last_execution_states, last_execution_report = (
+            last_kwargs, last_execution_report = (
                 supervisor_report.execution_reports[-1]
             )
+            last_execution_states = last_execution_report.get_state_infos()
             # updated n_steps
             if len(last_execution_states) == 0:  # manually check for success
                 state_info = environment.get_info()
@@ -48,15 +50,19 @@ def run_task(row, max_resets, controller_variant, **emulator_kwargs):
                         success = True
                         break
             last_state = last_execution_states[-1]
-            step_count = last_state["core"]["n_steps"]
-            n_steps += step_count
+            step_count = last_state["core"]["steps"]
+            n_steps = step_count # this counts all steps across resets
             # check the last execution report in the supervisor report. It is success only if exit code is 2
             if last_execution_report.exit_code == 2:
                 success = True
                 break
             else:
+                n_steps_total += n_steps
+                n_steps = 0                
                 n_resets += 1
         else:
+            n_steps_total += n_steps
+            n_steps = 0                
             n_resets += 1
     environment.close()
     return success, n_resets - 1, n_steps
