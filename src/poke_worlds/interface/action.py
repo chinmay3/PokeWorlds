@@ -91,26 +91,28 @@ class HighLevelAction(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def space_to_parameters(self, space_action: Space) -> Dict[str, Any]:
+    def space_to_parameters(self, space_action: Space) -> Optional[Dict[str, Any]]:
         """
         Converts a Gym space action into high level action parameters.
+        If the provided space action is invalid, return None.
 
         :param space_action: The action in the high level action's parameter space.
         :type space_action: Space
         :return: The high level action's parameters corresponding to the space action.
-        :rtype: Dict[str, Any]
+        :rtype: Optional[Dict[str, Any]]
         """
         raise NotImplementedError
 
     @abstractmethod
-    def parameters_to_space(self, **kwargs) -> Space:
+    def parameters_to_space(self, **kwargs) -> Optional[Space]:
         """
         Converts high level action parameters into a Gym space action.
+        If the provided parameters are invalid, return None.
 
         :param kwargs: The high level action's parameters.
         :type kwargs: Dict[str, Any]
         :return: The action in the high level action's parameter space.
-        :rtype: Space
+        :rtype: Optional[Space]
         """
         raise NotImplementedError
 
@@ -130,8 +132,8 @@ class HighLevelAction(ABC):
     @abstractmethod
     def _execute(self, **kwargs) -> Tuple[List[Dict[str, Dict[str, Any]]], int]:
         """
-        Executes the specified high level action on the emulator.
-        Does not check for validity
+        Executes the specified, valid high level action on the emulator.
+        Does not check for validity, assumes the action is valid.
 
         :param self: Description
         :param kwargs: Additional arguments required for the specific high level action.
@@ -166,14 +168,13 @@ class HighLevelAction(ABC):
         """
         Executes the specified high level action on the emulator after checking for validity.
 
-        Args:
-            kwargs: Additional arguments required for the specific high level action.
+        :param kwargs: Additional arguments required for the specific high level action.
+        :return: None, None if the action is not valid. Otherwise:
 
-        Returns:
+            - A list of state tracker reports after each low level action executed.
 
-            List[Dict[str, Dict[str, Any]]]: A list of state tracker reports after each low level action executed.
-
-            int: Action success status.
+            - Action success status.
+        :rtype: Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[int]]
         """
         if self._emulator is None:
             log_error(
@@ -190,16 +191,18 @@ class HighLevelAction(ABC):
         """
         Executes the specified high level action on the emulator after checking for validity.
 
-        Args:
-            space_action (Space): The action in the high level action's parameter space.
+        :param space_action: The action in the high level action's parameter space.
+        :type space_action: Space
+        :return: None, None if the action is not valid. Otherwise:
 
-        Returns:
+            - A list of state tracker reports after each low level action executed.
 
-            List[Dict[str, Dict[str, Any]]]: A list of state tracker reports after each low level action executed.
-
-            int: Action success status.
+            - Action success status.
+        :rtype: Tuple[Optional[List[Dict[str, Dict[str, Any]]]], Optional[int]]
         """
         parameters = self.space_to_parameters(space_action)
+        if parameters is None:
+            return None, None
         return self.execute(**parameters)
 
 
@@ -241,10 +244,11 @@ class LowLevelAction(HighLevelAction):
         if low_level_action is None or not isinstance(
             low_level_action, LowLevelActions
         ):
-            log_error(
-                "LowLevelAction requires a 'low_level_action' parameter of type LowLevelActions.",
-                self._parameters,
-            )
+            # log_warn(
+            #    "LowLevelAction requires a 'low_level_action' parameter of type LowLevelActions.",
+            #    self._parameters,
+            # )
+            return None
         return low_level_action.value
 
     def _execute(
@@ -303,10 +307,11 @@ class LowLevelPlayAction(HighLevelAction):
 
     def parameters_to_space(self, low_level_action: LowLevelActions) -> Space:
         if low_level_action is None or low_level_action not in self.allowed_actions:
-            log_error(
-                "LowLevelPlayAction requires a 'low_level_action' parameter that is not a menu button press.",
-                self._parameters,
-            )
+            # log_warn(
+            #    "LowLevelPlayAction requires a 'low_level_action' parameter that is not a menu button press.",
+            #    self._parameters,
+            # )
+            return None
         return self.allowed_actions.index(low_level_action)
 
     def _execute(
@@ -353,10 +358,11 @@ class RandomPlayAction(HighLevelAction):
         elif kind == "press":
             return 1
         else:
-            log_error(
-                "RandomPlayAction requires a 'kind' parameter of either 'move' or 'press'.",
-                self._parameters,
-            )
+            # log_warn(
+            #    "RandomPlayAction requires a 'kind' parameter of either 'move' or 'press'.",
+            #    self._parameters,
+            # )
+            return None
 
     def _execute(self, kind: str):
         if kind == "move":

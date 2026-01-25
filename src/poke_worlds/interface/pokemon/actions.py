@@ -326,22 +326,22 @@ class MoveStepsAction(BaseMovementAction):
         direction = None
         if space_action[0] > 0:
             if direction is not None:
-                log_error(f"Weird space vector: {space_action}", self._parameters)
+                return None  # can't move in two directions at once
             direction = "up"
         if space_action[0] < 0:
             if direction is not None:
-                log_error(f"Weird space vector: {space_action}", self._parameters)
+                return None
             direction = "down"
         if space_action[1] > 0:
             if direction is not None:
-                log_error(f"Weird space vector: {space_action}", self._parameters)
+                return None
             direction = "right"
         if space_action[1] < 0:
             if direction is not None:
-                log_error(f"Weird space vector: {space_action}", self._parameters)
+                return None
             direction = "left"
         if direction is None:
-            log_error(f"Weird space vector: {space_action}", self._parameters)
+            return None
         steps = abs(int(space_action.sum()))
         return {"direction": direction, "steps": steps}
 
@@ -356,12 +356,14 @@ class MoveStepsAction(BaseMovementAction):
         elif direction == "left":
             move_vec[0] = -1
         else:
-            log_error(f"Unrecognized direction {direction}", self._parameters)
+            # log_warn(f"Unrecognized direction {direction}", self._parameters)
+            return None
         if steps <= 0:
-            log_error(
-                f"Bro. What you trying here. Don't step weirdly: {steps}",
-                self._parameters,
-            )
+            # log_warn(
+            #    f"Bro. What you trying here. Don't step weirdly: {steps}",
+            #    self._parameters,
+            # )
+            return None
         move_vec *= steps
         return move_vec
 
@@ -520,7 +522,8 @@ class MenuAction(HighLevelAction):
 
     def parameters_to_space(self, menu_action):
         if menu_action not in self._MENU_ACTION_MAP.keys():
-            log_error(f"Invalid menu action {menu_action}", self._parameters)
+            # log_warn(f"Invalid menu action {menu_action}", self._parameters)
+            return None
 
     def space_to_parameters(self, space_action):
         menu_action = None

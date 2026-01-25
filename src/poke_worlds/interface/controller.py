@@ -132,6 +132,8 @@ class Controller(ABC):
             OneOf: The action in the controller's action space.
         """
         space_action = action.parameters_to_space(**kwargs)
+        if space_action is None:
+            return None
         action_index = self.actions.index(action)
         return (action_index, space_action)
 
@@ -209,6 +211,11 @@ class Controller(ABC):
                 space_action = self._high_level_action_to_space_action(
                     action, **parameters
                 )
+                if space_action is None:
+                    log_error(
+                        f"Invalid action parameters combination for {action}: {parameters}. Ensure there are no bugs in {action}.get_all_valid_parameters",
+                        self._parameters,
+                    )
                 valid_space_actions[action].append(space_action)
         return valid_space_actions
 
@@ -272,7 +279,7 @@ class Controller(ABC):
         executing_action = self.actions[action_index]
         return executing_action.execute(**kwargs)
 
-    def string_to_space_action(self, input_str: str) -> Space:
+    def string_to_space_action(self, input_str: str) -> Optional[OneOf]:
         """
         Converts a string input to a space action
         Args:
@@ -282,6 +289,8 @@ class Controller(ABC):
             OneOf: The action in the controller's action space.
         """
         action, kwargs = self.string_to_high_level_action(input_str=input_str)
+        if action is None:
+            return None
         return self._high_level_action_to_space_action(action, kwargs)
 
     def execute_string(
