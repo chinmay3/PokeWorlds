@@ -12,6 +12,7 @@ from poke_worlds.execution.pokemon.reports import SimplePokemonExecutionReport
 from tqdm import tqdm
 import pandas as pd
 import traceback
+import os
 
 
 def run_task(row, max_resets, controller_variant, **emulator_kwargs):
@@ -82,7 +83,7 @@ def run_task(row, max_resets, controller_variant, **emulator_kwargs):
 )
 @click.option("--save_video", type=bool, default=True)
 @click.option("--max_resets", default=3, type=int)
-@click.option("--max_steps", default=1000, type=int)
+@click.option("--max_steps", default=200, type=int)
 @click.option("--override_index", default=None, type=int, required=False)
 def do(game, controller_variant, save_video, max_resets, max_steps, override_index):
     project_parameters = load_parameters()
@@ -99,6 +100,7 @@ def do(game, controller_variant, save_video, max_resets, max_steps, override_ind
     benchmark_tasks = get_benchmark_tasks(game=game)
     results = []
     columns = ["game", "task", "success", "n_resets", "n_steps"]
+    os.makedirs("results", exist_ok=True)
     for i, row in tqdm(benchmark_tasks.iterrows(), total=len(benchmark_tasks)):
         if override_index is not None and i != override_index:
             continue
@@ -114,7 +116,7 @@ def do(game, controller_variant, save_video, max_resets, max_steps, override_ind
         )
         results.append([row["game"], row["task"], success, n_resets, n_steps])
         df = pd.DataFrame(results, columns=columns)
-        save_path = f"benchmark_zero_shot_{game}_{model_save_name}.csv"
+        save_path = f"results/benchmark_zero_shot_{game}_{model_save_name}.csv"
         df.to_csv(save_path, index=False)
         print(f"Saved benchmark results to {save_path}")
 

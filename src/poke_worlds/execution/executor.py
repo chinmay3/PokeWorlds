@@ -1056,7 +1056,7 @@ Reasoning: I believe"""
         # Use the VLM to infer the action sequence
         current_frame = self._environment.get_info()["core"]["current_frame"]
         response = self._vlm.infer(final_prompt, current_frame, max_new_tokens=300)[0]
-        log_info(f"EQA Executor action sequence creation VLM response: {response}")
+        # log_info(f"EQA Executor action sequence creation VLM response: {response}")
 
         # Parse the response to extract the action sequence
         if "Action Sequence:" not in response:
@@ -1106,7 +1106,7 @@ Reasoning: I believe"""
 
         current_frame = self._environment.get_info()["core"]["current_frame"]
         response = self._vlm.infer(prompt, current_frame, max_new_tokens=150)[0]
-        log_info(f"EQA Executor change prediction VLM response: {response}")
+        # log_info(f"EQA Executor change prediction VLM response: {response}")
 
         if "Changes:" in response:
             changes_part = response.split("Changes:")[1].strip()
@@ -1173,7 +1173,7 @@ Reasoning: I believe"""
         )
 
         response = self._vlm.infer(prompt, current_frame, max_new_tokens=250)[0]
-        log_info(f"EQA Executor after action reflection VLM response: {response}")
+        # log_info(f"EQA Executor after action reflection VLM response: {response}")
 
         # Parse the response
         changes = "No changes observed"
@@ -1206,7 +1206,7 @@ Reasoning: I believe"""
             eval_response = self._vlm.infer(
                 eval_prompt, current_frame, max_new_tokens=150
             )[0]
-            log_info(f"EQA Executor change evaluation VLM response: {eval_response}")
+            # log_info(f"EQA Executor change evaluation VLM response: {eval_response}")
 
             # Parse evaluation response (but we may not need to use it directly)
 
@@ -1244,9 +1244,9 @@ Reasoning: I believe"""
         revisit_response = self._vlm.infer(
             revisit_prompt, current_frame, max_new_tokens=250
         )[0]
-        log_info(
-            f"EQA Executor action sequence revisit VLM response: {revisit_response}"
-        )
+        # log_info(
+        #    f"EQA Executor action sequence revisit VLM response: {revisit_response}"
+        # )
 
         # Parse revisit response
         if "Action Sequence:" in revisit_response:
@@ -1298,7 +1298,7 @@ Reasoning: I believe"""
 
             current_frame = self._environment.get_info()["core"]["current_frame"]
             response = self._vlm.infer(prompt, current_frame, max_new_tokens=150)[0]
-            log_info(f"EQA Executor exit decision VLM response: {response}")
+            # log_info(f"EQA Executor exit decision VLM response: {response}")
 
             if "Decision:" in response:
                 decision_part = response.split("Decision:")[1].strip()

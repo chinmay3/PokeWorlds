@@ -341,9 +341,9 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
             desc="Overall VLM Agent Progress",
         )
         while not mission_accomplished:
-            log_info(
-                f"Starting execution of immediate task: {immediate_task} with initial_plan: {initial_plan}"
-            )
+            # log_info(
+            #    f"Starting execution of immediate task: {immediate_task} with initial_plan: {initial_plan}"
+            # )
             execution_report = self.call_executor(
                 high_level_goal=self.mission,
                 task=immediate_task,
@@ -376,12 +376,12 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
             if mission_accomplished:
                 log_info("Mission accomplished!")
                 break
-            log_info(f"Executor Analysis: {analysis}")
+            # log_info(f"Executor Analysis: {analysis}")
             if execution_report.exit_code == 1:
                 log_warn("Environment Steps Done")
                 break
             elif execution_report.exit_code == 2:
-                log_info("Environment Terminated Successfully")
+                # log_info("Environment Terminated Successfully")
                 break
             prompt = self.executor_information_construction_prompt.replace(
                 "[LESSONS_LEARNED]", lessons_learned
@@ -394,7 +394,7 @@ Plan: <YOUR PLAN FOR THE EXECUTOR TO FOLLOW TO ACHIEVE THE IMMEDIATE TASK>
             if immediate_task is None or initial_plan is None:
                 break
             pbar.update(1)
-        log_info("Finished playing VLM agent.")
+        # log_info("Finished playing VLM agent.")
 
 
 class EQASupervisor(Supervisor):
@@ -522,7 +522,7 @@ class EQASupervisor(Supervisor):
         prompt = prompt.replace("[VISUAL_CONTEXT]", initial_visual_context)
 
         response = self._vlm.infer(prompt, current_frame, max_new_tokens=200)[0]
-        log_info(f"EQA Supervisor scene description VLM response: {response}")
+        # log_info(f"EQA Supervisor scene description VLM response: {response}")
 
         known_info = "No known information"
         unknown_info = "No unknown information"
@@ -538,7 +538,7 @@ class EQASupervisor(Supervisor):
         prompt = prompt.replace("[UNKNOWN_INFO]", unknown_info)
 
         response = self._vlm.infer(prompt, current_frame, max_new_tokens=200)[0]
-        log_info(f"EQA Supervisor planning VLM response: {response}")
+        # log_info(f"EQA Supervisor planning VLM response: {response}")
 
         if "To Track:" in response and "High Level Plan:" in response:
             parts = response.split("High Level Plan:")
@@ -572,7 +572,7 @@ class EQASupervisor(Supervisor):
 
             current_frame = self._environment.get_info()["core"]["current_frame"]
             response = self._vlm.infer(prompt, current_frame, max_new_tokens=200)[0]
-            log_info(f"EQA Supervisor task planning VLM response: {response}")
+            # log_info(f"EQA Supervisor task planning VLM response: {response}")
 
             immediate_task = "Explore the area"
             task_plan = "Look around to gather information"
@@ -623,7 +623,7 @@ class EQASupervisor(Supervisor):
 
             current_frame = self._environment.get_info()["core"]["current_frame"]
             response = self._vlm.infer(prompt, current_frame, max_new_tokens=200)[0]
-            log_info(f"EQA Supervisor termination VLM response: {response}")
+            # log_info(f"EQA Supervisor termination VLM response: {response}")
 
             if "Can Answer:" in response and "Yes" in response:
                 # We can answer the question
@@ -649,7 +649,7 @@ class EQASupervisor(Supervisor):
 
             current_frame = self._environment.get_info()["core"]["current_frame"]
             response = self._vlm.infer(prompt, current_frame, max_new_tokens=300)[0]
-            log_info(f"EQA Supervisor executor analysis VLM response: {response}")
+            # log_info(f"EQA Supervisor executor analysis VLM response: {response}")
 
             # Parse analysis response
             final_state_summary = "No summary available"
