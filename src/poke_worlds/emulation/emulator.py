@@ -62,6 +62,90 @@ class ReleaseActions(Enum):
     }
 
 
+class IDPathCreator:
+    """
+    Handles the creation of IDs and paths for saving emulator artifacts.
+    """
+
+    def __init__(self, parameters: dict):
+        verify_parameters(parameters)
+        self._parameters = parameters
+
+    def _get_numbered_instance_id(self, path: str, instance_id: str = None) -> int:
+        """
+        Looks at the given path and returns <next_number>_<instance_id> where next_number is 1 + the highest existing numbered instance ID in the path.
+
+        :param path: Path to look for existing instances.
+        :type path: str
+        :param instance_id: Instance ID pattern to match. If None, counts all instances.
+        :type instance_id: str
+        :return: Number of existing instances matching the pattern.
+        """
+        # instance_id = str(uuid.uuid4())[:8]
+        if not os.path.exists(path):
+            if instance_id is None:
+                instance_id = str(uuid.uuid4())[:8]
+            return f"0_{instance_id}"
+        if instance_id is None:
+            instance_id = str(uuid.uuid4())[:8]
+            n_existing = os.listdir(path)
+            return f"{len(n_existing)}_{instance_id}"
+        # must find the pattern <number>_<instance_id>
+        pattern = re.compile(r"(\d+)_" + re.escape(instance_id))
+        existing_instances = [d for d in os.listdir(path) if pattern.match(d)]
+        if len(existing_instances) == 0:
+            return f"0_{instance_id}"
+        else:
+            return f"{len(existing_instances)}_{instance_id}"
+
+    def get_session_path(
+        self,
+        session_name: Optional[str],
+        instance_id: Optional[str],
+        environment_variant: str,
+    ) -> str:
+        if session_name is None:
+            session_name = "tmp_sessions"
+            log_warn(
+                f"Saving a temporary session. If you run emulator.clear_tmp_sessions(), it will be deleted. To make it permanent, pass in a session_name to the emulator."
+            )
+        elif not isinstance(session_name, str) or session_name == "":
+            log_error(
+                f"session_name must be a non-empty string. Recieved {session_name}",
+                self._parameters,
+            )
+        storage_dir = self._parameters["storage_dir"]
+        session_path = os.path.join(
+            storage_dir, "sessions", environment_variant, session_name
+        )
+        if instance_id is not None:
+            if not isinstance(instance_id, str) or instance_id == "":
+                log_error(
+                    f"instance_id must be a non-empty string. Recieved {instance_id}",
+                    self._parameters,
+                )
+            session_path = os.path.join(session_path, "named_instances")
+        instance_id = self._get_numbered_instance_id(session_path, instance_id)
+        full_session_path = os.path.join(session_path, instance_id)
+        os.makedirs(full_session_path, exist_ok=True)
+        return full_session_path
+
+    def clear_tmp_sessions(self):
+        """
+        Clears the tmp_sessions directory for ALL game variants.
+        """
+        storage_dir = self._parameters["storage_dir"]
+        session_path = os.path.join(storage_dir, "sessions")
+        if not os.path.exists(session_path):
+            return
+        existing_variants = os.listdir(session_path)
+        for variant in existing_variants:
+            tmp_sessions_path = os.path.join(session_path, variant, "tmp_sessions")
+            if not os.path.exists(tmp_sessions_path):
+                continue
+            shutil.rmtree(tmp_sessions_path)
+
+
 class Emulator:
     """
     Handles the running of the GameBoy emulator, including loading ROMs, managing state, performing low level actions and calling the tracker.
@@ -165,28 +249,13 @@ class Emulator:
             save_video = self._parameters["gameboy_default_save_video"]
         self.save_video = save_video
         """ Whether to save video of the episodes. """
-        if instance_id is None:
-            instance_id = str(uuid.uuid4())[:8]
-        self.instance_id = instance_id
-        """ Unique identifier for this environment instance. Useful for distinguishing multiple environments running in parallel. """
-        self.session_name = None
-        if session_name is None:
-            session_name = "tmp_sessions"
-            log_warn(
-                f"Saving a temporary session. If you run emulator.clear_tmp_sessions(), it will be deleted. To make it permanent, pass in a session_name to the emulator."
-            )
-        elif not isinstance(session_name, str) or session_name == "":
-            log_error(
-                f"session_name must be a non-empty string. Recieved {session_name}",
-                self._parameters,
-            )
-        self.session_name = session_name
-        """ Name of the session. Decides the directory where artifacts are saved. """
-        self.session_path = os.path.join(
-            self.get_session_path(), self.session_name, self.instance_id
+        id_path_creator = IDPathCreator(self._parameters)
+        self.session_path = id_path_creator.get_session_path(
+            session_name=session_name,
+            instance_id=instance_id,
+            environment_variant=self.get_env_variant(),
         )
         """ Path to the session directory. This is where all artifacts for this session are saved. """
-        os.makedirs(self.session_path, exist_ok=True)
         self.act_freq = parameters["gameboy_action_freq"]
         """ Number of emulator ticks per action. Defaults to value specified in config files. """
         self.press_step = parameters["gameboy_press_step"]
@@ -228,9 +297,6 @@ class Emulator:
         """ Instance of the StateParser to parse game state variables. """
 
         self.state_tracker = state_tracker_class(
-            self.game,
-            self.session_name,
-            self.instance_id,
             self.state_parser,
             self._parameters,
         )
@@ -277,31 +343,6 @@ class Emulator:
         pyboy.stop()
         log_info(f"Created initial state file at {state_path}")
         sys.exit(0)
-
-    def clear_tmp_sessions(self):
-        """
-        Clears the tmp_sessions directory for ALL game variants.
-        """
-        storage_dir = self._parameters["storage_dir"]
-        session_path = os.path.join(storage_dir, "sessions")
-        if not os.path.exists(session_path):
-            return
-        existing_variants = os.listdir(session_path)
-        for variant in existing_variants:
-            tmp_sessions_path = os.path.join(session_path, variant, "tmp_sessions")
-            if not os.path.exists(tmp_sessions_path):
-                continue
-            shutil.rmtree(tmp_sessions_path)
-
-    def get_session_path(self) -> str:
-        """
-        Returns the path to the session directory for this environment variant.
-        :return: path to the session directory
-        """
-        storage_dir = self._parameters["storage_dir"]
-        session_path = os.path.join(storage_dir, "sessions", self.get_env_variant())
-        os.makedirs(session_path, exist_ok=True)
-        return session_path
 
     def set_init_state(self, init_state: str):
         """Sets a new initial state file for the environment. and resets the environment.

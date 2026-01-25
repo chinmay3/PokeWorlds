@@ -509,28 +509,16 @@ class StateTracker:
 
     def __init__(
         self,
-        name: str,
-        session_name: str,
-        instance_id: str,
         state_parser: StateParser,
         parameters: dict,
     ):
         """
         Initializes the StateTracker.
         Args:
-            name (str): Name of the game.
-            session_name (str): Name of the session.
-            instance_id (str): Unique identifier for this environment instance.
             state_parser (StateParser): An instance of the StateParser to parse game state variables.
             parameters (dict): A dictionary of parameters for configuration.
         """
         verify_parameters(parameters)
-        self.name = name
-        """ Name of the game. """
-        self.session_name = session_name
-        """ Name of the session. """
-        self.instance_id = instance_id
-        """ Unique identifier for this environment instance. """
         self.state_parser = state_parser
         """ An instance of the StateParser to parse game state variables. """
         self._parameters = parameters
@@ -671,7 +659,7 @@ class StateTracker:
 
     def __repr__(self) -> str:
         metric_names = [mg.NAME for mg in self.metrics.values()]
-        return f"<StateTracker(name={self.name}, session_name={self.session_name}, instance_id={self.instance_id}), metrics=({', '.join(metric_names)})>"
+        return f"<StateTracker, metrics=({', '.join(metric_names)})>"
 
 
 class TestTrackerMixin:

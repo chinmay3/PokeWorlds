@@ -27,6 +27,7 @@ There are two ways to navigate the documentation:
 * `AVAILABLE_GAMES`: List of available game variants supported by the package.
 * `get_emulator`: Factory function to get an emulator instance for a specified game variant.
 * `get_available_init_states`: Function to get a list of available initial states for a specified game variant.
+* `clear_tmp_sessions`: Function to clear temporary emulator sessions.
 
 **Interface Submodule:**
 * `get_environment`: Factory function to get an environment instance for a specified game variant and environment variant.
@@ -52,4 +53,6 @@ from poke_worlds.interface.registry import (
     get_training_environments_kwargs,
     get_shifted_environments_kwargs,
 )
+from poke_worlds.emulation import clear_tmp_sessions
+
 from poke_worlds.execution.executor import Executor

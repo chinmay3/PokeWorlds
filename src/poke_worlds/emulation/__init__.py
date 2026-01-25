@@ -13,3 +13,17 @@ This is what you should familiarize yourself with most deeply if you wish to use
 from poke_worlds.emulation.emulator import Emulator, LowLevelActions
 from poke_worlds.emulation.tracker import StateTracker, TestTrackerMixin
 from poke_worlds.emulation.parser import StateParser
+
+
+def clear_tmp_sessions():
+    """
+    Clears any temporary emulator sessions that may have been left
+    over from previous runs. This is useful to call at the start of a new
+    run to ensure no leftover sessions interfere with the new run.
+    """
+    from poke_worlds.emulation.emulator import IDPathCreator
+    from poke_worlds.utils import load_parameters
+
+    parameters = load_parameters()
+    creator = IDPathCreator(parameters)
+    creator.clear_tmp_sessions()
