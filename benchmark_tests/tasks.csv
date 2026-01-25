@@ -1,6 +1,6 @@
 game,task_category,task,init_state,state_tracker_class,other_disallowed_states,shifted_training_games
 pokemon_red,navigation,Enter the Pokemon Center,location_viridian_city_starting_charmander,viridian_center_test,location_viridian_city_complete,"pokemon_crystal, pokemon_brown, pokemon_starbeasts, pokemon_fools_gold, pokemon_prism"
-pokemon_red,navigation,Exit the cave using the exit on the bottom left,location_mt_moon_complete,mt_moon_test,location_mt_moon_starting_charmander,"pokemon_crystal, pokemon_brown, pokemon_starbeasts, pokemon_fools_gold, pokemon_prism"
+pokemon_red,navigation,Exit the cave using the exit on the bottom right,location_mt_moon_complete,mt_moon_test,location_mt_moon_starting_charmander,"pokemon_crystal, pokemon_brown, pokemon_starbeasts, pokemon_fools_gold, pokemon_prism"
 pokemon_red,interaction,Speak to Bill,location_bills_house_complete,speak_to_bill_test,location_bills_house_complete,"pokemon_crystal, pokemon_brown, pokemon_starbeasts, pokemon_fools_gold, pokemon_prism"
 pokemon_red,interaction,Pick up the item,location_viridian_forest_starting_charmander,pickup_pokeball_test,location_viridian_forest_complete,"pokemon_crystal, pokemon_brown, pokemon_starbeasts, pokemon_fools_gold, pokemon_prism"
 pokemon_red,"navigation, interaction",Read the sign,location_viridian_city_starting_charmander,read_trainers_tips_sign_test,location_viridian_city_complete,"pokemon_crystal, pokemon_brown, pokemon_starbeasts, pokemon_fools_gold, pokemon_prism"

@@ -155,7 +155,7 @@ class PokemonExecutor(SimpleExecutor):
             last_action_full_str = f"Action Taken: {last_action_str} | Status Message: {last_action_message}"
             prompt = prompt.replace("[LAST_ACTION]", last_action_full_str)
         # Now need to parse the response into plan, action, reasoning
-        action_str = None
+        action_str = "None"
         max_internal_retries = self._max_retries_per_action
         n_retries = 0
         if len(prev_action_strings) > 0:
@@ -185,6 +185,7 @@ class PokemonExecutor(SimpleExecutor):
             self._most_recent_plan = plan
             self._most_recent_next_action_thoughts = next_action_reasoning
             return action_str
+        return action_str  # will be retried externally
 
     def _string_to_executor_action(self, action_str):
         action_str = action_str.strip().lower()

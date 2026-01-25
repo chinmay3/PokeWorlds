@@ -11,6 +11,7 @@ from poke_worlds.execution.pokemon.executors import PokemonExecutor
 from poke_worlds.execution.pokemon.reports import SimplePokemonExecutionReport
 from tqdm import tqdm
 import pandas as pd
+import traceback
 
 
 def run_task(row, max_resets, controller_variant, **emulator_kwargs):
@@ -21,7 +22,7 @@ def run_task(row, max_resets, controller_variant, **emulator_kwargs):
     mission = row["task"]
     task_str = mission.replace(" ", "_").lower()
     emulator_kwargs = emulator_kwargs.copy()
-    emulator_kwargs["session_name"] += f"_{task_str}"
+    emulator_kwargs["session_name"] += f"/{task_str}/"
     environment = get_test_environment(
         row=row, controller_variant=controller_variant, **emulator_kwargs
     )
@@ -35,35 +36,39 @@ def run_task(row, max_resets, controller_variant, **emulator_kwargs):
         mission=mission,
         initial_visual_context="You are seeing a screenshot of the game.",
     )
-    while n_resets < max_resets + 1:
-        supervisor_report = supervisor.play()
-        if len(supervisor_report.execution_reports) > 0:
-            last_kwargs, last_execution_report = (
-                supervisor_report.execution_reports[-1]
-            )
-            last_execution_states = last_execution_report.get_state_infos()
-            # updated n_steps
-            if len(last_execution_states) == 0:  # manually check for success
-                state_info = environment.get_info()
-                if "terminated_truncated" in state_info:
-                    if state_info["terminated_truncated"]["terminated"]:
-                        success = True
-                        break
-            last_state = last_execution_states[-1]
-            step_count = last_state["core"]["steps"]
-            n_steps = step_count # this counts all steps across resets
-            # check the last execution report in the supervisor report. It is success only if exit code is 2
-            if last_execution_report.exit_code == 2:
-                success = True
-                break
+    try:
+        while n_resets < max_resets + 1:
+            supervisor_report = supervisor.play()
+            if len(supervisor_report.execution_reports) > 0:
+                last_kwargs, last_execution_report = (
+                    supervisor_report.execution_reports[-1]
+                )
+                last_execution_states = last_execution_report.get_state_infos()
+                # updated n_steps
+                if len(last_execution_states) == 0:  # manually check for success
+                    state_info = environment.get_info()
+                    if "terminated_truncated" in state_info:
+                        if state_info["terminated_truncated"]["terminated"]:
+                            success = True
+                            break
+                last_state = last_execution_states[-1]
+                step_count = last_state["core"]["steps"]
+                n_steps = step_count # this counts all steps across resets
+                # check the last execution report in the supervisor report. It is success only if exit code is 2
+                if last_execution_report.exit_code == 2:
+                    success = True
+                    break
+                else:
+                    n_steps_total += n_steps
+                    n_steps = 0                
+                    n_resets += 1
             else:
                 n_steps_total += n_steps
                 n_steps = 0                
                 n_resets += 1
-        else:
-            n_steps_total += n_steps
-            n_steps = 0                
-            n_resets += 1
+    except Exception as e:
+        traceback.print_exc()
+        print(f"Error during execution of task '{mission}': {e}")
     environment.close()
     return success, n_resets - 1, n_steps
 
@@ -101,10 +106,10 @@ def do(game, controller_variant, save_video, max_resets, max_steps):
             **emulator_kwargs,
         )
         results.append([row["game"], row["task"], success, n_resets, n_steps])
-    df = pd.DataFrame(results, columns=columns)
-    save_path = f"benchmark_zero_shot_{game}_{model_save_name}.csv"
-    df.to_csv(save_path, index=False)
-    print(f"Saved benchmark results to {save_path}")
+        df = pd.DataFrame(results, columns=columns)
+        save_path = f"benchmark_zero_shot_{game}_{model_save_name}.csv"
+        df.to_csv(save_path, index=False)
+        print(f"Saved benchmark results to {save_path}")
 
 
 if __name__ == "__main__":
