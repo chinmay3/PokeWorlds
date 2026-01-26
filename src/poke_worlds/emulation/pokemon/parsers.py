@@ -447,12 +447,13 @@ class PokemonStateParser(StateParser, ABC):
         return self.named_region_matches_target(current_screen, "dialogue_bottom_right")
 
     def dialogue_box_empty(self, current_screen: np.ndarray) -> bool:
-        return (
-            self.capture_named_region(
-                current_frame=current_screen, name="dialogue_box_full"
-            )
-            > 254
-        ).all()
+        box = self.capture_named_region(
+            current_frame=current_screen, name="dialogue_box_full"
+        )
+        perc_lt_255 = np.mean(box < 255)
+        if perc_lt_255 < 0.082:  # Empirical threshold
+            return True
+        return False
 
     def is_in_dialogue(
         self, current_screen: np.ndarray, trust_previous: bool = False
