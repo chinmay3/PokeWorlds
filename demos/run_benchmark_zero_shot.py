@@ -81,7 +81,16 @@ def run_task(row, max_resets, controller_variant, **emulator_kwargs):
 @click.option("--max_resets", default=3, type=int)
 @click.option("--max_steps", default=200, type=int)
 @click.option("--override_index", default=None, type=int, required=False)
-def do(game, controller_variant, save_video, max_resets, max_steps, override_index):
+@click.option("--random_sample", type=int, default=None)
+def do(
+    game,
+    controller_variant,
+    save_video,
+    max_resets,
+    max_steps,
+    override_index,
+    random_sample,
+):
     project_parameters = load_parameters()
     executor_vlm_name = project_parameters["executor_vlm_model"]
     model_save_name = executor_vlm_name.split("/")[-1].lower()
@@ -96,6 +105,14 @@ def do(game, controller_variant, save_video, max_resets, max_steps, override_ind
     benchmark_tasks = get_benchmark_tasks(game=game)
     results = []
     columns = ["game", "task", "success", "n_resets", "n_steps"]
+    if random_sample is not None:
+        if not (1 <= random_sample <= len(benchmark_tasks) - 1):
+            raise ValueError(
+                f"random_sample must be between 1 and {len(benchmark_tasks) - 1}, got {random_sample}"
+            )
+        benchmark_tasks = benchmark_tasks.sample(
+            n=random_sample, random_state=42
+        ).reset_index(drop=True)
     os.makedirs("results", exist_ok=True)
     for i, row in tqdm(benchmark_tasks.iterrows(), total=len(benchmark_tasks)):
         if override_index is not None and i != override_index:
