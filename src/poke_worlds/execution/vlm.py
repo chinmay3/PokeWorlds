@@ -5,16 +5,21 @@ import numpy as np
 from PIL import Image
 import torch
 from abc import ABC, abstractmethod
+from time import perf_counter, sleep
+import os
+import base64
+
 
 _project_parameters = load_parameters()
 configs = check_optional_installs(warn=True)
 for config in configs:
     _project_parameters[f"{config}_importable"] = configs[config]
 
-if _project_parameters["transformers_importable"]:
-    # Import anything related to transformers here.
+if _project_parameters["vlm_importable"]:
+    # Import anything related to vlms here.
     import torch
     from transformers import AutoModelForImageTextToText, AutoProcessor
+    from openai import OpenAI
 else:
     pass
 
@@ -240,6 +245,129 @@ class VLMEngine(ABC):
             max_new_tokens,
             **kwargs,
         )
+
+
+class OpenAIModel(ModelInterface):
+    seconds_per_query = (60 / 20) + 0.01
+
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+        self.client = OpenAI()
+        self.previous_call = perf_counter() - self.seconds_per_query
+
+    def generate(
+        self, prompt: str, max_new_tokens: int = 50, temperature: float = None
+    ) -> str:
+        time_to_wait = self.seconds_per_query - (perf_counter() - self.previous_call)
+        if time_to_wait > 0:
+            sleep(time_to_wait)
+        self.previous_call = perf_counter()
+        response = self.client.responses.create(
+            model=self.model_name,
+            input=prompt,
+            max_output_tokens=max_new_tokens,
+            temperature=temperature,
+        )
+        text = response.output_text
+        if "[STOP]" in text:
+            text = text.split("[STOP]")[0]
+        return text.strip()
+
+
+class OpenAIVLMEngine(VLMEngine):
+    """OpenAI VLM engine implementation using OpenAI API."""
+
+    seconds_per_query = (60 / 20) + 0.01
+    """ Seconds to wait between queries to avoid rate limiting. Adjust as needed."""
+
+    _CLIENT = None
+    _previous_call = 0.0
+
+    @staticmethod
+    def clear_cache() -> str:
+        """Clears the OpenAI cache directory.
+
+        Returns:
+            str: The path to the temporary directory used for OpenAI cache.
+        """
+        tmp_dir = _project_parameters["tmp_dir"] + "/openai_cache"
+        if os.path.exists(tmp_dir):
+            os.rmdir(tmp_dir)
+        os.makedirs(tmp_dir, exist_ok=True)
+        return tmp_dir
+
+    @staticmethod
+    def get_encoded_images(images: List[Union[np.ndarray, Image.Image]]) -> List[str]:
+        """Encodes images to base64 strings for OpenAI API input.
+
+        :param images: List of images in numpy array format (H x W x C) or Pillow Image format.
+        :type images: List[Union[np.ndarray, Image.Image]]
+        :return: List of base64 encoded image strings.
+        :rtype: List[str]
+        """
+        cache_dir = OpenAIVLMEngine.clear_cache()
+        encoded_images = []
+        for i, img in enumerate(images):
+            if isinstance(img, np.ndarray):
+                pil_img = convert_numpy_greyscale_to_pillow(img)
+            else:
+                pil_img = img
+            img_path = os.path.join(cache_dir, f"image_{i}.jpg")
+            pil_img.save(img_path, format="JPEG")
+            with open(img_path, "rb") as image_file:
+                encoded_images.append(
+                    base64.b64encode(image_file.read()).decode("utf-8")
+                )
+        return encoded_images
+
+    @staticmethod
+    def start(**kwargs):
+        OpenAIVLMEngine._CLIENT = OpenAI()
+
+    @staticmethod
+    def is_loaded(**kwargs):
+        return OpenAIVLMEngine._CLIENT is not None
+
+    @staticmethod
+    def do_infer(texts, images, max_new_tokens, **kwargs):
+        images = OpenAIVLMEngine.get_encoded_images(images)
+        base_input_dict = {
+            "role": "user",
+            "content": [{"type": "input_text"}, {"type": "input_image"}],
+        }
+        inputs = []
+        for text, img in zip(texts, images):
+            prompt_dict = base_input_dict.copy()
+            prompt_dict["content"][0]["text"] = text
+            prompt_dict["content"][1]["image_url"] = f"data:image/jpeg;base64,{img}"
+            inputs.append(prompt_dict)
+        time_to_wait = OpenAIVLMEngine.seconds_per_query - (
+            perf_counter() - OpenAIVLMEngine._previous_call
+        )
+        if time_to_wait > 0:
+            sleep(time_to_wait)
+        OpenAIVLMEngine._previous_call = perf_counter()
+        model = kwargs["model_name"]
+        response = OpenAIVLMEngine._CLIENT.responses.create(
+            model=model,
+            input=inputs,
+            max_output_tokens=max_new_tokens,
+        )
+        breakpoint()
+        output = response.output
+        output_texts = []
+        for item in output:
+            output_texts.append(item["content"][0]["text"])
+        final_texts = []
+        for text in output_texts:
+            if "[STOP]" in text:
+                text = text.split("[STOP]")[0]
+            final_texts.append(text.strip())
+        return final_texts
+
+    @staticmethod
+    def do_multi_infer(texts, images, max_new_tokens, **kwargs):
+        raise NotImplementedError
 
 
 class HuggingFaceVLMEngine(VLMEngine):

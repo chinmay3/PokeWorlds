@@ -27,7 +27,8 @@ def compute_secondary_parameters(params: dict):
     """
     params["rom_data_dir"] = os.path.join(params["storage_dir"], "rom_data")
     params["log_dir"] = os.path.join(params["storage_dir"], "logs")
-    for dirname in ["rom_data_dir", "log_dir"]:
+    params["tmp_dir"] = os.path.join(params["storage_dir"], "tmp")
+    for dirname in ["rom_data_dir", "log_dir", "tmp_dir"]:
         if not os.path.exists(params[dirname]):
             os.makedirs(params[dirname])
     if "log_file" not in params:

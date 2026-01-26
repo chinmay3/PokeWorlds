@@ -145,7 +145,7 @@ def check_optional_installs(warn=False) -> Dict[str, bool]:
         This does not check internal requirements (e.g. `einops` may be needed for some models, etc.)
     """
     config_imports = {
-        "transformers": ["transformers", "torch", "accelerate"],
+        "vlm": ["transformers", "torch", "accelerate", "openai"],
     }
     if warn:
         logger = get_logger()
