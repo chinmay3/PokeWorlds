@@ -326,11 +326,10 @@ class OpenAIVLMEngine(VLMEngine):
             input=inputs,
             max_output_tokens=max_new_tokens,
         )
-        breakpoint()
         output = response.output
         output_texts = []
         for item in output:
-            output_texts.append(item["content"][0]["text"])
+            output_texts.append(item.content[0].text)
         final_texts = []
         for text in output_texts:
             if "[STOP]" in text:
@@ -570,7 +569,7 @@ class VLM:
             self._ENGINE = engine
         else:
             if self._vlm_kind == "openai":
-                self._ENGINE = None  # OpenAIVLMEngine not yet implemented
+                self._ENGINE = OpenAIVLMEngine
             else:
                 self._ENGINE = HuggingFaceVLMEngine
         self._ENGINE.start(**self._standard_kwargs)
