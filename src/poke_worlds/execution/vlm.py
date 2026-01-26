@@ -634,14 +634,11 @@ def ocr(
     if text_prompt is None:
         text_prompt = "If there is no text in the image, just say NONE. Otherwise, perform OCR and state the text in this image:"
     parameters = _project_parameters
-    batch_size = parameters["ocr_batch_size"]
     max_new_tokens = parameters["ocr_max_new_tokens"]
     texts = [text_prompt] * len(images)
     if vlm is None:
         vlm = ExecutorVLM()
-    ocred = vlm.infer(
-        texts=texts, images=images, max_new_tokens=max_new_tokens, batch_size=batch_size
-    )
+    ocred = vlm.infer(texts=texts, images=images, max_new_tokens=max_new_tokens)
     for i, res in enumerate(ocred):
         if res.strip().lower() == "none":
             log_warn(
