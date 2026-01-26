@@ -29,12 +29,9 @@ Challenge your agents to explore, build general skills and master one of the mos
 <img src="assets/logo.png" width="70px"> provides simple mechanisms to determine the basic state of the agent and identify specific event triggers that occur in the game, allowing one to form descriptive state spaces and track a broad range of metrics over playthroughs. 
 
 **Abstracted Action Space and Low Level Controllers:**
-While all Pokémon games can be played with joystick inputs and a few buttons, not all inputs are meaningful at all times (e.g. when in dialogue, the agent cannot perform any action until the conversation is complete, temporarily reducing the meaningful action space to a single button.)
+While all Pokémon games can be played with joystick inputs and a few buttons, not all inputs are meaningful at all times (e.g. when in dialogue, the agent cannot perform any action until the conversation is complete, temporarily reducing the meaningful action space to a single button.) Another major hurdle to progress is the difficulty of learning how abstract actions (e.g. "Open the player Pokémon menu") correspond to low level game console inputs (e.g. Click 'Start' and then move in the menu until you are on the 'Pokémon' option, then click 'A').
 
-
-Another major hurdle to progress is the difficulty of learning how abstract actions (e.g. "Use the Flamethrower attack") correspond to low level game console inputs (e.g. Click 'B' until you are in the 'Battle' Menu, navigate to the 'Fight' button in the menu with the arrow keys and click 'A', then navigate to 'Flamethrower' with the arrow keys and finally click 'A'.)
-
-<img src="assets/logo.png" width="70"> allows language-capable agents to play the game without any awareness of the buttons, and perform actions purely by verbalising its intent (e.g. "Open the bag"). Our low-level controllers then process the request and convert it into the required sequence of button inputs, providing a layer of abstraction. 
+<img src="assets/logo.png" width="70"> allows language-capable agents to play the game without any awareness of the buttons, and perform actions purely by verbalising its intent (e.g. "openmenu(pokemon)"). Our low-level controllers then process the request and convert it into the required sequence of button inputs, providing a layer of abstraction. 
 
 
 **General and "Unleaked" Test Environments:**

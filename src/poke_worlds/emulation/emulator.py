@@ -442,7 +442,10 @@ class Emulator:
 
         :param action: Lowest level action to perform on the emulator.
         :type action: LowLevelActions
-        :return: The stack of frames that passed while performing the action, if rendering is enabled. Is of shape [n_frames (3 right now), height, width, channels]. Otherwise, None.
+        :return:
+            - The stack of frames that passed while performing the action, if rendering is enabled. Is of shape [n_frames (3 right now), height, width, channels]. Otherwise, None.
+
+            - Is max steps reached.
         :rtype: Tuple[Optional[np.ndarray], bool]
         """
         if action is not None:

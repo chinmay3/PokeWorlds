@@ -537,7 +537,7 @@ class Environment(gym.Env, ABC):
             log_error(
                 "Cannot step environment because emulator indicates done. Please reset the environment.",
                 self._parameters,
-            )
+            )  # TODO: This triggered once during demos/benchmark runs, need to investigate why.
         start_state = self.get_info()
         self.before_step(action, kwargs)
         transition_states, action_success = self._controller.execute(action, **kwargs)

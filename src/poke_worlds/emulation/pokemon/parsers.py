@@ -151,6 +151,7 @@ class PokemonStateParser(StateParser, ABC):
             "cannot_run_from_trainer",
             "no_pp_for_move",
         ],
+        "menu_box_strip": ["cursor_on_options", "cursor_on_pokedex"],
     }
     """ Common multi-targets for the common multi-target named screen regions. 
     - dialogue_box_middle:
@@ -158,6 +159,9 @@ class PokemonStateParser(StateParser, ABC):
         - cannot_escape: Fail to run from a wild Pokemon
         - cannot_run_from_trainer: Try to run from a trainer battle and get an error message
         - no_pp_for_move: Try to use a move with no PP remaining.
+    - menu_box_strip:
+        - cursor_on_options: Cursor is on the options in the start menu. This is vital to prevent agents from changing the text frame option. 
+        - cursor_on_pokedex: Cursor is on the Pokedex in the start menu.
 
     """
 
@@ -183,7 +187,6 @@ class PokemonStateParser(StateParser, ABC):
             additional_named_screen_region_details (List[Tuple[str, int, int, int, int]]): Parameters associated with additional named screen regions to include.
             additional_multi_target_named_screen_region_details (List[Tuple[str, int, int, int, int]]): Parameters associated with additional multi-target named screen regions to include.
             override_multi_targets (Dict[str, List[str]]): Dictionary mapping region names to lists of target names for multi-target regions.
-                By default, will add "menu_box_strip" with target "cursor_on_options". This is important because we don't want agents messing with the frame of the emulator (it will wreck our state parsing).
         """
         verify_parameters(parameters)
         regions = _get_proper_regions(
@@ -230,15 +233,6 @@ class PokemonStateParser(StateParser, ABC):
                 f"Multi-target regions provided in multi_targets do not match the defined multi-target regions. Provided: {multi_target_provided_region_names}, Defined: {multi_target_region_names}",
                 parameters,
             )
-        if "menu_box_strip" not in multi_target_region_names:
-            log_error(
-                f"menu_box_strip must be defined as a multi-target region to ensure proper state parsing.",
-                parameters,
-            )
-        if "menu_box_strip" not in multi_targets:
-            multi_targets["menu_box_strip"] = ["cursor_on_options"]
-        else:
-            multi_targets["menu_box_strip"].append("cursor_on_options")
         for region_name, x, y, w, h in multi_target_regions:
             region_target_paths = {}
             subdir = captures_dir + f"/{region_name}/"
@@ -392,6 +386,19 @@ class PokemonStateParser(StateParser, ABC):
     @abstractmethod
     def is_in_fight_bag(self, current_screen: np.ndarray) -> bool:
         raise NotImplementedError
+
+    def is_on_top_menu_option(self, current_screen: np.ndarray) -> bool:
+        """
+        Determines if the cursor is currently on the top option in the start menu.
+
+        Args:
+            current_screen (np.ndarray): The current screen frame from the emulator.
+        Returns:
+            bool: True if the cursor is on the top menu option, False otherwise.
+        """
+        return self.named_region_matches_multi_target(
+            current_screen, "menu_box_strip", "cursor_on_pokedex"
+        )
 
     def is_in_menu(
         self, current_screen: np.ndarray, trust_previous: bool = False

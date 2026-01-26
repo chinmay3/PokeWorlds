@@ -7,6 +7,7 @@ from poke_worlds.interface.pokemon.actions import (
     BattleMenuAction,
     PickAttackAction,
     MoveGridAction,
+    OpenMenuAction,
 )
 from poke_worlds.interface.controller import Controller
 from poke_worlds.interface.action import HighLevelAction
@@ -15,6 +16,26 @@ from typing import Dict, Any
 
 
 class PokemonStateWiseController(Controller):
+    """
+    High Level Actions for the Pokemon Environment:
+
+    - In Free Roam:
+        - MoveStepsAction(direction: str, steps: int): Move in a particular direction by a specified number of grid steps.
+        - InteractAction(): Interact with cell directly in front of you. Only works if there is something to interact with.
+        - OpenMenuAction(option: str): Open a specific player menu option.
+
+    - In Dialogue:
+        - PassDialogueAction(): Advance the dialogue by one step.
+
+    - In Battle:
+        - BattleMenuAction(option: str): Navigate the battle menu to select an option. Fight to choose an attack, Pokemon to switch Pokemon, Bag to use an item, Run to attempt to flee the battle, and Progress to continue dialogue or other battle events.
+        - In Fight Options Menu:
+            - PickAttackAction(option: int): Select an attack option in the battle fight menu.
+
+    - In Menu:
+        - MenuAction(menu_action: str): Navigate the game menu.
+    """
+
     ACTIONS = [
         MoveStepsAction,
         MenuAction,
@@ -23,6 +44,7 @@ class PokemonStateWiseController(Controller):
         BattleMenuAction,
         PickAttackAction,
         MoveStepsAction,
+        OpenMenuAction,
     ]
 
     def string_to_high_level_action(self, input_str):
@@ -52,7 +74,7 @@ class PokemonStateWiseController(Controller):
             return PickAttackAction, {"option": option}
         if action_name == "menu":
             option = action_args_str.strip()
-            if option in ["up", "down", "confirm", "back"]:
+            if option in ["up", "down", "left", "right", "confirm", "back"]:
                 return MenuAction, {"menu_action": option}
             else:
                 return None, None
@@ -79,6 +101,9 @@ class PokemonStateWiseController(Controller):
                 return None, None
             steps = int(steps_part)
             return MoveStepsAction, {"direction": cardinal, "steps": steps}
+        if action_name == "openmenu":
+            option = action_args_str.strip()
+            return OpenMenuAction, {"option": option}
         return None, None
 
     def get_action_strings(
@@ -90,6 +115,7 @@ class PokemonStateWiseController(Controller):
         free_roam_action_strings = {
             MoveStepsAction: "move(<up, down, right or left> <steps: int>): Move in a particular direction by a specified number of grid steps.",
             InteractAction: "interact(): Interact with cell directly in front of you. Only works if there is something to interact with.",
+            OpenMenuAction: "openmenu(<pokedex, pokemon, bag, trainer>): Open a specific player menu option.",
         }
         dialogue_action_strings = {
             PassDialogueAction: "passdialogue(): Advance the dialogue by one step.",
@@ -101,7 +127,7 @@ class PokemonStateWiseController(Controller):
             PickAttackAction: "pickattack(<1-4>): Select an attack option in the battle fight menu.",
         }
         menu_action_strings = {
-            MenuAction: "menu(<up, down, confirm or back>): Navigate the game menu.",
+            MenuAction: "menu(<up, down, left, right, confirm or back>): Navigate the game menu.",
         }
         if return_all:
             actions = {
@@ -130,52 +156,3 @@ class PokemonStateWiseController(Controller):
                     f"Unknown agent state {current_state} when getting action strings."
                 )
         return actions
-
-    def get_action_success_message(
-        self,
-        action: HighLevelAction,
-        action_kwargs: Dict[str, Any],
-        action_success: int,
-    ) -> str:
-        action_success_message = ""
-        if action_success == 0:
-            action_success_message = "Action performed."
-        if action == MoveStepsAction or action == MoveGridAction:
-            if action_success == 1:
-                action_success_message = "You moved until you hit a wall, object, NPC or obstacle. If it is an object or NPC, you can now interact with it or run checkinteraction() to see if its interactable. If it is an obstacle or wall, interacting will do nothing."
-            if action_success == -1:
-                action_success_message = "You could not move in that direction at all. There is most likely an obstacle in the way. If you are walking into an object or NPC you can now interact with them or run checkinteraction() to see if its interactable. If it is an obstacle or wall, interacting will do nothing."
-            if action_success == 2:
-                action_success_message = "You moved, but before you could finish your steps, you were interupted by a battle, dialogue or cutscene."
-        elif action == InteractAction:
-            if action_success == -1:
-                action_success_message = "There was nothing to interact with in front of you. Make sure you are facing an object or character and are right next to it. Move into an object or NPC to face them."
-            if action_success == 1:
-                action_success_message = "Your interaction led to something."
-        elif action == PassDialogueAction:
-            if action_success == -1:
-                action_success_message = (
-                    "There was no dialogue to pass through. Check the state"
-                )
-        elif action == MenuAction:
-            if action_success == -1:
-                action_success_message = "The menu action could not be performed. Check if you are in the menu and that the action is valid."
-        elif action == BattleMenuAction:
-            if action_success == -1:
-                action_success_message = "The battle menu action could not be performed. Check if you are in a battle and that the action is valid."
-            elif action_success == 1:
-                action_success = "Tried to run, but the wild pokemon was too fast and you could not escape."
-            elif action_success == 2:
-                action_success = (
-                    "Tried to run, but you cannot run from trainer battles."
-                )
-        elif action == PickAttackAction:
-            if action_success == -1:
-                action_success_message = "Could not pick that attack. Check if you are in the attack menu and that the attack index is valid."
-            if action_success == 1:
-                action_success_message = (
-                    "Insufficient pp for that move. Pick another move."
-                )
-        else:
-            action_success_message = f"UNHANDLED CASE: action={action}, args={action_kwargs}, action_success={action_success}"
-        return action_success_message

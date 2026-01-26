@@ -1,6 +1,10 @@
 from poke_worlds.utils import log_error, log_warn
 from poke_worlds.interface.action import HighLevelAction, SingleHighLevelAction
-from poke_worlds.emulation.pokemon.parsers import AgentState, PokemonStateParser
+from poke_worlds.emulation.pokemon.parsers import (
+    AgentState,
+    PokemonStateParser,
+    BasePokemonRedStateParser,
+)
 from poke_worlds.emulation.pokemon.trackers import CorePokemonTracker
 from poke_worlds.emulation import LowLevelActions
 from abc import ABC, abstractmethod
@@ -468,7 +472,7 @@ class MenuAction(HighLevelAction):
         "left": LowLevelActions.PRESS_ARROW_LEFT,
         "right": LowLevelActions.PRESS_ARROW_RIGHT,
         "back": LowLevelActions.PRESS_BUTTON_B,
-        "open": LowLevelActions.PRESS_BUTTON_START,  # In general, we won't be using this action, but prefer OpenMenuAction instead.
+        # "open": LowLevelActions.PRESS_BUTTON_START,  # In general, we won't be using this action, but prefer OpenMenuAction instead.
     }
 
     def is_valid(self, **kwargs):
@@ -528,6 +532,84 @@ class MenuAction(HighLevelAction):
         frames, done = self._emulator.step(action)
         action_success = 0 if frame_changed(current_frame, frames[-1]) else -1
         return [self._state_tracker.report()], action_success
+
+
+class OpenMenuAction(HighLevelAction):
+    """
+    Opens the main menu from free roam and navigates to specified option.
+    Is Valid When:
+    - In Free Roam State
+
+    Action Success Interpretation:
+    - -1: Navigation Failure. Screen did not end up in expected end state. This is a bug and should not happen.
+    - 0: Navigation Success. Screen ended up in expected end state.
+
+    """
+
+    options = ["pokedex", "pokemon", "bag", "trainer"]
+
+    def get_action_space(self):
+        return Discrete(len(self.options))
+
+    def space_to_parameters(self, space_action):
+        if space_action < 0 or space_action >= len(self.options):
+            return None
+        return {"option": self.options[space_action]}
+
+    def parameters_to_space(self, option: str):
+        if option not in self.options:
+            return None
+        return self.options.index(option)
+
+    def is_valid(self, option: str = None):
+        if option is not None and option not in self.options:
+            return False
+        state = self._state_tracker.get_episode_metric(("pokemon_core", "agent_state"))
+        return state == AgentState.FREE_ROAM
+
+    def is_red_variant(self):
+        """
+        Returns true iff the current game is a red/blue variant.
+        """
+        return isinstance(self._emulator.state_parser, BasePokemonRedStateParser)
+
+    def _execute(self, option: str):
+        n_steps_down = 0
+        if option == "pokedex":
+            pass
+        elif option == "pokemon":
+            n_steps_down = 1
+        elif option == "bag":
+            n_steps_down = 2
+        elif option == "trainer":
+            if self.is_red_variant():
+                n_steps_down = 3
+            else:
+                n_steps_down = 4
+        else:
+            log_error(f"Invalid option {option}", self._parameters)
+        # first open menu
+        self._emulator.step(LowLevelActions.PRESS_BUTTON_START)
+        ret_states = [self._state_tracker.report()]
+        # go to the top
+        flag = False
+        for _ in range(6):
+            self._emulator.step(LowLevelActions.PRESS_ARROW_UP)
+            if self._emulator.state_parser.is_on_top_menu_option(
+                self._emulator.get_current_frame()
+            ):
+                flag = True
+                break
+        if not flag:  # could not get to top. Some error
+            return ret_states, -1
+        # go down n_steps_down
+        for _ in range(n_steps_down):
+            self._emulator.step(LowLevelActions.PRESS_ARROW_DOWN)
+            ret_states.append(self._state_tracker.report())
+        # confirm
+        self._emulator.step(LowLevelActions.PRESS_BUTTON_A)
+        ret_states.append(self._state_tracker.report())
+        return ret_states, 0
 
 
 class BattleMenuAction(HighLevelAction):
