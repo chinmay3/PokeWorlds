@@ -25,6 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 vlm = [
     "accelerate>=1.12.0",
+    "anthropic>=0.76.0",
     "einops>=0.8.1",
     "openai>=2.15.0",
     "protobuf>=6.33.2",
