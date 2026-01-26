@@ -595,7 +595,7 @@ class Emulator:
             isColor=False,
         )
         self.video_running = True
-        log_info(f"Started recording video to: {video_path}", self._parameters)
+        log_info(f"\nStarted recording video to: {video_path}\n", self._parameters)
 
     def add_video_frames(self, frames: np.ndarray):
         """
