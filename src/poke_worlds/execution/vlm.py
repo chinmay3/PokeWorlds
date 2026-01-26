@@ -7,6 +7,7 @@ import torch
 from abc import ABC, abstractmethod
 from time import perf_counter, sleep
 import os
+import shutil
 import base64
 
 
@@ -265,7 +266,7 @@ class OpenAIVLMEngine(VLMEngine):
         """
         tmp_dir = _project_parameters["tmp_dir"] + "/openai_cache"
         if os.path.exists(tmp_dir):
-            os.rmdir(tmp_dir)
+            shutil.rmtree(tmp_dir)
         os.makedirs(tmp_dir, exist_ok=True)
         return tmp_dir
 
@@ -357,10 +358,16 @@ class OpenAIVLMEngine(VLMEngine):
             "content": [{"type": "input_text"}],
         }
         inputs = []
-        for text, img in zip(texts, images):
+        for text, img_list in zip(texts, images):
             prompt_dict = base_input_dict.copy()
             prompt_dict["content"][0]["text"] = text
-            prompt_dict["content"][1]["image_url"] = f"data:image/jpeg;base64,{img}"
+            for img in img_list:
+                prompt_dict["content"].append(
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:image/jpeg;base64,{img}",
+                    }
+                )
             inputs.append(prompt_dict)
 
         model = kwargs["model_name"]
