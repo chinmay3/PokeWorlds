@@ -380,7 +380,9 @@ class OpenAIVLMEngine(VLMEngine):
         return OpenAIVLMEngine._get_output(response.output)
 
 
-class AnthropicVLMEngine(VLMEngine):
+class AnthropicVLMEngine(
+    VLMEngine
+):  # TODO: I need to figure out how this works with multi inputs, and then make sure thats handled. rn this fails because we should be doing [response] instead
     """Anthropic VLM engine implementation using Anthropic API."""
 
     seconds_per_query = (60 / 20) + 0.01
