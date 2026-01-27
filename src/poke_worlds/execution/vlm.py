@@ -313,8 +313,7 @@ class OpenAIVLMEngine(VLMEngine):
         engine._previous_call = perf_counter()
 
     @staticmethod
-    def _get_output(response) -> List[str]:
-        output = response.output
+    def _get_output(output) -> List[str]:
         output_texts = []
         for item in output:
             output_texts.append(item.content[0].text)
@@ -346,7 +345,7 @@ class OpenAIVLMEngine(VLMEngine):
             input=inputs,
             max_output_tokens=max_new_tokens,
         )
-        return OpenAIVLMEngine._get_output(response)
+        return OpenAIVLMEngine._get_output(response.output)
 
     @staticmethod
     def do_multi_infer(texts, images, max_new_tokens, **kwargs):
@@ -378,7 +377,7 @@ class OpenAIVLMEngine(VLMEngine):
             input=inputs,
             max_output_tokens=max_new_tokens,
         )
-        return OpenAIVLMEngine._get_output(response)
+        return OpenAIVLMEngine._get_output(response.output)
 
 
 class AnthropicVLMEngine(VLMEngine):
@@ -397,10 +396,6 @@ class AnthropicVLMEngine(VLMEngine):
     @staticmethod
     def is_loaded(**kwargs):
         return AnthropicVLMEngine._CLIENT is not None
-
-    @staticmethod
-    def _get_output(response) -> List[str]:
-        breakpoint()
 
     @staticmethod
     def do_infer(texts, images, max_new_tokens, **kwargs):
@@ -429,7 +424,7 @@ class AnthropicVLMEngine(VLMEngine):
             messages=inputs,
             max_tokens=max_new_tokens,
         )
-        return AnthropicVLMEngine._get_output(response)
+        return OpenAIVLMEngine._get_output(response)
 
     @staticmethod
     def do_multi_infer(texts, images, max_new_tokens, **kwargs):
@@ -465,7 +460,7 @@ class AnthropicVLMEngine(VLMEngine):
             messages=inputs,
             max_tokens=max_new_tokens,
         )
-        return AnthropicVLMEngine._get_output(response)
+        return OpenAIVLMEngine._get_output(response)
 
 
 class HuggingFaceVLMEngine(VLMEngine):
