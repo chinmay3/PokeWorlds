@@ -189,6 +189,7 @@ class Environment(gym.Env, ABC):
             required_state_tracker_class (Type[StateTracker]): Usually the required state tracker class for the environment.
         """
         game = emulator_kwargs["game"]
+        has_option = "state_tracker_class" in emulator_kwargs
         incoming_state_tracker_class = emulator_kwargs.get(
             "state_tracker_class", "default"
         )
@@ -281,7 +282,7 @@ class Environment(gym.Env, ABC):
         action_success: Optional[int] = None,
     ) -> gym.spaces.Space:
         """
-        Returns the current observation from the emulator.
+        Returns the current observation from the emulator. Must match self.observation_space.
         Args:
             action (Optional[HighLevelAction]): The previous action taken.
             action_kwargs (dict): The keyword arguments used for the action.
@@ -698,7 +699,7 @@ class Environment(gym.Env, ABC):
         action_return: Optional[Dict[str, Any]] = None,
     ):
         """
-        Provide a way to render the output of get_observation to a human.
+        Provide a way to render the output of `get_observation` to a human.
         Implement if you want to use the human_step_play method.
 
         Args:
@@ -719,8 +720,9 @@ class Environment(gym.Env, ABC):
         action_return: Optional[Dict[str, Any]] = None,
     ):
         """
-        Provide a way to render the output of get_info to a human.
-        Implement if you want to use the human_step_play method with show_info=True
+        Provide a way to render the output of `get_info` to a human.
+        Implement if you want to use the human_step_play method with show_info=True.
+        Must always be a superset of render_obs (i.e. should also show what render_obs shows).
 
         Args:
             action (Optional[Type[HighLevelAction]]): The previous action taken.
@@ -745,14 +747,15 @@ class Environment(gym.Env, ABC):
         return self._controller.get_action_strings(return_all=return_all)
 
     def human_step_play(
-        self, max_steps: int = 50, show_info: bool = False
+        self, max_steps: int = 50, show_obs: bool = True, show_info: bool = True
     ) -> Tuple[List[float], bool, bool]:
         """
         Opens a render window and allow the human to play through the environment as an agent would
 
         Args:
             max_steps (int): max steps to take
-            show_info (bool): whether to show the state space (as opposed to just observation space)
+            show_obs (bool): whether to show the observation space rendering after each step
+            show_info (bool): whether to show the info rendering after each step. Will force show_obs=False if enabled.
 
         Returns:
             rewards (List[float]): List of rewards obtained at each step.
@@ -769,7 +772,9 @@ class Environment(gym.Env, ABC):
         rewards = []
         if show_info:
             self.render_info()
-        self.render_obs()
+            show_obs = False
+        if show_obs:
+            self.render_obs()
         while not done and steps < max_steps:
             action_input = self._controller.get_action_strings()
             action_input_str = ""
@@ -808,13 +813,14 @@ class Environment(gym.Env, ABC):
                         action_success=action_success,
                         action_return=action_return,
                     )
-                self.render_obs(
-                    action=action,
-                    action_kwargs=action_kwargs,
-                    transition_states=transition_states,
-                    action_success=action_success,
-                    action_return=action_return,
-                )
+                if show_obs:
+                    self.render_obs(
+                        action=action,
+                        action_kwargs=action_kwargs,
+                        transition_states=transition_states,
+                        action_success=action_success,
+                        action_return=action_return,
+                    )
             else:
                 log_warn("That was not a valid input. did nothing", self._parameters)
             if terminated or truncated:
@@ -872,9 +878,20 @@ class DummyEnvironment(Environment):
         action_return=None,
     ):  # Might cause issues if you try to render() as well
         """
-        Renders the observation space by displaying all the frames passed during the action execution.
+        Renders the screen.
         """
-        info = self.get_info()
+        screen = self.get_observation()
+        self._screen_render(screen)
+
+    def render_info(
+        self,
+        action=None,
+        action_kwargs=None,
+        transition_states=None,
+        action_success=None,
+        action_return=None,
+    ):
+        info = deepcopy(self.get_info())
         if transition_states is not None and len(transition_states) > 0:
             screens = transition_states[0]["core"]["passed_frames"]
             for transition_state in transition_states[1:]:
@@ -890,28 +907,6 @@ class DummyEnvironment(Environment):
             screens = [info["core"]["current_frame"]]
         for screen in screens:
             self._screen_render(screen)
-        obs = deepcopy(
-            self.get_observation(
-                action=action,
-                action_kwargs=action_kwargs,
-                transition_states=transition_states,
-                action_success=action_success,
-            )
-        )
-        obs.pop("screen")
-        obs["action_info"] = (action, action_kwargs, action_success, action_return)
-        log_info(f"Obs Strings + Action Info:", self._parameters)
-        log_dict(obs, parameters=self._parameters)
-
-    def render_info(
-        self,
-        action=None,
-        action_kwargs=None,
-        transition_states=None,
-        action_success=None,
-        action_return=None,
-    ):
-        info = deepcopy(self.get_info())
         info["core"].pop("current_frame")
         info["core"].pop("passed_frames")
         if "ocr" in info:

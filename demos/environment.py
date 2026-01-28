@@ -55,6 +55,12 @@ import click
     default=None,
     help="Whether to save a video of the gameplay. If not specified, uses default from config.",
 )
+@click.option(
+    "--show_mode",
+    type=click.Choice(["state", "obs"]),
+    default="state",
+    help="Whether to show the state metrics or raw observations during human play.",
+)
 def main(
     game,
     play_mode,
@@ -64,6 +70,7 @@ def main(
     state_tracker_class,
     render,
     save_video,
+    show_mode,
 ):
     if play_mode == "human":
         controller_variant = "state_wise"
@@ -103,7 +110,9 @@ def main(
             plt.title("Rewards over Time")
             plt.show()
     else:
-        environment.human_step_play()
+        show_obs = show_mode == "obs"
+        show_info = not show_obs
+        environment.human_step_play(show_obs=show_obs, show_info=show_info)
 
 
 if __name__ == "__main__":

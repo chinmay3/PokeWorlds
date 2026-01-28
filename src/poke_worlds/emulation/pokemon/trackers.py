@@ -60,7 +60,13 @@ class CorePokemonTracker(StateTracker):
                 self.episode_metrics["core"]["passed_frames"][-1, :] = screen
 
 
-class PokemonRedStarterTracker(CorePokemonTracker):
+class PokemonOCRTracker(CorePokemonTracker):
+    def start(self):
+        super().start()
+        self.metric_classes.extend([PokemonOCRMetric])
+
+
+class PokemonRedStarterTracker(PokemonOCRTracker):
     """
     Example StateTracker that tracks the starter Pokémon chosen in Pokémon Red.
     """
@@ -68,12 +74,6 @@ class PokemonRedStarterTracker(CorePokemonTracker):
     def start(self):
         super().start()
         self.metric_classes.extend([PokemonRedStarter, PokemonRedLocation])
-
-
-class PokemonOCRTracker(CorePokemonTracker):
-    def start(self):
-        super().start()
-        self.metric_classes.extend([PokemonOCRMetric])
 
 
 class PokemonTestTracker(TestTrackerMixin, PokemonOCRTracker):

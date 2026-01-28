@@ -23,7 +23,7 @@ from poke_worlds.interface.controller import Controller, _ALWAYS_VALID_CONTROLLE
 from poke_worlds.interface.environment import Environment, DummyEnvironment
 from poke_worlds.interface.pokemon.environments import (
     PokemonEnvironment,
-    PokemonRedChooseCharmanderFastEnv,
+    PokemonRedChooseCharmanderEnvironment,
     PokemonOCREnvironment,
     PokemonTestEnvironment,
 )
@@ -38,7 +38,7 @@ AVAILABLE_ENVIRONMENTS: Dict[str, Dict[str, Type[Environment]]] = {
         "dummy": DummyEnvironment,
         "default": PokemonOCREnvironment,
         "basic": PokemonEnvironment,
-        "charmander_enthusiast": PokemonRedChooseCharmanderFastEnv,
+        "charmander": PokemonRedChooseCharmanderEnvironment,
         "test": PokemonTestEnvironment,
     },
     "pokemon_brown": {
