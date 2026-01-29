@@ -297,7 +297,7 @@ class OpenAIVLMEngine(VLMEngine):
 
     @staticmethod
     def start(**kwargs):
-        OpenAIVLMEngine._CLIENT = OpenAI()
+        OpenAIVLMEngine._CLIENT = OpenAI(api_key=_project_parameters["OPENAI_API_KEY"])
 
     @staticmethod
     def is_loaded(**kwargs):
@@ -393,7 +393,9 @@ class AnthropicVLMEngine(
 
     @staticmethod
     def start(**kwargs):
-        AnthropicVLMEngine._CLIENT = anthropic.Anthropic()
+        AnthropicVLMEngine._CLIENT = anthropic.Anthropic(
+            api_key=_project_parameters["ANTHROPIC_API_KEY"]
+        )
 
     @staticmethod
     def is_loaded(**kwargs):
