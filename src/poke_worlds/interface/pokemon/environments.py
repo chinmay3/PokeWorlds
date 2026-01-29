@@ -135,3 +135,25 @@ class PokemonRedChooseCharmanderEnvironment(PokemonRedStarterChoiceEnvironment):
             return (
                 100.0 + step_bonus
             )  # Penalty for choosing the wrong starter. For now, just less reward.
+
+
+class PokemonRedExploreStartingSceneEnvironment(PokemonRedStarterChoiceEnvironment):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from poke_worlds.execution.retrieval import Index
+
+        self._visual_index = Index(modality="image")
+
+    def determine_reward(
+        self, start_state, action, action_kwargs, transition_states, action_success
+    ) -> float:
+        """
+        Reward the agent for seeing a screen it has not seen before.
+        """
+        # take the current frame, embed it, compare to index, and reward based on novelty
+        screen = self._emulator.get_current_frame()  # avoids the grid
+        similarity_scores = self._visual_index.add_compare(screen)
+        if similarity_scores is None:
+            return 1.0  # first frame
+        novelty_score = 1.0 - float((similarity_scores.max()).item())
+        return novelty_score
