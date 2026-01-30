@@ -536,9 +536,9 @@ class StateTracker:
                 state_parser, parameters
             )
             self.metrics[metric_group_instance.NAME] = metric_group_instance
-        self.episode_metrics: Dict[str, Dict[str, Any]] = None
+        self.episode_metrics: Dict[str, Dict[str, Any]] = {}
         """ Dictionary to store metrics running during episode. """
-        self.final_metrics: Dict[str, Dict[str, Any]] = None
+        self.final_metrics: Dict[str, Dict[str, Any]] = {}
 
     def start(self):
         """
@@ -615,8 +615,6 @@ class StateTracker:
         Returns:
             Dict[str, Dict[str, Any]]: A nested dictionary containing the final metrics.
         """
-        if self.final_metrics is None:
-            return {}
         return self.final_metrics
 
     def _get_specific_metric(self, metrics_dict, key: Tuple[str, str]):

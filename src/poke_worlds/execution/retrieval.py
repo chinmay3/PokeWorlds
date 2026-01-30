@@ -55,10 +55,12 @@ class HuggingFaceEmbeddingEngine(ABC):
         pass
 
     @staticmethod
-    def start(model_kind: str, model_name: str):
+    def start(engine_class: Type["HuggingFaceEmbeddingEngine"], model_kind: str, model_name: str):
         """
         Starts the embedding engine with the specified model.
 
+        :param engine_class: The embedding engine class to use
+        :type engine_class: Type[HuggingFaceEmbeddingEngine]
         :param model_kind: The kind of model to use
         :type model_kind: str
         :param model_name: The name of the model to use
@@ -87,7 +89,7 @@ class HuggingFaceEmbeddingEngine(ABC):
             log_info(
                 f"Loading HuggingFace VLM model: {model_name}", _project_parameters
             )
-            model, processor = HuggingFaceEmbeddingEngine._do_start(
+            model, processor = engine_class._do_start(
                 model_kind, model_name
             )
             HuggingFaceEmbeddingEngine.MODEL_REGISTRY[model_name] = (
@@ -245,6 +247,7 @@ class HuggingFaceImageEmbeddingEngine(HuggingFaceEmbeddingEngine):
             log_error(
                 f"Unsupported executor_model_kind: {model_kind}", _project_parameters
             )
+        breakpoint()
         if model_kind in ["jina"]:
             model = AutoModel.from_pretrained(
                 model_name,
@@ -252,8 +255,8 @@ class HuggingFaceImageEmbeddingEngine(HuggingFaceEmbeddingEngine):
                 dtype=torch.bfloat16,
             ).to("cuda")
             processor = None
+            breakpoint()
             return model, processor
-
         else:
             log_error(
                 f"Unsupported HuggingFace model kind: {model_kind}", _project_parameters
@@ -328,7 +331,7 @@ class EmbeddingModel(ABC):
                 f"EmbeddingModel only supports HuggingFaceEmbeddingEngine currently.",
                 _project_parameters,
             )
-        self._ENGINE.start(model_kind=self._model_kind, model_name=self._model_name)
+        self._ENGINE.start(self._ENGINE, model_kind=self._model_kind, model_name=self._model_name)
 
     def embed(self, items: List[_EmbeddingInput]) -> torch.Tensor:
         """

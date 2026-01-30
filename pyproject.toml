@@ -28,6 +28,7 @@ vlm = [
     "anthropic>=0.76.0",
     "einops>=0.8.1",
     "openai>=2.15.0",
+    "peft>=0.18.1",
     "protobuf>=6.33.2",
     "sentencepiece>=0.2.1",
     "torch>=2.9.1",

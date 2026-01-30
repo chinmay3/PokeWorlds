@@ -93,20 +93,23 @@ class PokemonRedStarterChoiceEnvironment(PokemonOCREnvironment):
         return emulator_kwargs
 
     def determine_terminated(
-        self, start_state, action, action_kwargs, transition_states, action_success
-    ):
-        states = transition_states
-        for state in states:
-            starter_chosen = state["pokemon_red_starter"]["current_starter"]
-            if starter_chosen is not None:
-                return True
-        return super().determine_terminated(
+        self, start_state, *, action=None, action_kwargs=None, transition_states=None, action_success=None
+    ) -> bool:
+        super_terminated = super().determine_terminated(
             start_state=start_state,
             action=action,
             action_kwargs=action_kwargs,
             transition_states=transition_states,
             action_success=action_success,
         )
+        if transition_states is None:
+            return super_terminated
+        states = transition_states
+        for state in states:
+            starter_chosen = state["pokemon_red_starter"]["current_starter"]
+            if starter_chosen is not None:
+                return True
+        return super_terminated
 
 
 class PokemonRedChooseCharmanderEnvironment(PokemonRedStarterChoiceEnvironment):
@@ -115,11 +118,13 @@ class PokemonRedChooseCharmanderEnvironment(PokemonRedStarterChoiceEnvironment):
     """
 
     def determine_reward(
-        self, start_state, action, action_kwargs, transition_states, action_success
+        self, start_state, *, action=None, action_kwargs=None, transition_states=None, action_success=None
     ) -> float:
         """
         Reward the agent for choosing Charmander as quickly as possible.
         """
+        if transition_states is None:
+            return 0.0
         current_state = transition_states[-1]
         starter_chosen = current_state["pokemon_red_starter"]["current_starter"]
         n_steps = current_state["core"]["steps"]
@@ -145,7 +150,7 @@ class PokemonRedExploreStartingSceneEnvironment(PokemonRedStarterChoiceEnvironme
         self._visual_index = Index(modality="image")
 
     def determine_reward(
-        self, start_state, action, action_kwargs, transition_states, action_success
+        self, start_state, *, action=None, action_kwargs=None, transition_states=None, action_success=None
     ) -> float:
         """
         Reward the agent for seeing a screen it has not seen before.

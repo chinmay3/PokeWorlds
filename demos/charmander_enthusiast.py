@@ -1,8 +1,24 @@
-from poke_worlds import get_pokemon_environment, LowLevelPlayController
+"""
+To run this script, you will need to run:
+"""
+install_command = "uv pip install stable-baselines3[extra] wandb tensorboard"
+
+from poke_worlds import get_environment
 import gymnasium as gym
 from gymnasium.spaces import Discrete, OneOf
 import numpy as np
 import click
+
+try:
+    from stable_baselines3 import DQN, PPO
+    from stable_baselines3.common.evaluation import evaluate_policy
+    from stable_baselines3.common.vec_env import SubprocVecEnv
+    from stable_baselines3.common.callbacks import CallbackList
+    from wandb.integration.sb3 import WandbCallback
+    import wandb    
+except ImportError:
+    print(f"Please install required packages to run this script:\n{install_command}`")
+    exit(1)
 
 
 class OneOfToDiscreteWrapper(gym.ActionWrapper):
@@ -35,10 +51,10 @@ def make_env(rank, seed=0):
     """
 
     def _init():
-        original_env = get_pokemon_environment(
-            game_variant="pokemon_red",
-            controller=LowLevelPlayController(),
-            environment_variant="charmander_enthusiast",
+        original_env = get_environment(
+            game="pokemon_red",
+            controller_variant="state_wise",
+            environment_variant="starter_explore",
             max_steps=100,
             headless=True,
         )
@@ -47,12 +63,6 @@ def make_env(rank, seed=0):
         return ind_env
 
     return _init
-
-
-from stable_baselines3 import DQN, PPO
-from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.vec_env import SubprocVecEnv
-from stable_baselines3.common.callbacks import CallbackList
 
 
 @click.command()
@@ -76,9 +86,6 @@ from stable_baselines3.common.callbacks import CallbackList
     help="Total timesteps for training.",
 )
 def train(num_cpu, batch_size, exploration_fraction, gamma, total_timesteps):
-    from wandb.integration.sb3 import WandbCallback
-    import wandb
-
     callbacks = []
     run = wandb.init(
         project="PokeWorlds",
@@ -89,11 +96,12 @@ def train(num_cpu, batch_size, exploration_fraction, gamma, total_timesteps):
     )
     callbacks.append(WandbCallback())
 
-    env = SubprocVecEnv([make_env(i) for i in range(num_cpu)])
+    #env = SubprocVecEnv([make_env(i) for i in range(num_cpu)])
+    env = make_env(0)()  # Using single environment for simplicity
 
     # Instantiate the agent
     model = DQN(
-        "MultiInputPolicy",
+        "CnnPolicy",
         env,
         verbose=1,
         gamma=gamma,
@@ -112,7 +120,6 @@ def train(num_cpu, batch_size, exploration_fraction, gamma, total_timesteps):
         model, model.get_env(), n_eval_episodes=50
     )
     print(f"Reward: {mean_reward} +/- {std_reward}")
-    del model  # delete trained model to demonstrate loading
 
 
 @click.command()
@@ -123,10 +130,10 @@ def train(num_cpu, batch_size, exploration_fraction, gamma, total_timesteps):
     help="Whether to render the environment during evaluation.",
 )
 def evaluate(render):
-    env = get_pokemon_environment(
+    env = get_environment(
         game_variant="pokemon_red",
-        controller=LowLevelPlayController(),
-        environment_variant="charmander_enthusiast",
+        controller="state_wise",
+        environment_variant="charmander",
         max_steps=200,
         headless=True,
     )

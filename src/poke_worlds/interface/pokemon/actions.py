@@ -396,10 +396,7 @@ class MoveStepsAction(BaseMovementAction):
             Box: A Box space with shape (2,) and values ranging from -HARD_MAX_STEPS//2 to HARD_MAX_STEPS//2.
 
         """
-        component_actions = [
-            Discrete(HARD_MAX_STEPS) for _ in range(4)
-        ]  # up, down, left, right
-        return OneOf(component_actions)
+        return Discrete(4 * HARD_MAX_STEPS)
 
     def space_to_parameters(self, space_action):
         direction = None

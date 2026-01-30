@@ -25,6 +25,7 @@ from poke_worlds.interface.pokemon.environments import (
     PokemonEnvironment,
     PokemonRedChooseCharmanderEnvironment,
     PokemonOCREnvironment,
+    PokemonRedExploreStartingSceneEnvironment,
     PokemonTestEnvironment,
 )
 from poke_worlds.interface.pokemon.controllers import PokemonStateWiseController
@@ -39,6 +40,7 @@ AVAILABLE_ENVIRONMENTS: Dict[str, Dict[str, Type[Environment]]] = {
         "default": PokemonOCREnvironment,
         "basic": PokemonEnvironment,
         "charmander": PokemonRedChooseCharmanderEnvironment,
+        "starter_explore": PokemonRedExploreStartingSceneEnvironment, 
         "test": PokemonTestEnvironment,
     },
     "pokemon_brown": {

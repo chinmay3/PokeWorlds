@@ -544,8 +544,13 @@ class Environment(gym.Env, ABC):
         transition_states, action_success = self._controller.execute(action, **kwargs)
         if (
             transition_states is None
-        ):  # then the action was not a valid one according to the controller. Will return Nones for all
-            return None, None, None, None, None
+        ):  # then the action was not a valid one according to the controller. 
+            observation = self.get_observation()
+            current_state = self.get_info()
+            terminated = self.determine_terminated(start_state=start_state)
+            truncated = self.determine_truncated(start_state=start_state)
+            reward = self.determine_reward(start_state=start_state) - abs(self._parameters["invalid_action_penalty"])
+            return observation, reward, terminated, truncated, current_state
         self.after_step(start_state, action, kwargs, transition_states, action_success)
         truncated = self.determine_truncated(
             start_state=start_state,
@@ -593,6 +598,7 @@ class Environment(gym.Env, ABC):
         """
         Attempts to execute an input string representation of an action.
         Useful for human play or VLM interaction.
+        If the action is an invalid string, will not perform any action and will simply return Nones.
 
         :param input_str: The input string representing the action.
         :type input_str: str
@@ -611,7 +617,7 @@ class Environment(gym.Env, ABC):
         action, kwargs = self.string_to_high_level_action(input_str)
         if (
             action is None
-        ):  # not a valid action, will not perform an action and will simply return Nones
+        ):  # not a valid action, will not perform an action and will simply return Nones.
             return None, None, None, None, None
         return self.step_high_level_action(action, **kwargs)
 
@@ -944,6 +950,8 @@ class TestEnvironmentMixin:
                 "TestEnvironmentMixin requires the emulator's state tracker to be a TestTrackerMixin.",
                 self._parameters,
             )  # we don't need to repeat this for determine_terminated since its done here.
+        if transition_states is None:
+            return self._emulator.check_if_done()
         any_truncated = False
         for state in transition_states:
             if state["termination_truncation"]["truncated"]:
@@ -960,6 +968,8 @@ class TestEnvironmentMixin:
         transition_states: Optional[List[Dict[str, Dict[str, Any]]]] = None,
         action_success: Optional[int] = None,
     ) -> bool:
+        if transition_states is None:
+            return False
         any_terminated = False
         for state in transition_states:
             if state["termination_truncation"]["terminated"]:
