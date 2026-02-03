@@ -6,6 +6,7 @@ from poke_worlds.utils import (
     check_optional_installs,
 )
 from poke_worlds.execution.vlm import ExecutorVLM, convert_numpy_greyscale_to_pillow
+from poke_worlds.emulation.parser import StateParser
 import os
 from typing import List, Tuple, Any, Dict, Union, Type
 import numpy as np
@@ -21,12 +22,74 @@ if _project_parameters["vlm_importable"]:
     # Import anything related to embedding models here.
     from transformers import AutoModel, AutoTokenizer, AutoProcessor
     import torch
+    from torch import nn
 else:
     pass
 
 
 # make a typing annotation named tuple that is a union of str, np.ndarray, pil.Image.Image
 _EmbeddingInput = Union[str, np.ndarray, Image]
+
+
+class RandomPatchProjection:
+    cell_reduction_dimension = 8
+
+    def __init__(self):
+        start = 16 * 16
+        end = self.cell_reduction_dimension
+        midway = (start + end) // 2
+        my_local_rng = torch.Generator()
+        my_local_rng.manual_seed(_project_parameters["random_seed"])
+        step1 = nn.Linear(
+            start,
+            midway,
+            bias=False,
+            device="cuda" if torch.cuda.is_available() else "cpu",
+        )
+        step2 = nn.Linear(
+            midway,
+            end,
+            bias=False,
+            device="cuda" if torch.cuda.is_available() else "cpu",
+        )
+        nn.init.kaiming_normal(step1.weight, generator=my_local_rng)
+        nn.init.kaiming_normal(step2.weight, generator=my_local_rng)
+        self.random_projection = nn.Sequential(
+            step1,
+            nn.Tanh(),
+            step2,
+        )
+
+    def _embed_single(self, item: Union[np.ndarray, Image]) -> torch.Tensor:
+        item = np.array(item)
+        grid_cells = StateParser.capture_grid_cells(item, y_offset=0)
+        cell_embeddings = []
+        cell_keys = sorted(grid_cells.keys())
+        for key in cell_keys:
+            cell_image = grid_cells[key]
+            cell_image_resized = np.resize(cell_image, (16, 16))
+            cell_image_flat = cell_image_resized.flatten()
+            cell_image_tensor = torch.tensor(
+                cell_image_flat,
+                dtype=torch.float32,
+                device=self.random_projection[0].weight.device,
+            )
+            with torch.no_grad():
+                cell_embedding = self.random_projection(cell_image_tensor)
+            cell_embeddings.append(cell_embedding)
+        # image_embedding = torch.cat(cell_embeddings, dim=0)
+        cell_embeddings_tensor = torch.stack(cell_embeddings, dim=0)
+        image_embedding = torch.mean(cell_embeddings_tensor, dim=0)
+        # normalize
+        image_embedding = image_embedding / image_embedding.norm()
+        return image_embedding  # Should be of shape (cell_reduction_dimension,)
+
+    def project(self, items: List[Union[np.ndarray, Image]]) -> torch.Tensor:
+        embeddings = []
+        for item in items:
+            embedding = self._embed_single(item)
+            embeddings.append(embedding)
+        return torch.stack(embeddings, dim=0)
 
 
 class HuggingFaceEmbeddingEngine(ABC):
@@ -55,7 +118,11 @@ class HuggingFaceEmbeddingEngine(ABC):
         pass
 
     @staticmethod
-    def start(engine_class: Type["HuggingFaceEmbeddingEngine"], model_kind: str, model_name: str):
+    def start(
+        engine_class: Type["HuggingFaceEmbeddingEngine"],
+        model_kind: str,
+        model_name: str,
+    ):
         """
         Starts the embedding engine with the specified model.
 
@@ -89,9 +156,7 @@ class HuggingFaceEmbeddingEngine(ABC):
             log_info(
                 f"Loading HuggingFace VLM model: {model_name}", _project_parameters
             )
-            model, processor = engine_class._do_start(
-                model_kind, model_name
-            )
+            model, processor = engine_class._do_start(model_kind, model_name)
             HuggingFaceEmbeddingEngine.MODEL_REGISTRY[model_name] = (
                 model,
                 processor,
@@ -243,11 +308,10 @@ class HuggingFaceImageEmbeddingEngine(HuggingFaceEmbeddingEngine):
         :rtype: Tuple[AutoModel, AutoProcessor]
         """
         # this way, we can add more model kinds w different engines (e.g. OpenAI API) later
-        if model_kind not in ["jina"]:
+        if model_kind not in ["jina", "random_patch"]:
             log_error(
                 f"Unsupported executor_model_kind: {model_kind}", _project_parameters
             )
-        breakpoint()
         if model_kind in ["jina"]:
             model = AutoModel.from_pretrained(
                 model_name,
@@ -255,7 +319,10 @@ class HuggingFaceImageEmbeddingEngine(HuggingFaceEmbeddingEngine):
                 dtype=torch.bfloat16,
             ).to("cuda")
             processor = None
-            breakpoint()
+            return model, processor
+        elif model_kind in ["random_patch"]:
+            model = RandomPatchProjection()  # dummy placeholder
+            processor = None
             return model, processor
         else:
             log_error(
@@ -279,6 +346,8 @@ class HuggingFaceImageEmbeddingEngine(HuggingFaceEmbeddingEngine):
         :rtype: torch.Tensor
         """
         model, processor, _ = HuggingFaceEmbeddingEngine.MODEL_REGISTRY[model_name]
+        if model_kind in ["random_patch"]:
+            return model.project(items)
         images = []
         for item in items:
             if isinstance(item, np.ndarray):
@@ -331,7 +400,9 @@ class EmbeddingModel(ABC):
                 f"EmbeddingModel only supports HuggingFaceEmbeddingEngine currently.",
                 _project_parameters,
             )
-        self._ENGINE.start(self._ENGINE, model_kind=self._model_kind, model_name=self._model_name)
+        self._ENGINE.start(
+            self._ENGINE, model_kind=self._model_kind, model_name=self._model_name
+        )
 
     def embed(self, items: List[_EmbeddingInput]) -> torch.Tensor:
         """

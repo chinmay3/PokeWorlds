@@ -1,3 +1,4 @@
+random_seed: 42
 debug_mode: false
 debug_skip_lm: false # Will skip all LM calls, to allow debugging on systems without LM access. 
 invalid_action_penalty: 100.0 # Penalty for invalid actions in the environment

@@ -879,6 +879,9 @@ class Emulator:
                             continue
                         self.set_init_state(state_path)
                 elif first_char == "b":
+                    grid_cells = self.state_parser.capture_grid_cells(
+                        current_frame=self.get_current_frame(), y_offset=0
+                    )
                     breakpoint()
                 else:
                     current_frame = self.get_current_frame()

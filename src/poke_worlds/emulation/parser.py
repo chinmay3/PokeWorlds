@@ -424,8 +424,8 @@ class StateParser(ABC):
         ]  # (144, 160, 3) but force just greyscale
         return screen.copy()
 
+    @staticmethod
     def capture_box(
-        self,
         current_frame: np.ndarray,
         start_x: int,
         start_y: int,
@@ -459,8 +459,9 @@ class StateParser(ABC):
             end_y = min(current_frame.shape[0], end_y)
         return current_frame[start_y:end_y, start_x:end_x, :]
 
+    @staticmethod
     def capture_square_centered(
-        self, current_frame: np.ndarray, center_x: int, center_y: int, box_size: int
+        current_frame: np.ndarray, center_x: int, center_y: int, box_size: int
     ) -> np.ndarray:
         """
         Captures a square region from the current frame centered at (center_x, center_y) with the given box size.
@@ -481,8 +482,8 @@ class StateParser(ABC):
         end_y = min(center_y + half_box, current_frame.shape[0])
         return current_frame[start_y:end_y, start_x:end_x, :]
 
+    @staticmethod
     def draw_box(
-        self,
         current_frame: np.ndarray,
         start_x: int,
         start_y: int,
@@ -524,8 +525,8 @@ class StateParser(ABC):
         )
         return frame_with_box
 
+    @staticmethod
     def draw_square_centered(
-        self,
         current_frame: np.ndarray,
         center_x: int,
         center_y: int,
@@ -680,8 +681,9 @@ class StateParser(ABC):
         x, y, w, h = region.start_x, region.start_y, region.width, region.height
         return self.draw_box(current_frame, x, y, w, h, color, thickness)
 
+    @staticmethod
     def draw_grid_overlay(
-        self, current_frame: np.ndarray, grid_skip: int = 16, x_offset=0, y_offset=-2
+        current_frame: np.ndarray, grid_skip: int = 16, x_offset=0, y_offset=-2
     ) -> np.ndarray:
         """
         Draws a grid overlay on the current frame for easier region identification.
@@ -714,8 +716,8 @@ class StateParser(ABC):
             )
         return frame_with_grid
 
+    @staticmethod
     def capture_grid_cells(
-        self,
         current_frame: np.ndarray,
         *,
         quadrant: str = None,
@@ -730,7 +732,7 @@ class StateParser(ABC):
         ```python
         import matplotlib.pyplot as plt
         # ... run the state_parser in an env, example in dev_play.
-        grid_cells = self.state_parser.capture_grid_cells(current_frame)
+        grid_cells = StateParser.capture_grid_cells(current_frame)
         keep_keys = [(0, 0), (0, 1)]
         new_cells = {}
         for cell in keep_keys:
@@ -762,7 +764,6 @@ class StateParser(ABC):
             if quadrant.lower() not in ["tl", "tr", "bl", "br"]:
                 log_error(
                     f"Invalid quadrant: {quadrant}. Must be one of 'TL', 'TR', 'BL', 'BR'",
-                    self._parameters,
                 )
         cells = {}
         if x_offset != 0:
@@ -795,13 +796,14 @@ class StateParser(ABC):
                         continue
                     elif quadrant.lower() == "br" and (x_cell < 0 or y_cell > 0):
                         continue
-                cell_image = self.capture_box(
+                cell_image = StateParser.capture_box(
                     current_frame, x + x_offset, y + y_offset, grid_skip, grid_skip
                 )
                 cells[(x_cell, y_cell)] = cell_image
         return cells
 
-    def reform_image(self, grid_cells: Dict[Tuple[int, int], np.ndarray]) -> np.ndarray:
+    @staticmethod
+    def reform_image(grid_cells: Dict[Tuple[int, int], np.ndarray]) -> np.ndarray:
         """
         Reform the image from grid cells back into a single image.
         Expects the grid_cells to correspond to a rectangle.
