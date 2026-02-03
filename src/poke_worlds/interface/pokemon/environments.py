@@ -89,11 +89,17 @@ class PokemonRedStarterChoiceEnvironment(PokemonOCREnvironment):
         Environment.override_state_tracker_class(
             emulator_kwargs, PokemonRedStarterTracker
         )
-        emulator_kwargs["init_state"] = "starter"
+        emulator_kwargs["init_state"] = "test_starter_easy"
         return emulator_kwargs
 
     def determine_terminated(
-        self, start_state, *, action=None, action_kwargs=None, transition_states=None, action_success=None
+        self,
+        start_state,
+        *,
+        action=None,
+        action_kwargs=None,
+        transition_states=None,
+        action_success=None,
     ) -> bool:
         super_terminated = super().determine_terminated(
             start_state=start_state,
@@ -118,7 +124,13 @@ class PokemonRedChooseCharmanderEnvironment(PokemonRedStarterChoiceEnvironment):
     """
 
     def determine_reward(
-        self, start_state, *, action=None, action_kwargs=None, transition_states=None, action_success=None
+        self,
+        start_state,
+        *,
+        action=None,
+        action_kwargs=None,
+        transition_states=None,
+        action_success=None,
     ) -> float:
         """
         Reward the agent for choosing Charmander as quickly as possible.
@@ -150,7 +162,13 @@ class PokemonRedExploreStartingSceneEnvironment(PokemonRedStarterChoiceEnvironme
         self._visual_index = Index(modality="image")
 
     def determine_reward(
-        self, start_state, *, action=None, action_kwargs=None, transition_states=None, action_success=None
+        self,
+        start_state,
+        *,
+        action=None,
+        action_kwargs=None,
+        transition_states=None,
+        action_success=None,
     ) -> float:
         """
         Reward the agent for seeing a screen it has not seen before.
