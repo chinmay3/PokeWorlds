@@ -884,8 +884,18 @@ class DummyEnvironment(Environment):
             emulator=emulator, controller=controller, parameters=parameters
         )
 
-    def get_observation(self, **kwargs):
-        return self._emulator.get_current_frame()
+    def get_observation(self,
+        *,
+        action=None,
+        action_kwargs=None,
+        transition_states=None,
+        action_success=None):
+        if transition_states is None:
+            current_state = self.get_info()
+            screen = current_state["core"]["current_frame"]
+        else:
+            screen = transition_states[-1]["core"]["current_frame"]
+        return screen
 
     def determine_reward(self, **kwargs):
         return 0.0

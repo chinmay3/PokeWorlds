@@ -37,16 +37,6 @@ class PokemonOCREnvironment(PokemonEnvironment):
     REQUIRED_STATE_TRACKER = PokemonOCRTracker
     REQUIRED_EMULATOR = PokemonEmulator
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        screen_shape = self._emulator.screen_shape
-        screen_space = spaces.Box(
-            low=0, high=255, shape=(screen_shape[1], screen_shape[0], 1), dtype=np.uint8
-        )
-
-        self.observation_space = screen_space
-        """ The observation space is the raw pixel values of the emulator's screen only. """
-
     @staticmethod
     def override_emulator_kwargs(emulator_kwargs: dict) -> dict:
         Environment.override_state_tracker_class(
@@ -54,21 +44,6 @@ class PokemonOCREnvironment(PokemonEnvironment):
         )
         return emulator_kwargs
 
-    def get_observation(
-        self,
-        *,
-        action=None,
-        action_kwargs=None,
-        transition_states=None,
-        action_success=None,
-    ):
-        if transition_states is None:
-            current_state = self.get_info()
-            screen = current_state["core"]["current_frame"]
-        else:
-            screen = transition_states[-1]["core"]["current_frame"]
-        current_state = self._emulator.state_parser.get_agent_state(screen)
-        return screen
 
 
 class PokemonTestEnvironment(TestEnvironmentMixin, PokemonOCREnvironment):
