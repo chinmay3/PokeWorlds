@@ -89,7 +89,7 @@ class PokemonRedStarterChoiceEnvironment(PokemonOCREnvironment):
         Environment.override_state_tracker_class(
             emulator_kwargs, PokemonRedStarterTracker
         )
-        emulator_kwargs["init_state"] = "starter"
+        emulator_kwargs["init_state"] = "test_starter_easy"
         return emulator_kwargs
 
     def determine_terminated(
@@ -123,14 +123,24 @@ class PokemonRedChooseCharmanderEnvironment(PokemonRedStarterChoiceEnvironment):
         """
         Reward the agent for choosing Charmander as quickly as possible.
         """
+        from poke_worlds.interface.action import LowLevelAction, LowLevelActions
         if transition_states is None:
             return 0.0
         current_state = transition_states[-1]
         starter_chosen = current_state["pokemon_red_starter"]["current_starter"]
         n_steps = current_state["core"]["steps"]
         if starter_chosen is None:
+            if isinstance(action, LowLevelAction):
+                if "low_level_action" in action_kwargs:
+                    # reward for pressing A, penalty for pressing anything else
+                    low_level_action = action_kwargs["low_level_action"]
+                    print("Here")
+                    if low_level_action == LowLevelActions.PRESS_BUTTON_A:
+                        return 0.5
+                    else:
+                        return -0.1            
             if n_steps >= self._emulator.max_steps - 2:  # some safety
-                return -5.0  # Penalty for not choosing a starter within max steps
+                return -0.0  # Penalty for not choosing a starter within max steps
             else:
                 return 0.0
         step_bonus = 100 / (n_steps + 1)
