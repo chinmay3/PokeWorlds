@@ -68,6 +68,10 @@ AVAILABLE_ENVIRONMENTS: Dict[str, Dict[str, Type[Environment]]] = {
         "basic": PokemonEnvironment,
         "test": PokemonTestEnvironment,
     },
+    "legend_of_zelda": {
+        "dummy": DummyEnvironment,
+        "default": DummyEnvironment,
+    }
 }
 
 AVAILABLE_CONTROLLERS: Dict[str, Dict[str, Type[Controller]]] = {
@@ -89,6 +93,9 @@ AVAILABLE_CONTROLLERS: Dict[str, Dict[str, Type[Controller]]] = {
     "pokemon_fools_gold": {
         "state_wise": PokemonStateWiseController,
     },
+    "legend_of_zelda": {
+
+    }
 }
 
 for game in AVAILABLE_GAMES:

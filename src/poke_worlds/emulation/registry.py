@@ -44,6 +44,7 @@ from poke_worlds.emulation.pokemon.trackers import (
 )
 from poke_worlds.emulation.emulator import Emulator
 from poke_worlds.emulation.pokemon.emulators import PokemonEmulator
+from poke_worlds.emulation.legend_of_zelda.parsers import LegendOfZeldaParser
 
 _project_parameters = load_parameters()
 GAME_TO_GB_NAME = {
@@ -53,6 +54,7 @@ GAME_TO_GB_NAME = {
     "pokemon_crystal": "PokemonCrystal.gbc",
     "pokemon_fools_gold": "PokemonFoolsGold.gbc",
     "pokemon_prism": "PokemonPrism.gbc",
+    "legend_of_zelda": "LegendOfZeldaLinksAwakening.gbc"
     # "zelda_links_awakening": "ZeldaLinksAwakening.gb",
 }
 """ Expected save name for each game. Save the file to <storage_dir_from_config_file>/<game_name>_rom_data/<gb_name>"""
@@ -64,6 +66,7 @@ _STRONGEST_PARSERS: Dict[str, Type[StateParser]] = {
     "pokemon_starbeasts": PokemonStarBeastsStateParser,
     "pokemon_fools_gold": PokemonFoolsGoldStateParser,
     "pokemon_prism": PokemonPrismStateParser,
+    "legend_of_zelda": LegendOfZeldaParser
 }
 """ Mapping of game names to their corresponding strongest StateParser classes. 
 Unless you have a very good reason, you should always use the STRONGEST possible parser for a given game. 
@@ -105,6 +108,9 @@ AVAILABLE_STATE_TRACKERS: Dict[str, Dict[str, Type[StateTracker]]] = {
     "pokemon_prism": {
         "default": PokemonOCRTracker,
     },
+    "legend_of_zelda": {
+        "default": StateTracker
+    }
 }
 """ Mapping of game names to their available StateTracker classes with string identifiers. """
 
@@ -127,6 +133,9 @@ AVAILABLE_EMULATORS: Dict[str, Dict[str, Type[Emulator]]] = {
     "pokemon_prism": {
         "default": PokemonEmulator,
     },
+    "legend_of_zelda": {
+        "default": Emulator
+    }
 }
 """ Mapping of game names to their available Emulator classes with string identifiers. """
 
